@@ -3,7 +3,7 @@
 % Packages
 \usepackage[
   paperwidth=18in,
-  paperheight=5in,
+  paperheight=8in,
   margin=0.5in
 ]{geometry}
 \usepackage{amsmath, amssymb}
@@ -12,12 +12,142 @@
 
 \begin{document}
 
+\paragraph{Simplest approach}
 
-% \clearpage
-% \pdfpagewidth=18in
-% \pdfpageheight=5in
+As defined there are 3 LLM agents (1. Example Generator, 2. Relation Inference Agent, and 3. Evaluator), and we are supposed to update the prompt for Agent 1 and 2, using the feedbacks of Agent 3.
+For simplicity, now, we will update only the prompt of Agent 2 (relation inference agent), and keep other prompts frozen.
 
+A simple approach is given below that is similar to the work of GEPA: \\
+Given, Training set (Feedback set) $D_{feedback}$, Validation set $D_{validation}$, Test set $D_{test}$, Initial system $S_0$ that has prompts $P = \{P_{ex\_genertaion}, ...., P_{inference}\}$, and a initial population $Q = \{S_0\}$. \\
+We run the following steps in each iteration.
+\begin{enumerate}
+  \item Sample a System $S_x$ from $Q$ based on some priority.
+  \item Sample $f$ instances from $D_{feedback}$ (typically, $f = 3$) and use Prompt $P_{inference}$ of $S_x$ for inference on these instances.
+  \item Do evaluation using $P_{evaluation}$ prompt on the performance on $f$ instances.
+  \item Mutate i.e. update the prompt $P_{inference}$ based on evaluation; we get new prompt $P_{inference}'$ that forms the system $S_x'$
+  \item Run system $S_x'$ on validation set.
+  \item Add the system $S_x'$ in the population $Q$. If the size of current population set is over the $MAX\_POPULATION$, we remove the weakest system (the one with lowest score on validation set) from the population. 
+\end{enumerate}
+At the end we get our best system from the population $Q$, that has the highest score on validation set.
+Using the best system, we run it on the Test set.
 
+The sample prompts are given below:
+\pagebreak
+
+\paragraph{Evaluation Prompt}
+\begin{verbatim} 
+You are an good evaluator for a relation extraction inference task.
+
+In this task, a relation defines the connection between two selected entities in a sentence: a subject and an object.
+The relation describes the role or relationship that the object has with respect to the subject.
+The task is to infer a yes or no answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below an input instance for relation inference that contains:
+- A relation and its description
+- A support instance (an example where the relation holds)
+- A query sentence
+- A ground-truth label (yes/no)
+- A yes/no inference made by another LLM
+
+Your task is to explain the likely reasoning that led the other LLM to predict yes or no, using only the given relation description, support instance, and query. 
+Do not re-evaluate the relation yourself. Instead, explain the LLM’s decision in light of the ground-truth label.
+- If the prediction matches the label, explain what cues or evidence likely led to that choice.
+- If it does not match, explain what misunderstanding, missing evidence, or heuristic likely caused the prediction.
+
+Instance:
+```
+Relation: #RELATION#
+Relation description: #RELATION_DESCRIPTION#
+Support Instance: #SUPPORT_INSTANCE#
+
+Query: #QUERY#
+
+Label: #LABEL#
+LLM inference: #INFERENCE#
+```
+
+Output your feedback only inside <f> and </f> tags.
+\end{verbatim}
+
+\pagebreak
+\paragraph{Mutation Prompt}
+\begin{verbatim} 
+You are an good prompt generator for a relation extraction inference task.
+
+In this task, a relation defines the connection between two selected entities in a sentence: a subject and an object.
+The relation describes the role or relationship that the object has with respect to the subject.
+The task is to infer a yes or no answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below an prompt that is used by the another LLM to make the inference of the task:
+```
+#INFERENCE_PROMPT#
+```
+
+Using this prompt, the other LLM was tested on 3 instances of this task. Below you are given for each of the tasks: the inputs, the inference made by the other LLM, and a feedback.
+```
+Task 1
+Relation: #RELATION_1#
+Relation Description: #RELATION_DESCRIPTION_1#
+Support Instance: #SUPPORT_INSTANCE_1#
+Query sentence: #QUERY_1#
+Ground-truth label: #LABEL_1#
+LLM infernence: #QUERY_1#
+Feedback: #FEEDBACK_1#
+
+Task 2
+Relation: #RELATION_2#
+Relation Description: #RELATION_DESCRIPTION_2#
+Support Instance: #SUPPORT_INSTANCE_2#
+Query sentence: #QUERY_2#
+Ground-truth label: #LABEL_2#
+LLM infernence: #QUERY_2#
+Feedback: #FEEDBACK_2#
+
+Task 3
+Relation: #RELATION_3#
+Relation Description: #RELATION_DESCRIPTION_3#
+Support Instance: #SUPPORT_INSTANCE_3#
+Query sentence: #QUERY_3#
+Ground-truth label: #LABEL_3#
+LLM infernence: #QUERY_3#
+Feedback: #FEEDBACK_3#
+```
+
+Read the inputs, outputs, and the feedbacks carefully. Idenfity the problems with the current given prompt.
+Your task is to generate a revised form of the prompt so that the other LLM can improve the generalization of the task while using it. 
+You may include modify, add or remove any instructions provided in the current prompt. 
+You can put additional details or do anything in the prompt that may help to improve the prediction with generalization.
+
+Output the revised prompt only under <p> and </p> tags.
+\end{verbatim}
+
+\pagebreak
+
+\paragraph{The original prompt in GEPA paper used for mutation}
+\begin{verbatim}
+I provided an assistant with the following instructions to perform a task for me:
+‘‘‘
+<current instruction>
+‘‘‘
+The following are examples of different task inputs provided to the assistant
+along with the assistant’s response for each of them, and some feedback on how
+the assistant’s response could be better:
+‘‘‘
+<Inputs, Outputs and Feedback for minibatch of examples>
+‘‘‘
+Your task is to write a new instruction for the assistant.
+
+Read the inputs carefully and identify the input format and infer detailed task
+description about the task I wish to solve with the assistant.
+Read all the assistant responses and the corresponding feedback. Identify all
+niche and domain specific factual information about the task and include it in
+the instruction, as a lot of it may not be available to the assistant in the
+future. The assistant may have utilized a generalizable strategy to solve the
+task, if so, include that in the instruction as well.
+Provide the new instructions within ‘‘‘ blocks.
+\end{verbatim}
+
+\pagebreak
 \begin{table*}[h]
 \centering
 \small
