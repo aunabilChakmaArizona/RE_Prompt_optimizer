@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Iterable, List, Sequence, Tuple
 
 import torch
@@ -23,6 +24,7 @@ def run_binary_inference(
     model,
     tokenizer,
     batch_size: int = 8,
+    log_every: int = 50,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
     enable_thinking: bool = False,
@@ -32,13 +34,21 @@ def run_binary_inference(
     if not prompts:
         return []
 
+    start_time = time.perf_counter()
+    total_prompts = len(prompts)
+    num_batches = (total_prompts + batch_size - 1) // batch_size
+    print(
+        f"run_binary_inference: {total_prompts} prompts, "
+        f"batch_size={batch_size}, batches={num_batches}"
+    )
+
     yes_token_id = _get_token_id(tokenizer, yes_token)
     no_token_id = _get_token_id(tokenizer, no_token)
 
     predictions: List[str] = []
     target_device = getattr(model, "device", None)
 
-    for batch in _batched(list(prompts), batch_size):
+    for batch_index, batch in enumerate(_batched(list(prompts), batch_size), start=1):
         if use_chat_template:
             formatted = [
                 tokenizer.apply_chat_template(
@@ -65,7 +75,16 @@ def run_binary_inference(
         yes_logits = logits[:, 0]
         no_logits = logits[:, 1]
         predictions.extend(
-            [yes_token if y > n else no_token for y, n in zip(yes_logits, no_logits)]
+            [yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)]
         )
 
+        if log_every and batch_index % log_every == 0 and batch_index > 0:
+            print(f"\rProcessed {batch_index}/{num_batches} batches", end="", flush=True)
+
+    if log_every and num_batches >= log_every:
+        print(f"\rProcessed {num_batches}/{num_batches} batches", end="", flush=True)
+        print()
+
+    elapsed = time.perf_counter() - start_time
+    print(f"run_binary_inference: done in {elapsed:.2f}s")
     return predictions
