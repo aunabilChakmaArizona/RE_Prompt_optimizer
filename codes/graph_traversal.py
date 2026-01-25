@@ -74,7 +74,7 @@ class GraphTraversal:
         mutate_prompt_fn: MutatePromptFn,
         evaluate_fn: EvaluateFn,
         on_iteration_end: Optional[IterationHook] = None,
-    ) -> GraphNode:
+    ) -> tuple[GraphNode, List[GraphNode]]:
         if self.root.val_score is None:
             self.root.val_score = evaluate_fn(self.root, "validation")
 
@@ -102,4 +102,4 @@ class GraphTraversal:
             if on_iteration_end is not None:
                 on_iteration_end(iteration, parent, child)
 
-        return self.best_node()
+        return self.best_node(), self.population
