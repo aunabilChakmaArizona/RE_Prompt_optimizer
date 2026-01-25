@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import List
 
-from binary_inference import run_binary_inference
-from feedback_samples import FeedbackSamples
-from graph_node import GraphNode
-from prompts import INFERENCE_PROMPT_V1
+from agent_binary_inference import run_binary_inference
+from agent_feedback_samples import FeedbackSamples
+from agent_graph_node import GraphNode
+from agent_prompts import INFERENCE_PROMPT_V1
 from agent_data_utils import build_support_block
 
 

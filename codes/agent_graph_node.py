@@ -1,6 +1,6 @@
 from typing import Optional, List, Tuple
 
-from feedback_samples import FeedbackSamples
+from agent_feedback_samples import FeedbackSamples
 
 
 class GraphNode:

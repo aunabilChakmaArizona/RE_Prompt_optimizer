@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Iterable, List, Optional
 
-from feedback_samples import FeedbackSample, FeedbackSamples
+from agent_feedback_samples import FeedbackSample, FeedbackSamples
 
 
 def sample_feedback_fn(

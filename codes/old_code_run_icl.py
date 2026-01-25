@@ -45,9 +45,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from torch.utils.data import Dataset, DataLoader
 from functools import partial
 
-# import scorer
+# import agent_scorer
 # import util
-import prompts
+import agent_prompts as prompts
 
 transformers.logging.set_verbosity_error()
 

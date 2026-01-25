@@ -2,8 +2,8 @@ import math
 import random
 from typing import Callable, List, Optional, Sequence
 
-from feedback_samples import FeedbackSamples
-from graph_node import GraphNode
+from agent_feedback_samples import FeedbackSamples
+from agent_graph_node import GraphNode
 
 
 SampleFeedbackFn = Callable[[int], FeedbackSamples]

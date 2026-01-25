@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import List
 
-from feedback_samples import FeedbackSamples
-from graph_node import GraphNode
-from llm_prompting import run_prompt
-from prompts import MUTATION_PROMPT_V1
+from agent_feedback_samples import FeedbackSamples
+from agent_graph_node import GraphNode
+from agent_llm_prompting import run_prompt
+from agent_prompts import MUTATION_PROMPT_V1
 
 
 def _extract_between(text: str, tag: str) -> str:
