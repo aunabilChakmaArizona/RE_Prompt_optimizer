@@ -73,5 +73,5 @@ def evaluate_fn(
     predictions = run_binary_inference(
         prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
     )
-    stats = compute_prf_stats(labels, predictions, n_chunks=n_chunks)
-    return stats["f1_mean"]
+     
+    return compute_prf_stats(labels, predictions, n_chunks=n_chunks)

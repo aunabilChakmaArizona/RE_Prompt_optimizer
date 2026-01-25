@@ -36,6 +36,9 @@ def resolve_way_shots(way_ids: Sequence[int], shots: Dict) -> List[Dict]:
     if not way_ids:
         return resolved
     resolved.append(shots["shots"][way_ids[0]])
-    for shot_id in way_ids[1:]:
-        resolved.append(shots["umbc_shots"][shot_id])
+
+    # may come from LLM generation / UMBC index
+    # for shot_id in way_ids[1:]:
+    #     resolved.append(shots["umbc_shots"][shot_id])
+    
     return resolved
