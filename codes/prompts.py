@@ -1,81 +1,171 @@
-EVALUATE_INFERENCE_PROMPT_V1 = '''You are an good evaluator for a relation extraction inference task.
+EVALUATE_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at a particular yes/no decision, for both correct and incorrect predictions.
 
-In this task, a relation defines the connection between two selected entities in a sentence: a subject and an object.
-The relation describes the role or relationship that the object has with respect to the subject.
-The task is to infer a yes or no answer based on whether the query sentence expresses this relation between the subject and the object.
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
 
-You are given below an input instance for relation inference that contains:
+You are given an input instance for relation inference below that contains:
 - A relation and its description
 - A support instance (an example where the relation holds)
 - A query sentence
 - A ground-truth label (yes/no)
-- A yes/no inference made by another LLM
+- A yes/no inference made by another LLM on this instance
 
-Your task is to explain the likely reasoning that led the other LLM to predict yes or no, using only the given relation description, support instance, and query. 
-Do not re-evaluate the relation yourself. Instead, explain the LLM’s decision in light of the ground-truth label.
+The ground-truth label indicates whether the LLM inference was correct or incorrect and is provided only as contextual information. The feedback model’s task is to explain the most likely reasoning process that led to the model’s answer, not to re-evaluate, judge, or correct the prediction. In particular:
 - If the prediction matches the label, explain what cues or evidence likely led to that choice.
 - If it does not match, explain what misunderstanding, missing evidence, or heuristic likely caused the prediction.
 
 Instance:
 ```
 Relation: #RELATION#
-Relation description: #RELATION_DESCRIPTION#
+Relation Description: #RELATION_DESCRIPTION#
 Support Instance: #SUPPORT_INSTANCE#
 
 Query: #QUERY#
 
 Label: #LABEL#
-LLM inference: #INFERENCE#
+LLM Inference: #INFERENCE#
 ```
 
-Output your feedback only inside <f> and </f> tags.
+You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
 '''
 
-MUTATION_PROMPT_V1 = '''You are an good prompt generator for a relation extraction inference task.
+EVALUATE_INFERENCE_PROMPT_CORRECT_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this correct prediction.
 
-In this task, a relation defines the connection between two selected entities in a sentence: a subject and an object.
-The relation describes the role or relationship that the object has with respect to the subject.
-The task is to infer a yes or no answer based on whether the query sentence expresses this relation between the subject and the object.
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
 
-You are given below an prompt that is used by the another LLM to make the inference of the task:
+You are given an input instance for relation inference below that contains:
+- A relation and its description
+- A support instance (an example where the relation holds)
+- A query sentence
+- A ground-truth label (yes/no)
+- A yes/no inference made by another LLM on this instance
+
+The ground-truth label is provided only as contextual information. The feedback model’s task is to explain the most likely reasoning process that led to the model’s correct yes/no decision, highlighting the cues or evidence that support it.
+
+Instance:
+```
+Relation: #RELATION#
+Relation Description: #RELATION_DESCRIPTION#
+Support Instance: #SUPPORT_INSTANCE#
+
+Query: #QUERY#
+
+Label: #LABEL#
+LLM Inference: #INFERENCE#
+```
+
+You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
+'''
+
+EVALUATE_INFERENCE_PROMPT_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this incorrect prediction.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given an input instance for relation inference below that contains:
+- A relation and its description
+- A support instance (an example where the relation holds)
+- A query sentence
+- A ground-truth label (yes/no)
+- A yes/no inference made by another LLM on this instance
+
+The ground-truth label is provided only as contextual information. The feedback model’s task is to explain the most likely reasoning process that led to the model’s incorrect yes/no decision, highlighting the misunderstanding, missing evidence, or heuristic that caused the error.
+
+Instance:
+```
+Relation: #RELATION#
+Relation Description: #RELATION_DESCRIPTION#
+Support Instance: #SUPPORT_INSTANCE#
+
+Query: #QUERY#
+
+Label: #LABEL#
+LLM Inference: #INFERENCE#
+```
+
+You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
+'''
+
+
+MUTATION_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising and improving prompts based on feedback from previous model predictions.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below a prompt that is used by another LLM to make an inference for the task:
 ```
 #INFERENCE_PROMPT#
 ```
 
-Using this prompt, the other LLM was tested on 3 instances of this task. Below you are given for each of the tasks: the inputs, the inference made by the other LLM, and a feedback.
+Using this prompt, another LLM was tested on three instances of the task. Below, you are given the inputs, the inference made by the other LLM, and feedback for each task.
 ```
 Task 1
 Relation: #RELATION_1#
 Relation Description: #RELATION_DESCRIPTION_1#
 Support Instance: #SUPPORT_INSTANCE_1#
-Query sentence: #QUERY_1#
-Ground-truth label: #LABEL_1#
-LLM infernence: #QUERY_1#
+Query Sentence: #QUERY_1#
+Ground-Truth Label: #LABEL_1#
+LLM Inference: #INFERENCE_1#
 Feedback: #FEEDBACK_1#
 
 Task 2
 Relation: #RELATION_2#
 Relation Description: #RELATION_DESCRIPTION_2#
 Support Instance: #SUPPORT_INSTANCE_2#
-Query sentence: #QUERY_2#
-Ground-truth label: #LABEL_2#
-LLM infernence: #QUERY_2#
+Query Sentence: #QUERY_2#
+Ground-Truth Label: #LABEL_2#
+LLM Inference: #INFERENCE_2#
 Feedback: #FEEDBACK_2#
 
 Task 3
 Relation: #RELATION_3#
 Relation Description: #RELATION_DESCRIPTION_3#
 Support Instance: #SUPPORT_INSTANCE_3#
-Query sentence: #QUERY_3#
-Ground-truth label: #LABEL_3#
-LLM infernence: #QUERY_3#
+Query Sentence: #QUERY_3#
+Ground-Truth Label: #LABEL_3#
+LLM Inference: #INFERENCE_3#
 Feedback: #FEEDBACK_3#
 ```
 
-Read the inputs, outputs, and the feedbacks carefully. Idenfity the problems with the current given prompt.
-Your task is to generate a revised form of the prompt so that the other LLM can improve the generalization of the task while using it. 
-You may include modify, add or remove any instructions provided in the current prompt. 
-You can put additional details or do anything in the prompt that may help to improve the prediction with generalization.
+Carefully read the inputs, outputs, and feedback to identify problems with the current prompt. 
+Your task is to generate a revised form of the prompt so that the other LLM can improve the model’s generalization when using the prompt. 
+You may modify, add to, or remove any instructions or content in the current prompt in order to improve the prediction and enhance generalization.
 
-Output the revised prompt only under <p> and </p> tags.
+You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
+
+INFERENCE_PROMPT_V1 = '''You are given a relation name, a description of the relation in brackets, N support sentences that exemplify the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
+
+Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
+
+#SUPPORT_SENTENCE_BLOCK#
+
+Query Sentence: #QUERY_SENTENCE#
+
+If the relation holds between the Subject and Object in the query sentence, say "yes"; otherwise, say "no". Output only "yes" or "no", and nothing else.
+'''
+
+
+EXAMPLE_GENERATION_PROMPT_V1 = '''You are given a relation name, the description of the relation, and a support sentence that exemplifies the relation.
+
+A relation connects two entities in a sentence: the Subject and the Object. The Subject and the Object are indicated with the <subject>...</subject> and <object>...</object> tags, respectively.
+
+Relation name: "#RELATION#"
+Relation description: "#RELATION_DESCRIPTION#"
+Support Sentence: #SUPPORT_SENTENCE#
+
+Your task is to generate N completely different new example sentences that hold the same relation. You must follow these guidelines:
+- In each example, include subject and object tags to identify the Subject and the Object entities.
+- To increase diversity, use different words, phrases, and sentence structures across different examples.
+
+Output in the following format.
+
+01: your 1st example sentence
+02: your 2nd example sentence
+...
+N: your Nth example sentence
 '''
