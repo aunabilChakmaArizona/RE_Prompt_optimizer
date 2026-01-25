@@ -136,7 +136,7 @@ You may perform reasoning internally, but output only the revised prompt enclose
 '''
 
 
-INFERENCE_PROMPT_V1 = '''You are given a relation name, a description of the relation in brackets, N support sentences that exemplify the relation, and a query sentence.
+INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, #N# support sentence#S# that exemplify the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
 
