@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import List
 
-from agent_feedback_samples import FeedbackSamples
-from agent_graph_node import GraphNode
-from agent_llm_prompting import run_prompts
-from agent_prompts import FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
-from agent_relation_utils import get_relation_description
+from agents.agent_feedback_samples import FeedbackSamples
+from agents.agent_graph_node import GraphNode
+from agents.agent_llm_prompting import run_prompts
+from agents.agent_prompts import FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
+from agents.agent_relation_utils import get_relation_description
 
 
 def _format_feedback_prompt(

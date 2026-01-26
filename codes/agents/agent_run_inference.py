@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import List
 
-from agent_binary_inference import run_binary_inference
-from agent_feedback_samples import FeedbackSamples
-from agent_graph_node import GraphNode
-from agent_prompts import INFERENCE_PROMPT_V1
-from agent_data_utils import build_support_block
-from agent_relation_utils import get_relation_description
+from agents.agent_binary_inference import run_binary_inference
+from agents.agent_feedback_samples import FeedbackSamples
+from agents.agent_graph_node import GraphNode
+from agents.agent_prompts import INFERENCE_PROMPT_V1
+from agents.agent_data_utils import build_support_block
+from agents.agent_relation_utils import get_relation_description
 
 
 def _format_inference_prompt(

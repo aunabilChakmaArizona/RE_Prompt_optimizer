@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Sequence, Tuple
 
-from agent_scorer import score
+from agents.agent_scorer import score
 
 
 def _chunk_indices(total: int, n_chunks: int) -> List[Tuple[int, int]]:

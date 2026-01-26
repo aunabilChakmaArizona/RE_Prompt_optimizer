@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import List, Optional
 
-from agent_feedback_samples import FeedbackSample, FeedbackSamples
+from agents.agent_feedback_samples import FeedbackSample, FeedbackSamples
 
 
 def _split_by_correctness(

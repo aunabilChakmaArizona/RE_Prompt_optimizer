@@ -3,21 +3,21 @@ from __future__ import annotations
 import random
 from typing import Dict, List, Tuple
 
-from agent_data_loader import load_split_episodes, load_train_samples
-from agent_data_utils import get_sentence_with_tags
-from agent_evaluate import evaluate_fn as _evaluate_fn
-from agent_generate_feedback import generate_feedback_fn as _generate_feedback_fn
-from agent_graph_node import GraphNode
-from agent_models import load_model_and_tokenizer
-from agent_mutate_prompt import mutate_prompt_fn as _mutate_prompt_fn
-from agent_prompts import (
+from agents.agent_data_loader import load_split_episodes, load_train_samples
+from agents.agent_data_utils import get_sentence_with_tags
+from agents.agent_evaluate import evaluate_fn as _evaluate_fn
+from agents.agent_generate_feedback import generate_feedback_fn as _generate_feedback_fn
+from agents.agent_graph_node import GraphNode
+from agents.agent_models import load_model_and_tokenizer
+from agents.agent_mutate_prompt import mutate_prompt_fn as _mutate_prompt_fn
+from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
     INFERENCE_PROMPT_V1,
     MUTATION_PROMPT_V1,
 )
-from agent_run_inference import run_inference_fn as _run_inference_fn
-from agent_sample_feedback import sample_feedback_fn as _sample_feedback_fn
+from agents.agent_run_inference import run_inference_fn as _run_inference_fn
+from agents.agent_sample_feedback import sample_feedback_fn as _sample_feedback_fn
 
 
 def _resolve_binary_token_id(tokenizer, base_token: str) -> int:

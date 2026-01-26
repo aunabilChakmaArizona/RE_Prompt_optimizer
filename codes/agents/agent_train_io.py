@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 from typing import Dict, Iterable, Tuple
 
-from agent_graph_node import GraphNode
+from agents.agent_graph_node import GraphNode
 
 
 class Tee:

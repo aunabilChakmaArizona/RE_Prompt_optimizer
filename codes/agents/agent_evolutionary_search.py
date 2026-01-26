@@ -3,9 +3,9 @@ import random
 import time
 from typing import Callable, List, Optional, Sequence
 
-from agent_feedback_samples import FeedbackSamples
-from agent_graph_node import GraphNode
-from agent_select_feedback import select_feedback_samples
+from agents.agent_feedback_samples import FeedbackSamples
+from agents.agent_graph_node import GraphNode
+from agents.agent_select_feedback import select_feedback_samples
 
 
 SampleFeedbackFn = Callable[[int], FeedbackSamples]

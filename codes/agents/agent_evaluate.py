@@ -5,12 +5,12 @@ import os
 import time
 from typing import Dict, List, Sequence
 
-from agent_binary_inference import run_binary_inference
-from agent_graph_node import GraphNode
-from agent_prompts import INFERENCE_PROMPT_V1
-from agent_data_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
-from agent_metrics import compute_prf_stats
-from agent_relation_utils import get_relation_description
+from agents.agent_binary_inference import run_binary_inference
+from agents.agent_graph_node import GraphNode
+from agents.agent_prompts import INFERENCE_PROMPT_V1
+from agents.agent_data_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
+from agents.agent_metrics import compute_prf_stats
+from agents.agent_relation_utils import get_relation_description
 
 
 def _format_inference_prompt(

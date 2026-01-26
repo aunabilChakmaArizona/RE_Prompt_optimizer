@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import os
 
-from agent_evolutionary_search import EvolutionarySearch
-from agent_prompts import (
+from agents.agent_evolutionary_search import EvolutionarySearch
+from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
     MUTATION_PROMPT_V1,
 )
-from agent_train_config import parse_args, resolve_data_dir
-from agent_train_io import (
+from agents.agent_train_config import parse_args, resolve_data_dir
+from agents.agent_train_io import (
     create_run_dir,
     restore_logging,
     save_population,
@@ -17,7 +17,7 @@ from agent_train_io import (
     setup_logging,
     write_args,
 )
-from agent_train_pipeline import build_root_node, load_model_and_data
+from agents.agent_train_pipeline import build_root_node, load_model_and_data
 
 
 def main() -> None:
