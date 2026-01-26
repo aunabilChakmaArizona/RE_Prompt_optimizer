@@ -11,7 +11,7 @@ from agent_select_feedback import select_feedback_samples
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
 RunInferenceFn = Callable[[GraphNode, FeedbackSamples], FeedbackSamples]
 GenerateFeedbackFn = Callable[[GraphNode, FeedbackSamples], str]
-MutatePromptFn = Callable[[GraphNode, FeedbackSamples, str], str]
+MutatePromptFn = Callable[[GraphNode, FeedbackSamples], str]
 EvaluateFn = Callable[[GraphNode, str], float]
 IterationHook = Callable[[int, GraphNode, GraphNode], None]
 
@@ -37,6 +37,14 @@ class EvolutionarySearch:
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
+
+    def _format_feedback_text(self, feedback_samples: FeedbackSamples) -> str:
+        feedback_texts = getattr(feedback_samples, "feedback_texts", None)
+        if feedback_texts is None:
+            feedback_texts = [
+                getattr(sample, "feedback_text", "") for sample in feedback_samples.selected_samples
+            ]
+        return "\n".join([t for t in feedback_texts if t.strip()])
 
     def _score_or_neg_inf(self, node: GraphNode) -> float:
         if node.val_score is None:
@@ -100,10 +108,11 @@ class EvolutionarySearch:
                 rng=self.rng,
             )
             print("[evolutionary_search] generate feedback text")
-            feedback_text = generate_feedback_fn(parent, feedback_samples)
+            feedback_samples = generate_feedback_fn(parent, feedback_samples)
+            feedback_text = self._format_feedback_text(feedback_samples)
 
             print("[evolutionary_search] mutate prompt")
-            new_prompt = mutate_prompt_fn(parent, feedback_samples, feedback_text)
+            new_prompt = mutate_prompt_fn(parent, feedback_samples)
             child = GraphNode(
                 inference_prompt=new_prompt,
                 parent=parent,

@@ -34,7 +34,7 @@ def generate_feedback_fn(
     model,
     tokenizer,
     batch_size: int = 4,
-) -> str:
+) -> FeedbackSamples:
     if not feedback_samples.selected_samples:
         feedback_samples.feedback_texts = []
         return ""
@@ -58,5 +58,8 @@ def generate_feedback_fn(
     feedback_texts = run_prompts(
         prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
     )
-    feedback_samples.feedback_texts = feedback_texts # todo: save the each feeback texts with associated selected samples from feedback_samples
-    return "\n".join(feedback_texts)
+    feedback_samples.feedback_texts = feedback_texts
+    for sample, feedback_text in zip(feedback_samples.selected_samples, feedback_texts):
+        sample.feedback_text = feedback_text
+
+    return feedback_samples

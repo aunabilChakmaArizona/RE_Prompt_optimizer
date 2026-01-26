@@ -26,7 +26,6 @@ def _pad_list(items: List[str], size: int) -> List[str]:
 def mutate_prompt_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
-    feedback_text: str,
     *,
     model,
     tokenizer,
@@ -35,10 +34,10 @@ def mutate_prompt_fn(
     base_prompt = node.mutation_prompt or MUTATION_PROMPT_V1
 
     samples = feedback_samples.selected_samples
-    feedback_texts = getattr(feedback_samples, "feedback_texts", None)
-    if feedback_texts is None:
-        feedback_texts = [t for t in feedback_text.split("\n") if t.strip()]
-    feedback_texts = _pad_list(list(feedback_texts), 3)
+    feedback_texts = [
+        getattr(sample, "feedback_text", "") for sample in feedback_samples.selected_samples
+    ]
+    feedback_texts = _pad_list([t for t in feedback_texts if t.strip()], 3)
 
     def get_attr(i: int, name: str) -> str:
         if i >= len(samples):
