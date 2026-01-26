@@ -47,9 +47,13 @@ class EvolutionarySearch:
         return "\n\n".join([t for t in feedback_texts if t.strip()])
 
     def _score_or_neg_inf(self, node: GraphNode) -> float:
-        if node.val_score is None:
+        val_score = node.val_score
+        if val_score is None:
             return float("-inf")
-        return float(node.val_score)
+        score = val_score.get("f1_mean")
+        if score is None:
+            return float("-inf")
+        return float(score)
 
     def _softmax_weights(self, scores: Sequence[Optional[float]]) -> List[float]:
         if self.temperature <= 0:
@@ -69,7 +73,13 @@ class EvolutionarySearch:
         return weights
 
     def sample_parent(self) -> GraphNode:
-        scores = [node.val_score for node in self.population]
+        scores = []
+        for node in self.population:
+            val_score = node.val_score
+            if val_score is None:
+                scores.append(None)
+            else:
+                scores.append(val_score.get("f1_mean"))
         weights = self._softmax_weights(scores)
         return self.rng.choices(self.population, weights=weights, k=1)[0]
 
