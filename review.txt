@@ -1,0 +1,35 @@
+Here’s a focused review of the `agent*.py` files + `core_trainer.py`, with emphasis on prompting + binary inference speed.
+
+High‑impact fixes (speed + correctness)
+- `codes/agent_binary_inference.py`: `yes_token_id/no_token_id` are derived from the *first* token of "yes"/"no". If those are multi‑token for your model, you’re comparing the wrong logits. This silently hurts accuracy and wastes compute. Fix by ensuring *single‑token* answers (e.g., " yes"/" no" for BPE models) and assert `len(encode)==1`. Do the same in `codes/agent_train_pipeline.py`.
+- `codes/agent_binary_inference.py`: logits are taken at `-1`. This assumes left‑padding (set in `codes/agent_models.py`), but if padding_side ever changes, you’d read padding tokens. Safer and still fast: pick the last non‑padding index via `attention_mask.sum(dim=1)-1`.
+- `codes/agent_llm_prompting.py`: `run_prompts` defaults `enable_thinking=True`, which expands output + latency for feedback generation. For speed, default this to `False` (or pass explicitly in callers). `codes/agent_generate_feedback.py` is the main path affected.
+
+Prompting tweaks for speed (token count reduction)
+- `codes/agent_prompts.py`: the inference prompt is verbose. If your priority is throughput, shorten it: drop duplicated explanations and keep only the minimal task definition + explicit yes/no instruction. Fewer prompt tokens yields immediate speedups.
+- `codes/agent_run_inference.py`: `_format_inference_prompt` does both `#QUERY_SENTENCE#` and `#QUERY#` replacements; the base prompt only uses `#QUERY_SENTENCE#`. Drop the extra replace to reduce string ops (small but free).
+- `codes/agent_generate_feedback.py`: feedback prompt is long, and `max_new_tokens` is not constrained here. Pass `max_new_tokens` from args (add a `--feedback-max-new-tokens`) to avoid over‑generation.
+
+Binary inference speed knobs
+- `codes/agent_binary_inference.py`: consider `log_every=0` in tight loops to reduce stdout overhead.
+- `codes/agent_binary_inference.py`: `use_cache=False` is fine for single forward, but if you ever switch to short incremental generation, set `use_cache=True`.
+- `codes/agent_models.py`: for supported models, consider `attn_implementation="flash_attention_2"` and `torch.backends.cuda.matmul.allow_tf32 = True` for throughput gains (opt‑in).
+
+Parallel data/tokenization (your “multiple workers” question)
+Right now, you build prompts in Python lists and tokenize in the main process. There’s no DataLoader/prefetch. Options:
+- Prefetch tokenization: use a background `ThreadPoolExecutor` or `ProcessPoolExecutor` to tokenize the *next* batch while the GPU runs the current batch. This helps if tokenization is a non‑trivial slice of total time.
+- DataLoader with `num_workers` + `pin_memory`: wrap prompt formatting + tokenization in a Dataset and let PyTorch prefetch. Benefit depends on CPU cost vs GPU time.
+- Offline preprocessing: if prompts are static for a node (e.g., evaluation), pretokenize once and reuse cached `input_ids/attention_mask`. This can save a lot during repeated evaluation loops in `codes/agent_evaluate.py`.
+
+Correctness gotcha (not speed but important)
+- `codes/agent_metrics.py` uses `agent_scorer.score`, which treats `"no_relation"` as negative. In `codes/agent_evaluate.py`, labels are `"yes"`/`"no"`, so `"no"` is treated as a positive class, not negative. This makes your reported F1 misleading. If you want binary F1, use a true binary scorer.
+
+If you want, I can draft concrete patches for:
+1) robust single‑token yes/no handling + attention_mask‑based last token,
+2) disable `enable_thinking` in feedback generation,
+3) add a prefetch/tokenization DataLoader path.
+
+Next steps (pick one)
+1) I draft a patch to fix yes/no token handling + last‑token selection.
+2) I implement a DataLoader/prefetch version for `run_binary_inference`.
+3) I tighten prompts + max_new_tokens for speed.
