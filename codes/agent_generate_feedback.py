@@ -5,7 +5,7 @@ from typing import List
 from agent_feedback_samples import FeedbackSamples
 from agent_graph_node import GraphNode
 from agent_llm_prompting import run_prompts
-from agent_prompts import EVALUATE_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
+from agent_prompts import FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
 
 
 def _format_feedback_prompt(
@@ -39,7 +39,7 @@ def generate_feedback_fn(
         feedback_samples.feedback_texts = []
         return ""
 
-    base_prompt = node.feedback_prompt or EVALUATE_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
+    base_prompt = node.feedback_prompt or FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
 
     prompts: List[str] = []
     for sample in feedback_samples.selected_samples:
@@ -58,5 +58,5 @@ def generate_feedback_fn(
     feedback_texts = run_prompts(
         prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
     )
-    feedback_samples.feedback_texts = feedback_texts
+    feedback_samples.feedback_texts = feedback_texts # todo: save the each feeback texts with associated selected samples from feedback_samples
     return "\n".join(feedback_texts)

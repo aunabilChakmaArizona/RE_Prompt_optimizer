@@ -1,4 +1,4 @@
-EVALUATE_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at a particular yes/no decision, for both correct and incorrect predictions.
+FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at a particular yes/no decision, for both correct and incorrect predictions.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
@@ -29,7 +29,7 @@ LLM Inference: #INFERENCE#
 You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
 '''
 
-EVALUATE_INFERENCE_PROMPT_CORRECT_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this correct prediction.
+FEEDBACK_INFERENCE_PROMPT_CORRECT_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this correct prediction.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
@@ -58,7 +58,7 @@ LLM Inference: #INFERENCE#
 You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
 '''
 
-EVALUATE_INFERENCE_PROMPT_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this incorrect prediction.
+FEEDBACK_INFERENCE_PROMPT_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this incorrect prediction.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
