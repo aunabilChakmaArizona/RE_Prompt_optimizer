@@ -6,6 +6,7 @@ from agent_feedback_samples import FeedbackSamples
 from agent_graph_node import GraphNode
 from agent_llm_prompting import run_prompts
 from agent_prompts import FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
+from agent_relation_utils import get_relation_description
 
 
 def _format_feedback_prompt(
@@ -41,6 +42,7 @@ def generate_feedback_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
     *,
+    dataset_type: str,
     model,
     tokenizer,
     batch_size: int = 4,
@@ -54,11 +56,14 @@ def generate_feedback_fn(
 
     prompts: List[str] = []
     for sample in feedback_samples.selected_samples:
+        relation = getattr(sample, "relation", "")
         prompts.append(
             _format_feedback_prompt(
                 base_prompt=base_prompt,
-                relation=getattr(sample, "relation", ""),
-                relation_description=getattr(sample, "relation_description", ""),
+                relation=relation,
+                relation_description=(
+                    get_relation_description(relation, dt=dataset_type) if relation else ""
+                ),
                 support_sentence=getattr(sample, "support_sentence", ""),
                 query_sentence=getattr(sample, "query_sentence", ""),
                 label=sample.label,

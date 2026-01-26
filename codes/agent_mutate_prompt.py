@@ -7,6 +7,7 @@ from agent_feedback_samples import FeedbackSamples
 from agent_graph_node import GraphNode
 from agent_llm_prompting import run_prompt
 from agent_prompts import MUTATION_PROMPT_V1
+from agent_relation_utils import get_relation_description
 
 
 def _extract_between(text: str, tag: str) -> str:
@@ -27,6 +28,7 @@ def mutate_prompt_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
     *,
+    dataset_type: str,
     model,
     tokenizer,
     max_new_tokens: int = 512,
@@ -48,9 +50,11 @@ def mutate_prompt_fn(
     prompt = prompt.replace("#INFERENCE_PROMPT#", node.inference_prompt)
 
     for idx in range(3):
-        prompt = prompt.replace(f"#RELATION_{idx+1}#", get_attr(idx, "relation"))
+        relation = get_attr(idx, "relation")
+        prompt = prompt.replace(f"#RELATION_{idx+1}#", relation)
         prompt = prompt.replace(
-            f"#RELATION_DESCRIPTION_{idx+1}#", get_attr(idx, "relation_description")
+            f"#RELATION_DESCRIPTION_{idx+1}#",
+            get_relation_description(relation, dt=dataset_type) if relation else "",
         )
         prompt = prompt.replace(
             f"#SUPPORT_INSTANCE_{idx+1}#", get_attr(idx, "support_sentence")

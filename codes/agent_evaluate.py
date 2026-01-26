@@ -10,6 +10,7 @@ from agent_graph_node import GraphNode
 from agent_prompts import INFERENCE_PROMPT_V1
 from agent_data_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
 from agent_metrics import compute_prf_stats
+from agent_relation_utils import get_relation_description
 
 
 def _format_inference_prompt(
@@ -32,6 +33,7 @@ def evaluate_fn(
     node: GraphNode,
     split: str,
     *,
+    dataset_type: str,
     model,
     tokenizer,
     episodes: List[Dict],
@@ -65,7 +67,7 @@ def evaluate_fn(
             way_shots = resolve_way_shots(way, shots)
             relation = way_shots[0]["relation"]
             support_sentences = [get_sentence_with_tags(s).strip() for s in way_shots]
-            relation_description = relation_descriptions.get(relation, "")
+            relation_description = get_relation_description(relation, dt=dataset_type)
 
             prompts.append(
                 _format_inference_prompt(

@@ -26,6 +26,7 @@ class EvolutionarySearch:
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         example_generation_prompt: str = "",
+        dataset_type: str = "fs_tacred",
         rng: Optional[random.Random] = None,
     ):
         self.root = root
@@ -36,6 +37,7 @@ class EvolutionarySearch:
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
+        self.dataset_type = dataset_type
         self.rng = rng or random.Random()
 
     def _format_feedback_text(self, feedback_samples: FeedbackSamples) -> str:
@@ -100,7 +102,9 @@ class EvolutionarySearch:
         print("[evolutionary_search] start")
         if self.root.val_score is None:
             print("[evolutionary_search] evaluate root")
-            self.root.val_score = evaluate_fn(self.root, "validation")
+            self.root.val_score = evaluate_fn(
+                self.root, "validation", dataset_type=self.dataset_type
+            )
 
         for iteration in range(self.max_iterations):
             iter_start = time.monotonic()
@@ -110,7 +114,9 @@ class EvolutionarySearch:
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
             print("[evolutionary_search] run inference")
-            feedback_samples = run_inference_fn(parent, feedback_samples)
+            feedback_samples = run_inference_fn(
+                parent, feedback_samples, dataset_type=self.dataset_type
+            )
             print("[evolutionary_search] select feedback samples")
             feedback_samples = select_feedback_samples(
                 feedback_samples,
@@ -118,11 +124,15 @@ class EvolutionarySearch:
                 rng=self.rng,
             )
             print("[evolutionary_search] generate feedback text")
-            feedback_samples = generate_feedback_fn(parent, feedback_samples)
+            feedback_samples = generate_feedback_fn(
+                parent, feedback_samples, dataset_type=self.dataset_type
+            )
             feedback_text = self._format_feedback_text(feedback_samples)
 
             print("[evolutionary_search] mutate prompt")
-            new_prompt = mutate_prompt_fn(parent, feedback_samples)
+            new_prompt = mutate_prompt_fn(
+                parent, feedback_samples, dataset_type=self.dataset_type
+            )
             child = GraphNode(
                 inference_prompt=new_prompt,
                 parent=parent,
@@ -133,7 +143,9 @@ class EvolutionarySearch:
                 example_generation_prompt=self.example_generation_prompt,
             )
             print("[evolutionary_search] evaluate child")
-            child.val_score = evaluate_fn(child, "validation")
+            child.val_score = evaluate_fn(
+                child, "validation", dataset_type=self.dataset_type
+            )
 
             print("[evolutionary_search] update graph")
             parent.add_child_from_feedback(feedback_samples, child)
