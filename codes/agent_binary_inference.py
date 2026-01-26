@@ -15,7 +15,19 @@ def _get_token_id(tokenizer, text: str) -> int:
     token_ids = tokenizer.encode(text, add_special_tokens=False)
     if not token_ids:
         raise ValueError(f"Token '{text}' is not in the tokenizer vocabulary.")
+    if len(token_ids) != 1:
+        raise ValueError(
+            f"Token '{text}' is not a single token for this tokenizer."
+        )
     return token_ids[0]
+
+
+def _resolve_binary_token_id(tokenizer, base_token: str) -> int:
+    try:
+        return _get_token_id(tokenizer, base_token)
+    except ValueError:
+        spaced = f" {base_token}"
+        return _get_token_id(tokenizer, spaced)
 
 
 def run_binary_inference(
@@ -44,8 +56,16 @@ def run_binary_inference(
         f"batch_size={batch_size}, batches={num_batches}"
     )
 
-    yes_token_id = yes_token_id if yes_token_id is not None else _get_token_id(tokenizer, yes_token)
-    no_token_id = no_token_id if no_token_id is not None else _get_token_id(tokenizer, no_token)
+    yes_token_id = (
+        yes_token_id
+        if yes_token_id is not None
+        else _resolve_binary_token_id(tokenizer, yes_token)
+    )
+    no_token_id = (
+        no_token_id
+        if no_token_id is not None
+        else _resolve_binary_token_id(tokenizer, no_token)
+    )
 
     predictions: List[str] = []
     target_device = getattr(model, "device", None)

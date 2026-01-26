@@ -20,6 +20,18 @@ from agent_run_inference import run_inference_fn as _run_inference_fn
 from agent_sample_feedback import sample_feedback_fn as _sample_feedback_fn
 
 
+def _resolve_binary_token_id(tokenizer, base_token: str) -> int:
+    token_ids = tokenizer.encode(base_token, add_special_tokens=False)
+    if len(token_ids) == 1:
+        return token_ids[0]
+    spaced_token_ids = tokenizer.encode(f" {base_token}", add_special_tokens=False)
+    if len(spaced_token_ids) == 1:
+        return spaced_token_ids[0]
+    raise ValueError(
+        f"Token '{base_token}' is not a single token for this tokenizer."
+    )
+
+
 def build_feedback_pool(shots: Dict) -> Dict[str, List[dict]]:
     pool: Dict[str, List[dict]] = {}
     for shot in shots.values():
@@ -77,8 +89,8 @@ def build_training_functions(
     eval_output_dir: str,
     rng: random.Random,
 ):
-    yes_token_id = tokenizer.encode("yes", add_special_tokens=False)[0]
-    no_token_id = tokenizer.encode("no", add_special_tokens=False)[0]
+    yes_token_id = _resolve_binary_token_id(tokenizer, "yes")
+    no_token_id = _resolve_binary_token_id(tokenizer, "no")
 
     def sample_feedback(k: int):
         samples = _sample_feedback_fn(feedback_pool, k=k, rng=rng)

@@ -14,7 +14,7 @@ def run_prompts(
     *,
     model,
     tokenizer,
-    max_new_tokens: int = 256,
+    max_new_tokens: int = 1000, # todo: check if 1000 is sufficient
     batch_size: int = 8,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,

@@ -23,7 +23,6 @@ def _format_inference_prompt(
     prompt = prompt.replace("#RELATION_DESCRIPTION#", relation_description)
     prompt = prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
     prompt = prompt.replace("#QUERY_SENTENCE#", query_sentence)
-    prompt = prompt.replace("#QUERY#", query_sentence)
     return prompt
 
 

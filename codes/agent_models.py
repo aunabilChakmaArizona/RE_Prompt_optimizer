@@ -32,7 +32,8 @@ def load_model_and_tokenizer(model_id: str) -> Tuple[AutoModelForCausalLM, AutoT
         model_id,
         torch_dtype=_default_dtype(device_map),
         trust_remote_code=True,
-        device_map=device_map,
+        device_map=device_map, 
+        # todo:  attn_implementation="flash_attention_2" if supported
     )
     model.eval()
 
