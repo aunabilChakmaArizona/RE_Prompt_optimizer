@@ -1,5 +1,6 @@
 import math
 import random
+import time
 from typing import Callable, List, Optional, Sequence
 
 from agent_feedback_samples import FeedbackSamples
@@ -77,22 +78,31 @@ class GraphTraversal:
         selection_mode: str = "mixed",
         on_iteration_end: Optional[IterationHook] = None,
     ) -> tuple[GraphNode, List[GraphNode]]:
+        start_time = time.monotonic()
+        print("[graph_traversal] start")
         if self.root.val_score is None:
+            print("[graph_traversal] evaluate root")
             self.root.val_score = evaluate_fn(self.root, "validation")
 
         for iteration in range(self.max_iterations):
+            iter_start = time.monotonic()
+            print(f"[graph_traversal] iteration {iteration + 1}/{self.max_iterations} start")
             parent = self.sample_parent()
+            print("[graph_traversal] sample feedback")
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
+            print("[graph_traversal] run inference")
             feedback_samples = run_inference_fn(parent, feedback_samples)
+            print("[graph_traversal] select feedback samples")
             feedback_samples = select_feedback_samples(
                 feedback_samples,
                 selection_mode=selection_mode,
                 rng=self.rng,
             )
-            
+            print("[graph_traversal] generate feedback text")
             feedback_text = generate_feedback_fn(parent, feedback_samples)
 
+            print("[graph_traversal] mutate prompt")
             new_prompt = mutate_prompt_fn(parent, feedback_samples, feedback_text)
             child = GraphNode(
                 inference_prompt=new_prompt,
@@ -102,12 +112,25 @@ class GraphTraversal:
                 mutation_prompt=self.mutation_prompt,
                 example_generation_prompt=self.example_generation_prompt,
             )
+            print("[graph_traversal] evaluate child")
             child.val_score = evaluate_fn(child, "validation")
 
+            print("[graph_traversal] update graph")
             parent.add_child_from_feedback(feedback_samples, child)
             self.population.append(child)
 
             if on_iteration_end is not None:
+                print("[graph_traversal] on_iteration_end hook")
                 on_iteration_end(iteration, parent, child)
 
+            iter_elapsed = time.monotonic() - iter_start
+            total_elapsed = time.monotonic() - start_time
+            print(
+                f"[graph_traversal] iteration {iteration + 1} end "
+                f"(iter {iter_elapsed:.2f}s, total {total_elapsed:.2f}s)"
+            )
+
+        total_elapsed = time.monotonic() - start_time
+        print(f"[graph_traversal] end (total {total_elapsed:.2f}s)")
+        
         return self.best_node(), self.population
