@@ -27,6 +27,16 @@ def _format_feedback_prompt(
     return prompt
 
 
+def _extract_feedback(text: str) -> str:
+    start = text.find("<f>")
+    if start == -1:
+        return text.strip()
+    end = text.find("</f>", start + 3)
+    if end == -1:
+        return text.strip()
+    return text[start + 3 : end].strip()
+
+
 def generate_feedback_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
@@ -37,6 +47,7 @@ def generate_feedback_fn(
 ) -> FeedbackSamples:
     if not feedback_samples.selected_samples:
         feedback_samples.feedback_texts = []
+        feedback_samples.raw_feedback_texts = []
         return ""
 
     base_prompt = node.feedback_prompt or FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
@@ -55,11 +66,16 @@ def generate_feedback_fn(
             )
         )
 
-    feedback_texts = run_prompts(
+    raw_feedback_texts = run_prompts(
         prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
     )
+    feedback_texts = [_extract_feedback(text) for text in raw_feedback_texts]
+    feedback_samples.raw_feedback_texts = raw_feedback_texts
     feedback_samples.feedback_texts = feedback_texts
-    for sample, feedback_text in zip(feedback_samples.selected_samples, feedback_texts):
+    for sample, raw_feedback_text, feedback_text in zip(
+        feedback_samples.selected_samples, raw_feedback_texts, feedback_texts
+    ):
+        sample.raw_feedback_text = raw_feedback_text
         sample.feedback_text = feedback_text
 
     return feedback_samples

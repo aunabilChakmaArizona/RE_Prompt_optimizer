@@ -27,6 +27,8 @@ class FeedbackSamples:
 
         # Selected subset (e.g., 3-shot feedback)
         self.selected_samples: List[FeedbackSample] = []
+        self.raw_feedback_texts: List[str] = []
+        self.feedback_texts: List[str] = []
 
     def add_to_all_samples(self, feedback_sample: FeedbackSample):
         self.all_samples.append(feedback_sample)

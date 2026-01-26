@@ -9,6 +9,7 @@ class GraphNode:
         inference_prompt: str,
         parent: Optional["GraphNode"] = None,
         feedback: str = "",
+        raw_feedback_texts: Optional[List[str]] = None,
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         example_generation_prompt: str = "",
@@ -23,6 +24,7 @@ class GraphNode:
 
         # Prompt metadata
         self.feedback = feedback
+        self.raw_feedback_texts = raw_feedback_texts if raw_feedback_texts is not None else []
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
