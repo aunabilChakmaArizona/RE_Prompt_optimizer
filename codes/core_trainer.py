@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-import json
 import os
 
 from agent_evolutionary_search import EvolutionarySearch
+from agent_prompts import (
+    EXAMPLE_GENERATION_PROMPT_V1,
+    FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
+    MUTATION_PROMPT_V1,
+)
 from agent_train_config import parse_args, resolve_data_dir
 from agent_train_io import (
     create_run_dir,
@@ -31,16 +35,10 @@ def main() -> None:
         eval_output_dir = os.path.join(run_dir, "eval_outputs")
         os.makedirs(eval_output_dir, exist_ok=True)
 
-        (
-            _model,
-            _tokenizer,
-            rng,
-            _feedback_pool,
-            _train_shot_index,
-            _dev_data,
-            _test_data,
-            (sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate),
-        ) = load_model_and_data(args, data_dir, eval_output_dir, args.seed)
+        _, _, rng, _, _, _, _, funcs = load_model_and_data(
+            args, data_dir, eval_output_dir, args.seed
+        )
+        sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs
 
         root = build_root_node()
 

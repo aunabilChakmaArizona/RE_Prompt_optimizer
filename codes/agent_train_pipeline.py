@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import random
 from typing import Dict, List, Tuple
 
@@ -22,46 +21,24 @@ from agent_sample_feedback import sample_feedback_fn as _sample_feedback_fn
 
 
 def build_feedback_pool(shots: Dict) -> Dict[str, List[dict]]:
-    if not shots:
-        return {}
-    first_value = next(iter(shots.values()))
-    if isinstance(first_value, list):
-        return shots
-
     pool: Dict[str, List[dict]] = {}
     for shot in shots.values():
-        relation = shot.get("relation")
-        if relation is None:
-            continue
+        relation = shot["relation"]
         pool.setdefault(relation, []).append(shot)
     return pool
 
 
 def build_shot_index(shots: Dict) -> Dict[str, dict]:
-    if not shots:
-        return {}
-    first_value = next(iter(shots.values()))
-    if isinstance(first_value, list):
-        shot_index: Dict[str, dict] = {}
-        for shot_list in shots.values():
-            for shot in shot_list:
-                shot_id = shot.get("id")
-                if shot_id is not None:
-                    shot_index[shot_id] = shot
-        return shot_index
-
     return shots
 
 
 def enrich_feedback_samples(feedback_samples, shots_by_id: Dict[str, dict]) -> None:
     for sample in feedback_samples.all_samples:
-        support = shots_by_id.get(sample.id_1shot)
-        query = shots_by_id.get(sample.id_query)
-        if support:
-            sample.relation = support.get("relation", "")
-            sample.support_sentence = get_sentence_with_tags(support).strip()
-        if query:
-            sample.query_sentence = get_sentence_with_tags(query).strip()
+        support = shots_by_id[sample.id_1shot]
+        query = shots_by_id[sample.id_query]
+        sample.relation = support["relation"]
+        sample.support_sentence = get_sentence_with_tags(support).strip()
+        sample.query_sentence = get_sentence_with_tags(query).strip()
 
 
 def load_data_assets(args, data_dir: str) -> Tuple[Dict, Dict, Dict, Dict]:

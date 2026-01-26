@@ -36,22 +36,17 @@ def run_inference_fn(
     tokenizer,
     batch_size: int = 8,
 ) -> FeedbackSamples:
-    if not feedback_samples.selected_samples:
-        return feedback_samples
-
     base_prompt = node.inference_prompt or INFERENCE_PROMPT_V1
 
     prompts: List[str] = []
     for sample in feedback_samples.selected_samples:
-        relation = getattr(sample, "relation", "")
+        relation = sample.relation
         prompt = _format_inference_prompt(
             base_prompt=base_prompt,
             relation=relation,
-            relation_description=(
-                get_relation_description(relation, dt=dataset_type) if relation else ""
-            ),
-            support_sentence=getattr(sample, "support_sentence", ""),
-            query_sentence=getattr(sample, "query_sentence", ""),
+            relation_description=get_relation_description(relation, dt=dataset_type),
+            support_sentence=sample.support_sentence,
+            query_sentence=sample.query_sentence,
         )
         prompts.append(prompt)
 

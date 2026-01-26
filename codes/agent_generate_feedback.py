@@ -47,25 +47,18 @@ def generate_feedback_fn(
     tokenizer,
     batch_size: int = 4,
 ) -> FeedbackSamples:
-    if not feedback_samples.selected_samples:
-        feedback_samples.feedback_texts = []
-        feedback_samples.raw_feedback_texts = []
-        return ""
-
     base_prompt = node.feedback_prompt or FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
 
     prompts: List[str] = []
     for sample in feedback_samples.selected_samples:
-        relation = getattr(sample, "relation", "")
+        relation = sample.relation
         prompts.append(
             _format_feedback_prompt(
                 base_prompt=base_prompt,
                 relation=relation,
-                relation_description=(
-                    get_relation_description(relation, dt=dataset_type) if relation else ""
-                ),
-                support_sentence=getattr(sample, "support_sentence", ""),
-                query_sentence=getattr(sample, "query_sentence", ""),
+                relation_description=get_relation_description(relation, dt=dataset_type),
+                support_sentence=sample.support_sentence,
+                query_sentence=sample.query_sentence,
                 label=sample.label,
                 inference=sample.inference,
             )

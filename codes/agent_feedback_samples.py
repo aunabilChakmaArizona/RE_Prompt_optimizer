@@ -12,6 +12,11 @@ class FeedbackSample:
         self.id_query = id_query
         self.inference = inference
         self.label = label
+        self.relation = ""
+        self.support_sentence = ""
+        self.query_sentence = ""
+        self.raw_feedback_text = ""
+        self.feedback_text = ""
 
     def __repr__(self):
         return (

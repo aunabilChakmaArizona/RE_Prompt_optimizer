@@ -50,8 +50,6 @@ RELATION_DESCRIPTION = {
 
 def get_relation_description(relation, dt = "fs_tacred"):
     if dt == "fs_tacred":
-        assert relation in RELATION_DESCRIPTION.keys()
-
         return RELATION_DESCRIPTION[relation]
     else:
         return ""

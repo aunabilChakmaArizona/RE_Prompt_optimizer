@@ -44,8 +44,6 @@ def evaluate_fn(
     eval_id: str | int | None = None,
     output_dir: str | None = None,
 ) -> float:
-    if not episodes:
-        return 0.0
     if output_dir and eval_id is None:
         raise ValueError("eval_id is required when output_dir is provided.")
 
