@@ -4,6 +4,7 @@ from typing import Callable, List, Optional, Sequence
 
 from agent_feedback_samples import FeedbackSamples
 from agent_graph_node import GraphNode
+from agent_select_feedback import select_feedback_samples
 
 
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
@@ -73,6 +74,7 @@ class GraphTraversal:
         generate_feedback_fn: GenerateFeedbackFn,
         mutate_prompt_fn: MutatePromptFn,
         evaluate_fn: EvaluateFn,
+        selection_mode: str = "mixed",
         on_iteration_end: Optional[IterationHook] = None,
     ) -> tuple[GraphNode, List[GraphNode]]:
         if self.root.val_score is None:
@@ -83,8 +85,11 @@ class GraphTraversal:
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
             feedback_samples = run_inference_fn(parent, feedback_samples)
-            
-            # todo: will select 3 samples based on some priority from the feedback samples
+            feedback_samples = select_feedback_samples(
+                feedback_samples,
+                selection_mode=selection_mode,
+                rng=self.rng,
+            )
             
             feedback_text = generate_feedback_fn(parent, feedback_samples)
 
