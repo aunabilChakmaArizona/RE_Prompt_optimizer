@@ -6,6 +6,7 @@ from typing import Tuple
 import torch
 from huggingface_hub import login
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.utils import is_flash_attn_2_available
 
 
 def _default_device_map() -> str:
@@ -23,18 +24,28 @@ def _default_dtype(device_map: str) -> torch.dtype:
     return torch.float32
 
 
+def _default_attn_implementation(device_map: str) -> str | None:
+    if device_map == "cpu":
+        return None
+    if torch.cuda.is_available() and is_flash_attn_2_available():
+        return "flash_attention_2"
+    return None
+
+
 def load_model_and_tokenizer(model_id: str) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
     hf_token = os.getenv("HF_TOKEN")
     if hf_token:
         login(token=hf_token)
     device_map = _default_device_map()
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype=_default_dtype(device_map),
-        trust_remote_code=True,
-        device_map=device_map, 
-        # todo:  attn_implementation="flash_attention_2" if supported
-    )
+    attn_implementation = _default_attn_implementation(device_map)
+    model_kwargs = {
+        "torch_dtype": _default_dtype(device_map),
+        "trust_remote_code": True,
+        "device_map": device_map,
+    }
+    if attn_implementation:
+        model_kwargs["attn_implementation"] = attn_implementation
+    model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     model.eval()
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
