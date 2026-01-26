@@ -83,6 +83,9 @@ class GraphTraversal:
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
             feedback_samples = run_inference_fn(parent, feedback_samples)
+            
+            # todo: will select 3 samples based on some priority from the feedback samples
+            
             feedback_text = generate_feedback_fn(parent, feedback_samples)
 
             new_prompt = mutate_prompt_fn(parent, feedback_samples, feedback_text)

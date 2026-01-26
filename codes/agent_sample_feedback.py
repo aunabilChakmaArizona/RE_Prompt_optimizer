@@ -1,49 +1,69 @@
 from __future__ import annotations
 
 import random
-from typing import Iterable, List, Optional
+from typing import Dict, List, Optional
 
 from agent_feedback_samples import FeedbackSample, FeedbackSamples
 
 
 def sample_feedback_fn(
-    k: int,
-    feedback_pool: Iterable[dict],
+    feedback_pool: Dict[str, List[dict]],
+    k: int = 100,
     rng: Optional[random.Random] = None,
 ) -> FeedbackSamples:
-    pool_list = list(feedback_pool)
     rng = rng or random.Random()
 
-    if not pool_list:
+    if not feedback_pool:
         return FeedbackSamples()
 
-    selected = rng.sample(pool_list, k=min(k, len(pool_list)))
+    print(f"sample_feedback_fn: k={k}, relations={len(feedback_pool)}")
+
+    candidate_relations = [
+        relation
+        for relation, instances in feedback_pool.items()
+        if relation != "no_relation" and instances
+    ]
+    if not candidate_relations:
+        print("sample_feedback_fn: no candidate relations found")
+        return FeedbackSamples()
+
+    selected_relations = rng.choices(candidate_relations, k=k)
 
     feedback_samples = FeedbackSamples()
-    for entry in pool_list:
+    for relation in selected_relations:
+        support_candidates = feedback_pool.get(relation, [])
+        if not support_candidates:
+            continue
+
+        support_instance = rng.choice(support_candidates)
+        other_relations = [
+            rel
+            for rel, instances in feedback_pool.items()
+            if rel != relation and instances
+        ]
+
+        choose_same_relation = rng.random() < 0.2
+        if choose_same_relation:
+            query_relation = relation
+            query_candidates = [
+                inst for inst in support_candidates if inst is not support_instance
+            ]
+            query_instance = rng.choice(query_candidates)
+        else:
+            query_relation = rng.choice(other_relations)
+            query_instance = rng.choice(feedback_pool[query_relation])
+
         sample = FeedbackSample(
-            id_1shot=entry.get("id_1shot", -1),
-            id_query=entry.get("id_query", -1),
+            id_1shot=support_instance.get("id_1shot", support_instance.get("id", -1)),
+            id_query=query_instance.get("id_query", query_instance.get("id", -1)),
             inference="",
-            label=entry.get("label", ""),
+            label="yes" if query_relation == relation else "no",
         )
-        sample.relation = entry.get("relation", "")
-        sample.relation_description = entry.get("relation_description", "")
-        sample.support_sentence = entry.get("support_sentence", "")
-        sample.query_sentence = entry.get("query_sentence", "")
         feedback_samples.add_to_all_samples(sample)
 
-    for entry in selected:
-        sample = FeedbackSample(
-            id_1shot=entry.get("id_1shot", -1),
-            id_query=entry.get("id_query", -1),
-            inference="",
-            label=entry.get("label", ""),
-        )
-        sample.relation = entry.get("relation", "")
-        sample.relation_description = entry.get("relation_description", "")
-        sample.support_sentence = entry.get("support_sentence", "")
-        sample.query_sentence = entry.get("query_sentence", "")
-        feedback_samples.add_to_selected_samples(sample)
-
+    print(
+        f"sample_feedback_fn: done, "
+        f"all_samples={len(feedback_samples.all_samples)}, "
+        f"selected_samples={len(feedback_samples.selected_samples)}"
+    )
     return feedback_samples
