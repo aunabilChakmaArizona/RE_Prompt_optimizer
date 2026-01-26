@@ -9,10 +9,10 @@ from agent_select_feedback import select_feedback_samples
 
 
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
-RunInferenceFn = Callable[[GraphNode, FeedbackSamples], FeedbackSamples]
-GenerateFeedbackFn = Callable[[GraphNode, FeedbackSamples], str]
-MutatePromptFn = Callable[[GraphNode, FeedbackSamples], str]
-EvaluateFn = Callable[[GraphNode, str], float]
+RunInferenceFn = Callable[..., FeedbackSamples]
+GenerateFeedbackFn = Callable[..., FeedbackSamples]
+MutatePromptFn = Callable[..., str]
+EvaluateFn = Callable[..., float]
 IterationHook = Callable[[int, GraphNode, GraphNode], None]
 
 

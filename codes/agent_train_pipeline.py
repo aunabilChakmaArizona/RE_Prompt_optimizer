@@ -153,7 +153,6 @@ def build_training_functions(
             tokenizer=tokenizer,
             episodes=episodes,
             shots=shots,
-            relation_descriptions={},
             query_index=args.query_index,
             batch_size=args.eval_batch_size,
             n_chunks=args.eval_n_chunks,

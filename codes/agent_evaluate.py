@@ -38,7 +38,6 @@ def evaluate_fn(
     tokenizer,
     episodes: List[Dict],
     shots: Dict,
-    relation_descriptions: Dict[str, str],
     query_index: int = 0,
     batch_size: int = 8,
     n_chunks: int = 1,
