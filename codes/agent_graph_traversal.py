@@ -16,7 +16,7 @@ EvaluateFn = Callable[[GraphNode, str], float]
 IterationHook = Callable[[int, GraphNode, GraphNode], None]
 
 
-class GraphTraversal:
+class EvolutionarySearch:
     def __init__(
         self,
         root: GraphNode,
@@ -79,30 +79,30 @@ class GraphTraversal:
         on_iteration_end: Optional[IterationHook] = None,
     ) -> tuple[GraphNode, List[GraphNode]]:
         start_time = time.monotonic()
-        print("[graph_traversal] start")
+        print("[evolutionary_search] start")
         if self.root.val_score is None:
-            print("[graph_traversal] evaluate root")
+            print("[evolutionary_search] evaluate root")
             self.root.val_score = evaluate_fn(self.root, "validation")
 
         for iteration in range(self.max_iterations):
             iter_start = time.monotonic()
-            print(f"[graph_traversal] iteration {iteration + 1}/{self.max_iterations} start")
+            print(f"[evolutionary_search] iteration {iteration + 1}/{self.max_iterations} start")
             parent = self.sample_parent()
-            print("[graph_traversal] sample feedback")
+            print("[evolutionary_search] sample feedback")
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
-            print("[graph_traversal] run inference")
+            print("[evolutionary_search] run inference")
             feedback_samples = run_inference_fn(parent, feedback_samples)
-            print("[graph_traversal] select feedback samples")
+            print("[evolutionary_search] select feedback samples")
             feedback_samples = select_feedback_samples(
                 feedback_samples,
                 selection_mode=selection_mode,
                 rng=self.rng,
             )
-            print("[graph_traversal] generate feedback text")
+            print("[evolutionary_search] generate feedback text")
             feedback_text = generate_feedback_fn(parent, feedback_samples)
 
-            print("[graph_traversal] mutate prompt")
+            print("[evolutionary_search] mutate prompt")
             new_prompt = mutate_prompt_fn(parent, feedback_samples, feedback_text)
             child = GraphNode(
                 inference_prompt=new_prompt,
@@ -112,25 +112,25 @@ class GraphTraversal:
                 mutation_prompt=self.mutation_prompt,
                 example_generation_prompt=self.example_generation_prompt,
             )
-            print("[graph_traversal] evaluate child")
+            print("[evolutionary_search] evaluate child")
             child.val_score = evaluate_fn(child, "validation")
 
-            print("[graph_traversal] update graph")
+            print("[evolutionary_search] update graph")
             parent.add_child_from_feedback(feedback_samples, child)
             self.population.append(child)
 
             if on_iteration_end is not None:
-                print("[graph_traversal] on_iteration_end hook")
+                print("[evolutionary_search] on_iteration_end hook")
                 on_iteration_end(iteration, parent, child)
 
             iter_elapsed = time.monotonic() - iter_start
             total_elapsed = time.monotonic() - start_time
             print(
-                f"[graph_traversal] iteration {iteration + 1} end "
+                f"[evolutionary_search] iteration {iteration + 1} end "
                 f"(iter {iter_elapsed:.2f}s, total {total_elapsed:.2f}s)"
             )
 
         total_elapsed = time.monotonic() - start_time
-        print(f"[graph_traversal] end (total {total_elapsed:.2f}s)")
+        print(f"[evolutionary_search] end (total {total_elapsed:.2f}s)")
         
         return self.best_node(), self.population
