@@ -39,6 +39,9 @@ class EvolutionarySearch:
         self.example_generation_prompt = example_generation_prompt
         self.dataset_type = dataset_type
         self.rng = rng or random.Random()
+        if self.root.node_id is None:
+            self.root.node_id = 0
+        self._next_node_id = self.root.node_id + 1
 
     def _format_feedback_text(self, feedback_samples: FeedbackSamples) -> str:
         feedback_texts = getattr(feedback_samples, "feedback_texts", None)
@@ -141,7 +144,9 @@ class EvolutionarySearch:
                 feedback_prompt=self.feedback_prompt,
                 mutation_prompt=self.mutation_prompt,
                 example_generation_prompt=self.example_generation_prompt,
+                node_id=self._next_node_id,
             )
+            self._next_node_id += 1
             print("[evolutionary_search] evaluate child")
             child.val_score = evaluate_fn(
                 child, "validation", dataset_type=self.dataset_type

@@ -13,10 +13,12 @@ class GraphNode:
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         example_generation_prompt: str = "",
+        node_id: Optional[int] = None,
         val_score: Optional[float] = None,
         test_score: Optional[float] = None,
     ):
         self.inference_prompt = inference_prompt
+        self.node_id = node_id
 
         # Graph structure
         self.parent = parent
