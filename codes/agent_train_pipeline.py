@@ -77,6 +77,9 @@ def build_training_functions(
     eval_output_dir: str,
     rng: random.Random,
 ):
+    yes_token_id = tokenizer.encode("yes", add_special_tokens=False)[0]
+    no_token_id = tokenizer.encode("no", add_special_tokens=False)[0]
+
     def sample_feedback(k: int):
         samples = _sample_feedback_fn(feedback_pool, k=k, rng=rng)
         enrich_feedback_samples(samples, train_shot_index)
@@ -92,6 +95,8 @@ def build_training_functions(
             model=model,
             tokenizer=tokenizer,
             batch_size=args.inference_batch_size,
+            yes_token_id=yes_token_id,
+            no_token_id=no_token_id,
         )
 
     def generate_feedback(node: GraphNode, feedback_samples):
@@ -135,6 +140,8 @@ def build_training_functions(
             n_chunks=args.eval_n_chunks,
             eval_id=eval_id,
             output_dir=eval_output_dir,
+            yes_token_id=yes_token_id,
+            no_token_id=no_token_id,
         )
 
     return sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate

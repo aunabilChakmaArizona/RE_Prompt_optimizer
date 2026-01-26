@@ -35,6 +35,8 @@ def run_inference_fn(
     model,
     tokenizer,
     batch_size: int = 8,
+    yes_token_id: int | None = None,
+    no_token_id: int | None = None,
 ) -> FeedbackSamples:
     base_prompt = node.inference_prompt or INFERENCE_PROMPT_V1
 
@@ -55,6 +57,8 @@ def run_inference_fn(
         model=model,
         tokenizer=tokenizer,
         batch_size=batch_size,
+        yes_token_id=yes_token_id,
+        no_token_id=no_token_id,
     )
 
     for sample, pred in zip(feedback_samples.selected_samples, predictions):

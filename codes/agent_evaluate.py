@@ -43,6 +43,8 @@ def evaluate_fn(
     n_chunks: int = 1,
     eval_id: str | int | None = None,
     output_dir: str | None = None,
+    yes_token_id: int | None = None,
+    no_token_id: int | None = None,
 ) -> float:
     if output_dir and eval_id is None:
         raise ValueError("eval_id is required when output_dir is provided.")
@@ -84,7 +86,12 @@ def evaluate_fn(
     )
 
     predictions = run_binary_inference(
-        prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
+        prompts,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        yes_token_id=yes_token_id,
+        no_token_id=no_token_id,
     )
 
     if output_dir:

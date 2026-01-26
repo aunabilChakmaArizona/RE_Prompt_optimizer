@@ -30,6 +30,8 @@ def run_binary_inference(
     enable_thinking: bool = False,
     yes_token: str = "yes",
     no_token: str = "no",
+    yes_token_id: int | None = None,
+    no_token_id: int | None = None,
 ) -> List[str]:
     if not prompts:
         return []
@@ -42,8 +44,8 @@ def run_binary_inference(
         f"batch_size={batch_size}, batches={num_batches}"
     )
 
-    yes_token_id = _get_token_id(tokenizer, yes_token)
-    no_token_id = _get_token_id(tokenizer, no_token)
+    yes_token_id = yes_token_id if yes_token_id is not None else _get_token_id(tokenizer, yes_token)
+    no_token_id = no_token_id if no_token_id is not None else _get_token_id(tokenizer, no_token)
 
     predictions: List[str] = []
     target_device = getattr(model, "device", None)

@@ -47,7 +47,7 @@ def run_prompts(
         if target_device is not None:
             model_inputs = model_inputs.to(target_device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             generated_ids = model.generate(
                 **model_inputs, max_new_tokens=max_new_tokens, **gen_kwargs
             )
