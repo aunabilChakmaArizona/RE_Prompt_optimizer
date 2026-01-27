@@ -95,11 +95,9 @@ def build_training_functions(
     def sample_feedback(k: int):
         samples = _sample_feedback_fn(feedback_pool, k=k, rng=rng)
         enrich_feedback_samples(samples, train_shot_index)
-        samples.selected_samples = list(samples.all_samples)
         return samples
 
     def run_inference(node: GraphNode, feedback_samples):
-        feedback_samples.selected_samples = list(feedback_samples.all_samples)
         return _run_inference_fn(
             node,
             feedback_samples,

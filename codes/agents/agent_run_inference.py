@@ -40,7 +40,7 @@ def run_inference_fn(
     base_prompt = node.inference_prompt or INFERENCE_PROMPT_V1
 
     prompts: List[str] = []
-    for sample in feedback_samples.selected_samples:
+    for sample in feedback_samples.all_samples:
         relation = sample.relation
         prompt = _format_inference_prompt(
             base_prompt=base_prompt,
@@ -60,7 +60,7 @@ def run_inference_fn(
         no_token_id=no_token_id,
     )
 
-    for sample, pred in zip(feedback_samples.selected_samples, predictions):
+    for sample, pred in zip(feedback_samples.all_samples, predictions):
         sample.inference = pred
 
     return feedback_samples
