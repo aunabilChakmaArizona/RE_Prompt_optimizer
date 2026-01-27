@@ -69,39 +69,44 @@ def run_binary_inference(
 
     predictions: List[str] = []
     target_device = getattr(model, "device", None)
+    original_padding_side = getattr(tokenizer, "padding_side", "right")
 
-    for batch_index, batch in enumerate(_batched(list(prompts), batch_size), start=1):
-        if use_chat_template:
-            formatted = [
-                tokenizer.apply_chat_template(
-                    [{"role": "user", "content": prompt}],
-                    tokenize=False,
-                    add_generation_prompt=add_generation_prompt,
-                    enable_thinking=enable_thinking,
-                )
-                for prompt in batch
-            ]
-        else:
-            formatted = list(batch)
+    try:
+        tokenizer.padding_side = "left"
+        for batch_index, batch in enumerate(_batched(list(prompts), batch_size), start=1):
+            if use_chat_template:
+                formatted = [
+                    tokenizer.apply_chat_template(
+                        [{"role": "user", "content": prompt}],
+                        tokenize=False,
+                        add_generation_prompt=add_generation_prompt,
+                        enable_thinking=enable_thinking,
+                    )
+                    for prompt in batch
+                ]
+            else:
+                formatted = list(batch)
 
-        model_inputs = tokenizer(
-            formatted, return_tensors="pt", padding=True, truncation=True
-        )
-        if target_device is not None:
-            model_inputs = model_inputs.to(target_device)
+            model_inputs = tokenizer(
+                formatted, return_tensors="pt", padding=True, truncation=True
+            )
+            if target_device is not None:
+                model_inputs = model_inputs.to(target_device)
 
-        with torch.inference_mode():
-            outputs = model(**model_inputs, use_cache=False)
-            logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
+            with torch.inference_mode():
+                outputs = model(**model_inputs, use_cache=False)
+                logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
 
-        yes_logits = logits[:, 0]
-        no_logits = logits[:, 1]
-        predictions.extend(
-            [yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)]
-        )
+            yes_logits = logits[:, 0]
+            no_logits = logits[:, 1]
+            predictions.extend(
+                [yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)]
+            )
 
-        if log_every and batch_index % log_every == 0 and batch_index > 0:
-            print(f"\rProcessed {batch_index}/{num_batches} batches", end="", flush=True)
+            if log_every and batch_index % log_every == 0 and batch_index > 0:
+                print(f"\rProcessed {batch_index}/{num_batches} batches", end="", flush=True)
+    finally:
+        tokenizer.padding_side = original_padding_side
 
     if log_every and num_batches >= log_every:
         print(f"\rProcessed {num_batches}/{num_batches} batches", end="", flush=True)

@@ -30,6 +30,7 @@ def _default_attn_implementation(device_map: str) -> str | None:
     if device_map == "cpu":
         return None
     if torch.cuda.is_available() and is_flash_attn_2_available():
+        print("[Model] flash_attention_2 found")
         return "flash_attention_2"
     return None
 
@@ -53,7 +54,6 @@ def load_model_and_tokenizer(
     model.eval()
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    tokenizer.padding_side = "left"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         model.config.pad_token_id = tokenizer.pad_token_id
