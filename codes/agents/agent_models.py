@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from huggingface_hub import login
@@ -9,7 +9,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import is_flash_attn_2_available
 
 
-def _default_device_map() -> str:
+def _default_device_map(device_map: Optional[str]) -> str:
+    if device_map:
+        return device_map
     env_device = os.getenv("DEVICE_MAP") or os.getenv("CUDA_DEVICE")
     if env_device:
         return env_device
@@ -32,11 +34,13 @@ def _default_attn_implementation(device_map: str) -> str | None:
     return None
 
 
-def load_model_and_tokenizer(model_id: str) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
+def load_model_and_tokenizer(
+    model_id: str, device_map: Optional[str] = None
+) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
     hf_token = os.getenv("HF_TOKEN")
     if hf_token:
         login(token=hf_token)
-    device_map = _default_device_map()
+    device_map = _default_device_map(device_map)
     attn_implementation = _default_attn_implementation(device_map)
     model_kwargs = {
         "torch_dtype": _default_dtype(device_map),

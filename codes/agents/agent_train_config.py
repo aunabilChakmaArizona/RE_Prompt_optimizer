@@ -11,13 +11,11 @@ def default_data_dir() -> str:
 
 def default_trainings_dir() -> str:
     return os.path.abspath(
-        os.path.join(os.path.dirname(__file__), os.pardir, "trainings")
+        os.path.join(os.path.dirname(__file__), os.pardir, "./../trainings")
     )
-
 
 def resolve_data_dir(data_dir: Optional[str]) -> str:
     return data_dir or default_data_dir()
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run evolutionary prompt optimization.")
@@ -42,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selection-mode", default="mixed")
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--device-map",
+        default="cuda:0",
+        help="Device map override (e.g., cuda:0, cuda:1, cpu, auto)",
+    )
     parser.add_argument("--inference-batch-size", type=int, default=8)
     parser.add_argument("--feedback-batch-size", type=int, default=4)
     parser.add_argument("--eval-batch-size", type=int, default=8)

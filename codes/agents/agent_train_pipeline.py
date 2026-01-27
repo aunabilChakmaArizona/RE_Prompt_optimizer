@@ -171,7 +171,9 @@ def build_root_node() -> GraphNode:
 
 def load_model_and_data(args, data_dir: str, eval_output_dir: str, rng_seed: int):
     rng = random.Random(rng_seed)
-    model, tokenizer = load_model_and_tokenizer(args.model)
+    model, tokenizer = load_model_and_tokenizer(
+        args.model, device_map=args.device_map
+    )
     feedback_pool, train_shot_index, dev_data, test_data = load_data_assets(
         args, data_dir
     )

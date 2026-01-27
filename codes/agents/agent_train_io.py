@@ -33,6 +33,9 @@ def create_run_dir(trainings_dir: str, model_id: str) -> str:
 
 def setup_logging(run_dir: str) -> Tuple[object, object, object]:
     log_path = os.path.join(run_dir, "train.log")
+
+    print(f"[IO] Logging file: {log_path}")
+
     log_file = open(log_path, "w", encoding="utf-8")
     stdout_tee = Tee(sys.stdout, log_file)
     stderr_tee = Tee(sys.stderr, log_file)
