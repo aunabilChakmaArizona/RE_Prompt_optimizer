@@ -10,6 +10,7 @@ from agents.agent_graph_node import GraphNode
 from agents.agent_prompts import INFERENCE_PROMPT_V1
 from agents.agent_data_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
 from agents.agent_metrics import compute_prf_stats
+from agents.agent_scorer import NO_RELATION
 from agents.agent_relation_utils import get_relation_description
 
 
@@ -52,8 +53,12 @@ def evaluate_fn(
     start_time = time.perf_counter()
     base_prompt = node.inference_prompt or INFERENCE_PROMPT_V1
 
+    print(f"[agent_evaluate] evaluate_fn: base_prompt=\n{base_prompt}")
+
     prompts: List[str] = []
-    labels: List[str] = []
+    pair_labels: List[str] = []
+    episode_relations: List[List[str]] = []
+    episode_labels: List[str] = []
 
     for episode in episodes:
         ways = episode["meta_train"]
@@ -62,9 +67,11 @@ def evaluate_fn(
         query_relation = query["relation"]
         query_sentence = get_sentence_with_tags(query).strip()
 
+        relations: List[str] = []
         for way in ways:
             way_shots = resolve_way_shots(way, shots)
             relation = way_shots[0]["relation"]
+            relations.append(relation)
             support_sentences = [get_sentence_with_tags(s).strip() for s in way_shots]
             relation_description = get_relation_description(relation, dt=dataset_type)
 
@@ -77,7 +84,13 @@ def evaluate_fn(
                     query_sentence=query_sentence,
                 )
             )
-            labels.append("yes" if relation == query_relation else "no")
+            pair_labels.append("yes" if relation == query_relation else "no")
+
+        episode_relations.append(relations)
+        if query_relation in relations:
+            episode_labels.append(query_relation)
+        else:
+            episode_labels.append(NO_RELATION)
 
     print(
         f"[agent_evaluate] evaluate_fn: split={split}, episodes={len(episodes)}, "
@@ -85,7 +98,7 @@ def evaluate_fn(
         f"n_chunks={n_chunks}, eval_id={eval_id}"
     )
 
-    predictions = run_binary_inference(
+    pair_predictions = run_binary_inference(
         prompts,
         model=model,
         tokenizer=tokenizer,
@@ -93,6 +106,18 @@ def evaluate_fn(
         yes_token_id=yes_token_id,
         no_token_id=no_token_id,
     )
+
+    episode_predictions: List[str] = []
+    offset = 0
+    for relations in episode_relations:
+        chunk = pair_predictions[offset : offset + len(relations)]
+        offset += len(relations)
+        predicted_relation = NO_RELATION
+        for relation, pred in zip(relations, chunk):
+            if pred == "yes":
+                predicted_relation = relation
+                break
+        episode_predictions.append(predicted_relation)
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -104,17 +129,21 @@ def evaluate_fn(
                 {
                     "eval_id": eval_id,
                     "split": split,
-                    "labels": labels,
-                    "predictions": predictions,
+                    "labels": episode_labels,
+                    "predictions": episode_predictions,
+                    "pair_labels": pair_labels,
+                    "pair_predictions": pair_predictions,
                 },
                 handle,
             )
         print(f"[agent_evaluate] evaluate_fn: saved labels/predictions to {output_path}")
 
-    metrics = compute_prf_stats(labels, predictions, n_chunks=n_chunks)
+    metrics = compute_prf_stats(episode_labels, episode_predictions, n_chunks=n_chunks)
     elapsed = time.perf_counter() - start_time
     print(
         f"[agent_evaluate] evaluate_fn: done in {elapsed:.2f}s, "
-        f"f1_mean={metrics['f1_mean']:.4f}"
+        f"precision={metrics['precision_mean'] * 100:.2f}±{metrics['precision_std'] * 100:.2f}, "
+        f"recall={metrics['recall_mean'] * 100:.2f}±{metrics['recall_std'] * 100:.2f}, "
+        f"f1={metrics['f1_mean'] * 100:.2f}±{metrics['f1_std'] * 100:.2f}"
     )
     return metrics
