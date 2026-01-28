@@ -41,7 +41,7 @@ def load_model_and_tokenizer(
     device_map = _default_device_map(device_map)
     attn_implementation = _default_attn_implementation(device_map)
     model_kwargs = {
-        "torch_dtype": _default_dtype(device_map),
+        "dtype": _default_dtype(device_map),
         "trust_remote_code": True,
         "device_map": device_map,
     }

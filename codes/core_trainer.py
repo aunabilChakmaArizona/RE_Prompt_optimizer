@@ -44,43 +44,43 @@ def main() -> None:
         )
         sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs 
 
-        root = build_root_node()
+        # root = build_root_node()
 
-        search = EvolutionarySearch(
-            root=root,
-            max_iterations=args.max_iterations,
-            feedback_sample_size=args.feedback_sample_size,
-            temperature=args.temperature,
-            feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
-            mutation_prompt=MUTATION_PROMPT_V1,
-            example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
-            dataset_type=args.dataset_type,
-            rng=rng,
-        )
+        # search = EvolutionarySearch(
+        #     root=root,
+        #     max_iterations=args.max_iterations,
+        #     feedback_sample_size=args.feedback_sample_size,
+        #     temperature=args.temperature,
+        #     feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
+        #     mutation_prompt=MUTATION_PROMPT_V1,
+        #     example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+        #     dataset_type=args.dataset_type,
+        #     rng=rng,
+        # )
 
-        print(f"[train] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
-        best_node, population = search.run(
-            sample_feedback_fn=sample_feedback,
-            run_inference_fn=run_inference,
-            generate_feedback_fn=generate_feedback,
-            mutate_prompt_fn=mutate_prompt,
-            evaluate_fn=evaluate,
-            selection_mode=args.selection_mode,
-            overall_start_time=overall_start,
-        )
+        # print(f"[train] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
+        # best_node, population = search.run(
+        #     sample_feedback_fn=sample_feedback,
+        #     run_inference_fn=run_inference,
+        #     generate_feedback_fn=generate_feedback,
+        #     mutate_prompt_fn=mutate_prompt,
+        #     evaluate_fn=evaluate,
+        #     selection_mode=args.selection_mode,
+        #     overall_start_time=overall_start,
+        # )
 
-        print("[train] evaluating best on test")
-        best_test_metrics = evaluate(best_node, "test")
+        # print("[train] evaluating best on test")
+        # best_test_metrics = evaluate(best_node, "test")
 
-        save_population(run_dir, population, best_node)
+        # save_population(run_dir, population, best_node)
 
-        summary = {
-            "run_dir": run_dir,
-            "best_val_score": best_node.val_score,
-            "best_test_metrics": best_test_metrics,
-            "population_size": len(population),
-        }
-        save_summary(run_dir, summary)
+        # summary = {
+        #     "run_dir": run_dir,
+        #     "best_val_score": best_node.val_score,
+        #     "best_test_metrics": best_test_metrics,
+        #     "population_size": len(population),
+        # }
+        # save_summary(run_dir, summary)
 
         print(f"[train] done (elapsed={time.monotonic() - overall_start:.2f}s)")
     finally:
