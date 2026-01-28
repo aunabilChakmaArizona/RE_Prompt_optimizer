@@ -132,11 +132,13 @@ Carefully read the inputs, outputs, and feedback to identify problems with the c
 Your task is to generate a revised form of the prompt so that the other LLM can improve the model’s generalization when using the prompt. 
 You may modify, add to, or remove any instructions or content in the current prompt in order to improve the prediction and enhance generalization.
 
+Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#). These placeholders must remain exactly the same. Only the surrounding instructional text may be revised.
+
 You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 
-INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, #N# support sentence#S# that exemplify the relation, and a query sentence.
+INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, #NO_OF_SUPPORT_SENTENCES# support sentence#PLURAL_S_OR_NO_S# that exemplify the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
 
@@ -148,6 +150,8 @@ Query Sentence: #QUERY_SENTENCE#
 
 If the relation holds between the Subject and Object in the query sentence, say "yes"; otherwise, say "no". Output only "yes" or "no", and nothing else.
 '''
+
+INFERENCE_PROMPT_PLACEHODERS_V1 = ["#NO_OF_SUPPORT_SENTENCES#", "#PLURAL_S_OR_NO_S#", "#RELATION#", "#RELATION_DESCRIPTION#", "#QUERY_SENTENCE#", "#SUPPORT_SENTENCE_BLOCK#"]
 
 
 EXAMPLE_GENERATION_PROMPT_V1 = '''You are given a relation name, the description of the relation, and a support sentence that exemplifies the relation.

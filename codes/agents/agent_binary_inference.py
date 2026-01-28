@@ -36,7 +36,7 @@ def run_binary_inference(
     model,
     tokenizer,
     batch_size: int = 8,
-    log_every: int = 50,
+    log_every: int = 20,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
     enable_thinking: bool = False,

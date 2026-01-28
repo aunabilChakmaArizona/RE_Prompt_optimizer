@@ -6,7 +6,7 @@ from typing import List
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
-from agents.agent_prompts import MUTATION_PROMPT_V1
+from agents.agent_prompts import MUTATION_PROMPT_V1, INFERENCE_PROMPT_PLACEHODERS_V1
 from agents.agent_relation_utils import get_relation_description
 
 
@@ -63,6 +63,8 @@ def mutate_prompt_fn(
         prompt = prompt.replace(f"#LABEL_{idx+1}#", get_attr(idx, "label"))
         prompt = prompt.replace(f"#INFERENCE_{idx+1}#", get_attr(idx, "inference"))
         prompt = prompt.replace(f"#FEEDBACK_{idx+1}#", feedback_texts[idx])
+
+    prompt = prompt.replace("#LIST_OF_PLACEHOLDERS#", str(INFERENCE_PROMPT_PLACEHODERS_V1))
 
     raw_response = run_prompt(
         prompt,

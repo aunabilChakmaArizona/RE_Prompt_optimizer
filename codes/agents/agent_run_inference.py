@@ -63,6 +63,7 @@ def run_inference_fn(
         batch_size=batch_size,
         yes_token_id=yes_token_id,
         no_token_id=no_token_id,
+        log_every=5
     )
 
     for sample, pred in zip(feedback_samples.all_samples, predictions):
