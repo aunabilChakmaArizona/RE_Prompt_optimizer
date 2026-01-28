@@ -22,6 +22,13 @@ class Tee:
         for stream in self._streams:
             stream.flush()
 
+    def isatty(self) -> bool:
+        for stream in self._streams:
+            isatty = getattr(stream, "isatty", None)
+            if callable(isatty) and isatty():
+                return True
+        return False
+
 
 def create_run_dir(trainings_dir: str, model_id: str) -> str:
     run_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
