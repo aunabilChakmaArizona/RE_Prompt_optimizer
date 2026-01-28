@@ -53,6 +53,7 @@ def load_model_and_tokenizer(
     print(f"[agent_models] model loading done: {model_id}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    tokenizer.padding_side = "left"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         model.config.pad_token_id = tokenizer.pad_token_id
