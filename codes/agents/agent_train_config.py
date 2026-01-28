@@ -6,12 +6,12 @@ from typing import Optional
 
 
 def default_data_dir() -> str:
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "data"))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "data"))
 
 
 def default_trainings_dir() -> str:
     return os.path.abspath(
-        os.path.join(os.path.dirname(__file__), os.pardir, "./../trainings")
+        os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "trainings")
     )
 
 def resolve_data_dir(data_dir: Optional[str]) -> str:
