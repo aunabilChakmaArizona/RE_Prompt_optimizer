@@ -173,9 +173,9 @@ class EvolutionarySearch:
                 feedback_prompt=self.feedback_prompt,
                 mutation_prompt=self.mutation_prompt,
                 example_generation_prompt=self.example_generation_prompt,
+                raw_mutation_response=raw_mutation_response,
                 node_id=self._next_node_id,
             )
-            child.raw_mutation_response = raw_mutation_response
             self._next_node_id += 1
             _log_step("[evolutionary_search] evaluate child")
             child.val_score = evaluate_fn(

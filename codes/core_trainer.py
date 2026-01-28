@@ -20,6 +20,8 @@ from agents.agent_train_io import (
 )
 from agents.agent_train_pipeline import build_root_node, load_model_and_data
 
+# TODO: the "\r" and model and other inline loading must not do to log file (it too much printing in the log file) need to track so that I can see upto which step it is running but it can't go to log file.
+
 def main() -> None:
     overall_start = time.monotonic()
     args = parse_args()
@@ -44,7 +46,7 @@ def main() -> None:
         )
         sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs 
 
-        # root = build_root_node()
+        root = build_root_node()
 
         # search = EvolutionarySearch(
         #     root=root,
