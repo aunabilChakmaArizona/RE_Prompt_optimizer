@@ -21,7 +21,7 @@ class EvolutionarySearch:
         self,
         root: GraphNode,
         max_iterations: int = 20,
-        feedback_sample_size: int = 3,
+        feedback_sample_size: int = 100,
         population_sampling_temperature: float = 1.0,
         feedback_prompt: str = "",
         mutation_prompt: str = "",
