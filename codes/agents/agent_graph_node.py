@@ -32,6 +32,7 @@ class GraphNode:
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
+        self.raw_mutation_response: Optional[str] = None
 
         # Scores
         self.val_score = val_score

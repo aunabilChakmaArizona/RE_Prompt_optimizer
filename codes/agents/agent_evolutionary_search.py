@@ -11,7 +11,7 @@ from agents.agent_select_feedback import select_feedback_samples
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
 RunInferenceFn = Callable[..., FeedbackSamples]
 GenerateFeedbackFn = Callable[..., FeedbackSamples]
-MutatePromptFn = Callable[..., Optional[str]]
+MutatePromptFn = Callable[..., Optional[tuple[str, str]]]
 EvaluateFn = Callable[..., float]
 IterationHook = Callable[[int, GraphNode, GraphNode], None]
 
@@ -139,12 +139,13 @@ class EvolutionarySearch:
             feedback_text = self._format_feedback_text(feedback_samples)
 
             print("[evolutionary_search] mutate prompt")
-            new_prompt = mutate_prompt_fn(
+            mutation_result = mutate_prompt_fn(
                 parent, feedback_samples, dataset_type=self.dataset_type
             )
-            if new_prompt is None:
+            if mutation_result is None:
                 print("[evolutionary_search] mutation failed; parent marked dead")
                 continue
+            new_prompt, raw_mutation_response = mutation_result
             child = GraphNode(
                 inference_prompt=new_prompt,
                 parent=parent,
@@ -155,6 +156,7 @@ class EvolutionarySearch:
                 example_generation_prompt=self.example_generation_prompt,
                 node_id=self._next_node_id,
             )
+            child.raw_mutation_response = raw_mutation_response
             self._next_node_id += 1
             print("[evolutionary_search] evaluate child")
             child.val_score = evaluate_fn(
