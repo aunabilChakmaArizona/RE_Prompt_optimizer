@@ -61,28 +61,29 @@ def main() -> None:
         )
 
         print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
-        # best_node, population = search.run(
-        #     sample_feedback_fn=sample_feedback,
-        #     run_inference_fn=run_inference,
-        #     generate_feedback_fn=generate_feedback,
-        #     mutate_prompt_fn=mutate_prompt,
-        #     evaluate_fn=evaluate,
-        #     selection_mode=args.selection_mode,
-        #     overall_start_time=overall_start,
-        # )
 
-        # print("[core_trainer] evaluating best on test")
-        # best_test_metrics = evaluate(best_node, "test")
+        best_node, population = search.run(
+            sample_feedback_fn=sample_feedback,
+            run_inference_fn=run_inference,
+            generate_feedback_fn=generate_feedback,
+            mutate_prompt_fn=mutate_prompt,
+            evaluate_fn=evaluate,
+            selection_mode=args.selection_mode,
+            overall_start_time=overall_start,
+        )
 
-        # save_population(run_dir, population, best_node)
+        print("[core_trainer] evaluating best on test")
+        best_test_metrics = evaluate(best_node, "test")
 
-        # summary = {
-        #     "run_dir": run_dir,
-        #     "best_val_score": best_node.val_score,
-        #     "best_test_metrics": best_test_metrics,
-        #     "population_size": len(population),
-        # }
-        # save_summary(run_dir, summary)
+        save_population(run_dir, population, best_node)
+
+        summary = {
+            "run_dir": run_dir,
+            "best_val_score": best_node.val_score,
+            "best_test_metrics": best_test_metrics,
+            "population_size": len(population),
+        }
+        save_summary(run_dir, summary)
 
         print(f"[core_trainer] done (elapsed={time.monotonic() - overall_start:.2f}s)")
     finally:
