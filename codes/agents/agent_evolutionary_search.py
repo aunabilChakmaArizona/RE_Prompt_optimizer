@@ -22,7 +22,7 @@ class EvolutionarySearch:
         root: GraphNode,
         max_iterations: int = 20,
         feedback_sample_size: int = 3,
-        temperature: float = 1.0,
+        population_sampling_temperature: float = 1.0,
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         example_generation_prompt: str = "",
@@ -33,7 +33,7 @@ class EvolutionarySearch:
         self.population: List[GraphNode] = [root]
         self.max_iterations = max_iterations
         self.feedback_sample_size = feedback_sample_size
-        self.temperature = temperature
+        self.population_sampling_temperature = population_sampling_temperature
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
@@ -61,8 +61,8 @@ class EvolutionarySearch:
         return float(score)
 
     def _softmax_weights(self, scores: Sequence[Optional[float]]) -> List[float]:
-        if self.temperature <= 0:
-            raise ValueError("temperature must be > 0")
+        if self.population_sampling_temperature <= 0:
+            raise ValueError("population_sampling_temperature must be > 0")
         finite_scores = [s for s in scores if s is not None]
         if not finite_scores:
             return [1.0 for _ in scores]
@@ -72,7 +72,9 @@ class EvolutionarySearch:
             if s is None:
                 weights.append(0.0)
             else:
-                weights.append(math.exp((s - max_score) / self.temperature))
+                weights.append(
+                    math.exp((s - max_score) / self.population_sampling_temperature)
+                )
         if sum(weights) == 0.0:
             return [1.0 for _ in scores]
         return weights

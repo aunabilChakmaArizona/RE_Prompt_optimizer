@@ -48,17 +48,17 @@ def main() -> None:
 
         root = build_root_node()
 
-        # search = EvolutionarySearch(
-        #     root=root,
-        #     max_iterations=args.max_iterations,
-        #     feedback_sample_size=args.feedback_sample_size,
-        #     temperature=args.temperature,
-        #     feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
-        #     mutation_prompt=MUTATION_PROMPT_V1,
-        #     example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
-        #     dataset_type=args.dataset_type,
-        #     rng=rng,
-        # )
+        search = EvolutionarySearch(
+            root=root,
+            max_iterations=args.max_iterations,
+            feedback_sample_size=args.feedback_sample_size,
+            population_sampling_temperature=args.population_sampling_temperature,
+            feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
+            mutation_prompt=MUTATION_PROMPT_V1,
+            example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+            dataset_type=args.dataset_type,
+            rng=rng,
+        )
 
         # print(f"[train] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
         # best_node, population = search.run(
