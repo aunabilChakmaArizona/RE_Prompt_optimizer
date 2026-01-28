@@ -10,9 +10,11 @@ class GraphNode:
         parent: Optional["GraphNode"] = None,
         feedback: str = "",
         raw_feedback_texts: Optional[List[str]] = None,
+        feedback_prompts_used: Optional[List[str]] = None,
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         example_generation_prompt: str = "",
+        mutation_prompt_used: str = "",
         raw_mutation_response: Optional[str] = None,
         node_id: Optional[int] = None,
         val_score: Optional[float] = None,
@@ -30,9 +32,13 @@ class GraphNode:
         # Prompt metadata
         self.feedback = feedback
         self.raw_feedback_texts = raw_feedback_texts if raw_feedback_texts is not None else []
+        self.feedback_prompts_used = (
+            feedback_prompts_used if feedback_prompts_used is not None else []
+        )
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
+        self.mutation_prompt_used = mutation_prompt_used
         self.raw_mutation_response = raw_mutation_response
 
         # Scores

@@ -15,6 +15,7 @@ class FeedbackSample:
         self.relation = ""
         self.support_sentence = ""
         self.query_sentence = ""
+        self.feedback_prompt = ""
         self.raw_feedback_text = ""
         self.feedback_text = ""
 
@@ -32,6 +33,7 @@ class FeedbackSamples:
 
         # Selected subset (e.g., 3-shot feedback)
         self.selected_samples: List[FeedbackSample] = []
+        self.feedback_prompts: List[str] = []
         self.raw_feedback_texts: List[str] = []
         self.feedback_texts: List[str] = []
 

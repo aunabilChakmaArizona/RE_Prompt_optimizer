@@ -68,11 +68,13 @@ def generate_feedback_fn(
         prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
     )
     feedback_texts = [_extract_feedback(text) for text in raw_feedback_texts]
+    feedback_samples.feedback_prompts = prompts
     feedback_samples.raw_feedback_texts = raw_feedback_texts
     feedback_samples.feedback_texts = feedback_texts
-    for sample, raw_feedback_text, feedback_text in zip(
-        feedback_samples.selected_samples, raw_feedback_texts, feedback_texts
+    for sample, prompt, raw_feedback_text, feedback_text in zip(
+        feedback_samples.selected_samples, prompts, raw_feedback_texts, feedback_texts
     ):
+        sample.feedback_prompt = prompt
         sample.raw_feedback_text = raw_feedback_text
         sample.feedback_text = feedback_text
 

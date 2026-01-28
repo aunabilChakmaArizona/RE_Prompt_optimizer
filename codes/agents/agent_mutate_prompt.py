@@ -36,7 +36,7 @@ def mutate_prompt_fn(
     model,
     tokenizer,
     max_new_tokens: int = 512,
-) -> Optional[Tuple[str, str]]:
+) -> Optional[Tuple[str, str, str]]:
     base_prompt = node.mutation_prompt or MUTATION_PROMPT_V1
 
     samples = feedback_samples.selected_samples
@@ -80,7 +80,7 @@ def mutate_prompt_fn(
         )
         candidate = _extract_between(raw_response, "p")
         if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
-            return candidate, raw_response
+            return candidate, raw_response, prompt
 
         print(f"[mutation] missing placeholders; retry {attempt}/{max_attempts}")
 
