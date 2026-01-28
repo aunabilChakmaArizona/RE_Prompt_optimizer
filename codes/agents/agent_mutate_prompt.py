@@ -82,8 +82,8 @@ def mutate_prompt_fn(
         if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
             return candidate, raw_response, prompt
 
-        print(f"[mutation] missing placeholders; retry {attempt}/{max_attempts}")
+        print(f"[agent_mutate_prompt] missing placeholders; retry {attempt}/{max_attempts}")
 
     node.is_dead = True
-    print("[mutation] node marked dead (too many placeholder failures)")
+    print("[agent_mutate_prompt] node marked dead (too many placeholder failures)")
     return None

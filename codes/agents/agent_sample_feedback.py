@@ -16,7 +16,7 @@ def sample_feedback_fn(
     if not feedback_pool:
         return FeedbackSamples()
 
-    print(f"sample_feedback_fn: k={k}, relations={len(feedback_pool)}")
+    print(f"[agent_sample_feedback] sample_feedback_fn: k={k}, relations={len(feedback_pool)}")
 
     candidate_relations = [
         relation
@@ -24,7 +24,7 @@ def sample_feedback_fn(
         if relation != "no_relation" and instances
     ]
     if not candidate_relations:
-        print("sample_feedback_fn: no candidate relations found")
+        print("[agent_sample_feedback] sample_feedback_fn: no candidate relations found")
         return FeedbackSamples()
 
     selected_relations = rng.choices(candidate_relations, k=k)
@@ -62,7 +62,7 @@ def sample_feedback_fn(
         feedback_samples.add_to_all_samples(sample)
 
     print(
-        f"sample_feedback_fn: done, "
+        f"[agent_sample_feedback] sample_feedback_fn: done, "
         f"all_samples={len(feedback_samples.all_samples)}, "
         f"selected_samples={len(feedback_samples.selected_samples)}"
     )

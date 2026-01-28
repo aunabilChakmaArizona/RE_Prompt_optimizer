@@ -31,11 +31,11 @@ def main() -> None:
     log_file, original_stdout, original_stderr = setup_logging(run_dir)
 
     try:
-        print(f"[train] data directory: {data_dir}")
-        print("[train] run_dir:", run_dir)
-        print("[train] model:", args.model)
-        print("[train] dataset_type:", args.dataset_type)
-        print(f"[train] elapsed={time.monotonic() - overall_start:.2f}s (startup)")
+        print(f"[core_trainer] data directory: {data_dir}")
+        print("[core_trainer] run_dir:", run_dir)
+        print("[core_trainer] model:", args.model)
+        print("[core_trainer] dataset_type:", args.dataset_type)
+        print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (startup)")
 
         write_args(run_dir, args)
         eval_output_dir = os.path.join(run_dir, "eval_outputs")
@@ -60,7 +60,7 @@ def main() -> None:
             rng=rng,
         )
 
-        # print(f"[train] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
+        print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
         # best_node, population = search.run(
         #     sample_feedback_fn=sample_feedback,
         #     run_inference_fn=run_inference,
@@ -71,7 +71,7 @@ def main() -> None:
         #     overall_start_time=overall_start,
         # )
 
-        # print("[train] evaluating best on test")
+        # print("[core_trainer] evaluating best on test")
         # best_test_metrics = evaluate(best_node, "test")
 
         # save_population(run_dir, population, best_node)
@@ -84,7 +84,7 @@ def main() -> None:
         # }
         # save_summary(run_dir, summary)
 
-        print(f"[train] done (elapsed={time.monotonic() - overall_start:.2f}s)")
+        print(f"[core_trainer] done (elapsed={time.monotonic() - overall_start:.2f}s)")
     finally:
         restore_logging(log_file, original_stdout, original_stderr)
 

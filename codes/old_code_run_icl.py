@@ -24,7 +24,7 @@ from datetime import datetime
 today = datetime.today()
 formatted_date = today.strftime("%Y%m%d")  # %Y = 4-digit year, %m = 2-digit month, %d = 2-digit day
 
-print(f"*********** Running Experiment on: {formatted_date}, Model:{args.model}, Data: {args.dataset}, Shots: {args.shots}, Query: {args.query}, CUDA: {args.cuda} ********, IS_SUMM: {args.is_summ}")
+print(f"[old_code_run_icl] *********** Running Experiment on: {formatted_date}, Model:{args.model}, Data: {args.dataset}, Shots: {args.shots}, Query: {args.query}, CUDA: {args.cuda} ********, IS_SUMM: {args.is_summ}")
 
 ####### imports
 
@@ -63,8 +63,8 @@ model_id = args.model
 
 DEVICE_MAP = args.cuda
 
-print(model_id)
-print(f"Device: {DEVICE_MAP}")
+print(f"[old_code_run_icl] {model_id}")
+print(f"[old_code_run_icl] Device: {DEVICE_MAP}")
 
 # quant_config = BitsAndBytesConfig(
 #     load_in_8bit=True,       # enables 8-bit weights
@@ -90,8 +90,8 @@ if tokenizer.pad_token is None:
 
 yes_token_id = tokenizer.encode("yes", add_special_tokens=False)[0]
 no_token_id = tokenizer.encode("no", add_special_tokens=False)[0]
-print(f"Yes token ID: {yes_token_id}")
-print(f"No token ID: {no_token_id}")
+print(f"[old_code_run_icl] Yes token ID: {yes_token_id}")
+print(f"[old_code_run_icl] No token ID: {no_token_id}")
 
 
 PROMPT_TEMPLATE = dict()
@@ -286,7 +286,7 @@ if args.is_summ == True:
     prompt_details += "_summ"
 
 full_data = []
-print()
+print("[old_code_run_icl]")
 
 file_ = args.dataset
 NEW_ROOT_DATA_PATH = '/storage2/home/aunabilchakma/data/relation_extraction/'
@@ -294,8 +294,8 @@ file_path = os.path.join(NEW_ROOT_DATA_PATH, file_)
 episodes = read_pickle_file(file_path)[args.ep_start:args.ep_end]
 shots = read_pickle_file(NEW_ROOT_DATA_PATH + f"fs_{args.dataset_core}_shots_details.pkl")
 
-print("Format: " + prompt_type + prompt_details)
-print("Running: " + file_)
+print("[old_code_run_icl] Format: " + prompt_type + prompt_details)
+print("[old_code_run_icl] Running: " + file_)
 
 if args.is_summ == True:
     summ_map = read_pickle_file(NEW_ROOT_DATA_PATH + f"fs_{args.dataset_core}_v3_summ_map_{(model_id).replace('/','-')}.pkl")
@@ -318,7 +318,7 @@ answers = []
 votes = []
 pairs = []
 
-print(f"Total episodes: {len(episodes)}")
+print(f"[old_code_run_icl] Total episodes: {len(episodes)}")
 for idx_episode, episode in enumerate(episodes):
     ways = episode['meta_train']
     query = episode['meta_test'][args.query]
@@ -417,9 +417,9 @@ batch_prompts = []
 for i in range(0, len(unique_to_do), batch_size):
     batch_prompts.append(unique_to_do[i:i+batch_size])
 
-print(f"Total votes {len(votes)}")
-print(f"To prompt LLM: {len(unique_to_do)}")
-print(f"To distribute in batches: {len(batch_prompts)}")
+print(f"[old_code_run_icl] Total votes {len(votes)}")
+print(f"[old_code_run_icl] To prompt LLM: {len(unique_to_do)}")
+print(f"[old_code_run_icl] To distribute in batches: {len(batch_prompts)}")
 total_batches = len(batch_prompts)
 
 # run batches
@@ -451,9 +451,9 @@ for i, batch in enumerate(batch_prompts):
         current_time = time.time()
         elapsed_time = current_time - time_start
 
-        print(f"\rBatch: {i} / {total_batches}, time passed: {(elapsed_time/3600):.2f} hours", end="")
+        print(f"\r[old_code_run_icl] Batch: {i} / {total_batches}, time passed: {(elapsed_time/3600):.2f} hours", end="")
 
-print()
+print("[old_code_run_icl]")
 
 for entry in to_do:
     pa = (entry[-2], entry[-1])
@@ -497,4 +497,4 @@ with open(NEW_ROOT_DATA_PATH + f'results_fewrel/{(args.model).replace("/","-")}-
         f.write('$$$$$ votes\n')
         f.write(str(ev) + '\n')
 
-print('\n************Ended***************')
+print('\n[old_code_run_icl] ************Ended***************')

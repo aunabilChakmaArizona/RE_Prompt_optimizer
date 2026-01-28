@@ -52,7 +52,7 @@ def run_binary_inference(
     total_prompts = len(prompts)
     num_batches = (total_prompts + batch_size - 1) // batch_size
     print(
-        f"run_binary_inference: {total_prompts} prompts, "
+        f"[agent_binary_inference] run_binary_inference: {total_prompts} prompts, "
         f"batch_size={batch_size}, batches={num_batches}"
     )
 
@@ -104,14 +104,14 @@ def run_binary_inference(
             )
 
             if log_every and batch_index % log_every == 0 and batch_index > 0:
-                print(f"\rProcessed {batch_index}/{num_batches} batches", end="", flush=True)
+                print(f"\r[agent_binary_inference] Processed {batch_index}/{num_batches} batches", end="", flush=True)
     finally:
         tokenizer.padding_side = original_padding_side
 
     if log_every and num_batches >= log_every:
-        print(f"\rProcessed {num_batches}/{num_batches} batches", end="", flush=True)
-        print()
+        print(f"\r[agent_binary_inference] Processed {num_batches}/{num_batches} batches", end="", flush=True)
+        print("[agent_binary_inference]")
 
     elapsed = time.perf_counter() - start_time
-    print(f"run_binary_inference: done in {elapsed:.2f}s")
+    print(f"[agent_binary_inference] run_binary_inference: done in {elapsed:.2f}s")
     return predictions

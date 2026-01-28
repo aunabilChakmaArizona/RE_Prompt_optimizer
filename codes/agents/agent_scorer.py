@@ -41,7 +41,7 @@ def score(key, prediction, verbose=False):
 
     # Print verbose information
     if verbose:
-        print("Per-relation statistics:")
+        print("[agent_scorer] Per-relation statistics:")
         relations = gold_by_relation.keys()
         longest_relation = 0
         for relation in sorted(relations):
@@ -76,11 +76,11 @@ def score(key, prediction, verbose=False):
             sys.stdout.write("{:.2%}".format(f1))
             sys.stdout.write("  #: %d" % gold)
             sys.stdout.write("\n")
-        print("")
+        print("[agent_scorer]")
 
     # Print the aggregate score
     if verbose:
-        print("Final Score:")
+        print("[agent_scorer] Final Score:")
     prec_micro = 1.0
     if sum(guessed_by_relation.values()) > 0:
         prec_micro   = float(sum(correct_by_relation.values())) / float(sum(guessed_by_relation.values()))
@@ -103,9 +103,8 @@ if __name__ == "__main__":
 
     # Check that the lengths match
     if len(prediction) != len(key):
-        print("Gold and prediction file must have same number of elements: %d in gold vs %d in prediction" % (len(key), len(prediction)))
+        print("[agent_scorer] Gold and prediction file must have same number of elements: %d in gold vs %d in prediction" % (len(key), len(prediction)))
         exit(1)
     
     # Score the predictions
     score(key, prediction, verbose=True)
-

@@ -32,8 +32,8 @@ model_id = "Qwen/Qwen3-14B"
 
 DEVICE_MAP = "cuda:2"
 
-print(model_id)
-print(f"Device: {DEVICE_MAP}")
+print(f"[old_code_summarization] {model_id}")
+print(f"[old_code_summarization] Device: {DEVICE_MAP}")
 
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
@@ -89,14 +89,14 @@ file_ = "fs_fewrel_shots_details.pkl"
 NEW_ROOT_DIR = '/storage2/home/aunabilchakma/data/relation_extraction/'
 test_data = read_pickle_file(os.path.join(NEW_ROOT_DIR, file_))
 
-print(f"Running for Summarization model: {model_id}")
-print(f"Processing core test sentences file: {file_}")
+print(f"[old_code_summarization] Running for Summarization model: {model_id}")
+print(f"[old_code_summarization] Processing core test sentences file: {file_}")
 
 # summ_map = read_pickle_file(NEW_ROOT_DIR + f"fs_tacred_summ_map_umbcshots_{(model_id).replace('/','-')}.pkl")
 # print(f"Cur size: {len(summ_map)}")
 summ_map = dict()
 umbc_ids = set(read_pickle_file(NEW_ROOT_DIR + "fs_fewrel_umbc_ids_to_summarize_v2.pkl"))
-print(f"To summarize: {len(umbc_ids)}")
+print(f"[old_code_summarization] To summarize: {len(umbc_ids)}")
 
 base_prompt = '''Summarize the relations between “#SUBJECT#” (Subject) and “#OBJECT#” (Object) from context. They are marked by subject and object tags repectively in the context.
 Context: #SUPPORT_SENTENCE#
@@ -171,12 +171,12 @@ for ei, (id_, shot) in enumerate(test_data['umbc_shots'].items()):
         current_time = time.time()
         elapsed_time = current_time - time_start
 
-        print(f"\rEpisode: {ei}, time passed: {elapsed_time:.2f} seconds, Len summ: {len(summ_map)}", end="")
+        print(f"\r[old_code_summarization] Episode: {ei}, time passed: {elapsed_time:.2f} seconds, Len summ: {len(summ_map)}", end="")
 
-print()
-print(f"Final size: {len(summ_map)}")
-print("Saving...")
+print("[old_code_summarization]")
+print(f"[old_code_summarization] Final size: {len(summ_map)}")
+print("[old_code_summarization] Saving...")
 save_dict(summ_map, os.path.join(NEW_ROOT_DIR, f"fs_fewrel_umbcshots_v2_summ_map_{(model_id).replace('/','-')}.pkl"))
-print("Done finally")
+print("[old_code_summarization] Done finally")
 
-print('\n************Ended***************')
+print('\n[old_code_summarization] ************Ended***************')

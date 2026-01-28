@@ -80,7 +80,7 @@ def evaluate_fn(
             labels.append("yes" if relation == query_relation else "no")
 
     print(
-        f"evaluate_fn: split={split}, episodes={len(episodes)}, "
+        f"[agent_evaluate] evaluate_fn: split={split}, episodes={len(episodes)}, "
         f"prompts={len(prompts)}, batch_size={batch_size}, "
         f"n_chunks={n_chunks}, eval_id={eval_id}"
     )
@@ -109,12 +109,12 @@ def evaluate_fn(
                 },
                 handle,
             )
-        print(f"evaluate_fn: saved labels/predictions to {output_path}")
+        print(f"[agent_evaluate] evaluate_fn: saved labels/predictions to {output_path}")
 
     metrics = compute_prf_stats(labels, predictions, n_chunks=n_chunks)
     elapsed = time.perf_counter() - start_time
     print(
-        f"evaluate_fn: done in {elapsed:.2f}s, "
+        f"[agent_evaluate] evaluate_fn: done in {elapsed:.2f}s, "
         f"f1_mean={metrics['f1_mean']:.4f}"
     )
     return metrics

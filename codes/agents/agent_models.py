@@ -25,7 +25,7 @@ def _default_attn_implementation(device_map: str) -> str | None:
     if device_map == "cpu":
         return None
     if torch.cuda.is_available() and is_flash_attn_2_available():
-        print("[Model] flash_attention_2 found")
+        print("[agent_models] flash_attention_2 found")
         return "flash_attention_2"
     return None
 
@@ -33,7 +33,7 @@ def _default_attn_implementation(device_map: str) -> str | None:
 def load_model_and_tokenizer(
     model_id: str, device_map: Optional[str] = None
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
-    print(f"[Model] loading model: {model_id}")
+    print(f"[agent_models] loading model: {model_id}")
 
     hf_token = os.getenv("HF_TOKEN")
     if hf_token:
@@ -50,7 +50,7 @@ def load_model_and_tokenizer(
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     model.eval()
     
-    print(f"[Model] model loading done: {model_id}")
+    print(f"[agent_models] model loading done: {model_id}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
