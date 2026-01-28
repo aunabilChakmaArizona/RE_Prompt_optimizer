@@ -102,9 +102,19 @@ class EvolutionarySearch:
         mutate_prompt_fn: MutatePromptFn,
         evaluate_fn: EvaluateFn,
         selection_mode: str = "mixed",
+        overall_start_time: Optional[float] = None,
         on_iteration_end: Optional[IterationHook] = None,
     ) -> tuple[GraphNode, List[GraphNode]]:
+        
         start_time = time.monotonic()
+
+        def _log_step(message: str) -> None:
+            if overall_start_time is None:
+                print(message)
+                return
+            overall_elapsed = time.monotonic() - overall_start_time
+            print(f"{message} (overall {overall_elapsed:.2f}s)")
+
         print("[evolutionary_search] start")
         if self.root.val_score is None:
             print("[evolutionary_search] evaluate root")
@@ -114,31 +124,40 @@ class EvolutionarySearch:
 
         for iteration in range(self.max_iterations):
             iter_start = time.monotonic()
-            print(f"[evolutionary_search] iteration {iteration + 1}/{self.max_iterations} start")
+            overall_elapsed = None
+            if overall_start_time is not None:
+                overall_elapsed = time.monotonic() - overall_start_time
+            if overall_elapsed is None:
+                print(f"[evolutionary_search] iteration {iteration + 1}/{self.max_iterations} start")
+            else:
+                print(
+                    f"[evolutionary_search] iteration {iteration + 1}/{self.max_iterations} start "
+                    f"(overall {overall_elapsed:.2f}s)"
+                )
             if not any(not node.is_dead for node in self.population):
                 print("[evolutionary_search] no active nodes left; stopping")
                 break
             parent = self.sample_parent()
-            print("[evolutionary_search] sample feedback")
+            _log_step("[evolutionary_search] sample feedback")
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
-            print("[evolutionary_search] run inference")
+            _log_step("[evolutionary_search] run inference")
             feedback_samples = run_inference_fn(
                 parent, feedback_samples, dataset_type=self.dataset_type
             )
-            print("[evolutionary_search] select feedback samples")
+            _log_step("[evolutionary_search] select feedback samples")
             feedback_samples = select_feedback_samples(
                 feedback_samples,
                 selection_mode=selection_mode,
                 rng=self.rng,
             )
-            print("[evolutionary_search] generate feedback text")
+            _log_step("[evolutionary_search] generate feedback text")
             feedback_samples = generate_feedback_fn(
                 parent, feedback_samples, dataset_type=self.dataset_type
             )
             feedback_text = self._format_feedback_text(feedback_samples)
 
-            print("[evolutionary_search] mutate prompt")
+            _log_step("[evolutionary_search] mutate prompt")
             mutation_result = mutate_prompt_fn(
                 parent, feedback_samples, dataset_type=self.dataset_type
             )
@@ -158,27 +177,43 @@ class EvolutionarySearch:
             )
             child.raw_mutation_response = raw_mutation_response
             self._next_node_id += 1
-            print("[evolutionary_search] evaluate child")
+            _log_step("[evolutionary_search] evaluate child")
             child.val_score = evaluate_fn(
                 child, "validation", dataset_type=self.dataset_type
             )
 
-            print("[evolutionary_search] update graph")
+            _log_step("[evolutionary_search] update graph")
             parent.add_child_from_feedback(feedback_samples, child)
             self.population.append(child)
 
             if on_iteration_end is not None:
-                print("[evolutionary_search] on_iteration_end hook")
+                _log_step("[evolutionary_search] on_iteration_end hook")
                 on_iteration_end(iteration, parent, child)
 
             iter_elapsed = time.monotonic() - iter_start
             total_elapsed = time.monotonic() - start_time
-            print(
-                f"[evolutionary_search] iteration {iteration + 1} end "
-                f"(iter {iter_elapsed:.2f}s, total {total_elapsed:.2f}s)"
-            )
+            overall_elapsed = None
+            if overall_start_time is not None:
+                overall_elapsed = time.monotonic() - overall_start_time
+            if overall_elapsed is None:
+                print(
+                    f"[evolutionary_search] iteration {iteration + 1} end "
+                    f"(iter {iter_elapsed:.2f}s, total {total_elapsed:.2f}s)"
+                )
+            else:
+                print(
+                    f"[evolutionary_search] iteration {iteration + 1} end "
+                    f"(iter {iter_elapsed:.2f}s, total {total_elapsed:.2f}s, overall {overall_elapsed:.2f}s)"
+                )
 
         total_elapsed = time.monotonic() - start_time
-        print(f"[evolutionary_search] end (total {total_elapsed:.2f}s)")
+        if overall_start_time is None:
+            print(f"[evolutionary_search] end (total {total_elapsed:.2f}s)")
+        else:
+            overall_elapsed = time.monotonic() - overall_start_time
+            print(
+                f"[evolutionary_search] end (total {total_elapsed:.2f}s, "
+                f"overall {overall_elapsed:.2f}s)"
+            )
         
         return self.best_node(), self.population
