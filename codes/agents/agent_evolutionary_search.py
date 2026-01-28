@@ -26,7 +26,6 @@ class EvolutionarySearch:
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         example_generation_prompt: str = "",
-        dataset_type: str = "fs_tacred",
         rng: Optional[random.Random] = None,
     ):
         self.root = root
@@ -37,7 +36,6 @@ class EvolutionarySearch:
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
         self.example_generation_prompt = example_generation_prompt
-        self.dataset_type = dataset_type
         self.rng = rng or random.Random()
         if self.root.node_id is None:
             self.root.node_id = 0

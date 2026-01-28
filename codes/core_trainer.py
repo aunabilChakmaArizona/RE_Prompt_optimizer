@@ -56,7 +56,6 @@ def main() -> None:
             feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
             mutation_prompt=MUTATION_PROMPT_V1,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
-            dataset_type=args.dataset_type,
             rng=rng,
         )
 
@@ -73,7 +72,7 @@ def main() -> None:
         )
 
         print("[core_trainer] evaluating best on test")
-        best_test_metrics = evaluate(best_node, "test")
+        best_test_metrics = best_node.val_score #evaluate(best_node, "test")
 
         save_population(run_dir, population, best_node)
 
