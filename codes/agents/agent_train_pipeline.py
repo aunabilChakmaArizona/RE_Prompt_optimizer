@@ -79,21 +79,21 @@ def load_data_assets(args, data_dir: str) -> Tuple[Dict, Dict, Dict, Dict]:
         f"relations={len(feedback_pool)} instances={total_train_instances}"
     )
     print(
-        f"[Data] dataset_prefix={args.dataset_prefix} "
+        f"[Data] dataset_type={args.dataset_type} "
         f"dev_split={args.dev_split} test_split={args.test_split}"
     )
 
     dev_data = load_split_episodes(
         split=args.dev_split,
         data_dir=data_dir,
-        dataset_prefix=args.dataset_prefix,
+        dataset_type=args.dataset_type,
         ep_start=args.dev_ep_start,
         ep_end=args.dev_ep_end,
     )
     test_data = load_split_episodes(
         split=args.test_split,
         data_dir=data_dir,
-        dataset_prefix=args.dataset_prefix,
+        dataset_type=args.dataset_type,
         ep_start=args.test_ep_start,
         ep_end=args.test_ep_end,
     )
@@ -132,6 +132,7 @@ def build_training_functions(
             node,
             feedback_samples,
             dataset_type=args.dataset_type,
+            num_shots=args.num_shots,
             model=model,
             tokenizer=tokenizer,
             batch_size=args.inference_batch_size,

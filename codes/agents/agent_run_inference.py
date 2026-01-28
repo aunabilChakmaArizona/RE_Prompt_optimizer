@@ -16,6 +16,7 @@ def _format_inference_prompt(
     relation_description: str,
     support_sentence: str,
     query_sentence: str,
+    num_shots: int,
 ) -> str:
     support_block = build_support_block([support_sentence])
     prompt = base_prompt
@@ -23,6 +24,8 @@ def _format_inference_prompt(
     prompt = prompt.replace("#RELATION_DESCRIPTION#", relation_description)
     prompt = prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
     prompt = prompt.replace("#QUERY_SENTENCE#", query_sentence)
+    prompt = prompt.replace("#N#", str(num_shots))
+    prompt = prompt.replace("#S#", "" if num_shots == 1 else "s")
     return prompt
 
 
@@ -31,6 +34,7 @@ def run_inference_fn(
     feedback_samples: FeedbackSamples,
     *,
     dataset_type: str,
+    num_shots: int = 1,
     model,
     tokenizer,
     batch_size: int = 8,
@@ -48,6 +52,7 @@ def run_inference_fn(
             relation_description=get_relation_description(relation, dt=dataset_type),
             support_sentence=sample.support_sentence,
             query_sentence=sample.query_sentence,
+            num_shots=num_shots,
         )
         prompts.append(prompt)
 

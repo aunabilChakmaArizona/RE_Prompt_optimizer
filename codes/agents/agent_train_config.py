@@ -27,7 +27,6 @@ def parse_args() -> argparse.Namespace:
         default="fs_tacred_train_samples.pkl",
         help="Train samples pkl filename",
     )
-    parser.add_argument("--dataset-prefix", default="fs_tacred", help="Dataset prefix")
     parser.add_argument("--dev-split", default="dev", help="Dev split name")
     parser.add_argument("--test-split", default="test", help="Test split name")
     parser.add_argument("--dev-ep-start", type=int, default=0)
@@ -37,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--query-index", type=int, default=0)
     parser.add_argument("--max-iterations", type=int, default=20)
     parser.add_argument("--feedback-sample-size", type=int, default=100)
+    parser.add_argument("--num-shots", type=int, default=1, help="Number of examples in prompt")
     parser.add_argument("--selection-mode", default="mixed")
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)

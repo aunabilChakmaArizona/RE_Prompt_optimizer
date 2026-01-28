@@ -33,15 +33,15 @@ def load_split_episodes(
     *,
     split: str,
     data_dir: str = DEFAULT_DATA_DIR,
-    dataset_prefix: str = "fs_tacred",
+    dataset_type: str = "fs_tacred",
     ep_start: int = 0,
     ep_end: Optional[int] = None,
 ) -> Dict[str, Any]:
     episodes_path = os.path.join(
-        data_dir, f"{dataset_prefix}_{split}_episodes_1shots.pkl"
+        data_dir, f"{dataset_type}_{split}_episodes_1shots.pkl"
     )
     details_path = os.path.join(
-        data_dir, f"{dataset_prefix}_{split}_episodes_shots_details.pkl"
+        data_dir, f"{dataset_type}_{split}_episodes_shots_details.pkl"
     )
 
     episodes: List[Dict[str, Any]] = read_pickle_file(episodes_path)
