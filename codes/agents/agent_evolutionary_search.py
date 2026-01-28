@@ -142,9 +142,7 @@ class EvolutionarySearch:
 
             feedback_samples = sample_feedback_fn(self.feedback_sample_size)
             _log_step("[agent_evolutionary_search] run inference")
-            feedback_samples = run_inference_fn(
-                parent, feedback_samples, dataset_type=self.dataset_type
-            )
+            feedback_samples = run_inference_fn(parent, feedback_samples)
             _log_step("[agent_evolutionary_search] select feedback samples")
             feedback_samples = select_feedback_samples(
                 feedback_samples,
@@ -152,15 +150,11 @@ class EvolutionarySearch:
                 rng=self.rng,
             )
             _log_step("[agent_evolutionary_search] generate feedback text")
-            feedback_samples = generate_feedback_fn(
-                parent, feedback_samples, dataset_type=self.dataset_type
-            )
+            feedback_samples = generate_feedback_fn(parent, feedback_samples)
             feedback_text = self._format_feedback_text(feedback_samples)
 
             _log_step("[agent_evolutionary_search] mutate prompt")
-            mutation_result = mutate_prompt_fn(
-                parent, feedback_samples, dataset_type=self.dataset_type
-            )
+            mutation_result = mutate_prompt_fn(parent, feedback_samples)
             if mutation_result is None:
                 print("[agent_evolutionary_search] mutation failed; parent marked dead")
                 continue
