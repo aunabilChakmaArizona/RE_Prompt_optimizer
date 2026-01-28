@@ -120,9 +120,7 @@ class EvolutionarySearch:
         print("[agent_evolutionary_search] start")
         if self.root.val_score is None:
             print("[agent_evolutionary_search] evaluate root")
-            self.root.val_score = evaluate_fn(
-                self.root, "validation", dataset_type=self.dataset_type
-            )
+            self.root.val_score = evaluate_fn(self.root, "validation")
 
         for iteration in range(self.max_iterations):
             iter_start = time.monotonic()
@@ -182,9 +180,7 @@ class EvolutionarySearch:
             )
             self._next_node_id += 1
             _log_step("[agent_evolutionary_search] evaluate child")
-            child.val_score = evaluate_fn(
-                child, "validation", dataset_type=self.dataset_type
-            )
+            child.val_score = evaluate_fn(child, "validation")
 
             _log_step("[agent_evolutionary_search] update graph")
             parent.add_child_from_feedback(feedback_samples, child)
