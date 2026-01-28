@@ -33,6 +33,8 @@ def _default_attn_implementation(device_map: str) -> str | None:
 def load_model_and_tokenizer(
     model_id: str, device_map: Optional[str] = None
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
+    print(f"[Model] loading model: {model_id}")
+
     hf_token = os.getenv("HF_TOKEN")
     if hf_token:
         login(token=hf_token)
@@ -47,6 +49,8 @@ def load_model_and_tokenizer(
         model_kwargs["attn_implementation"] = attn_implementation
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     model.eval()
+    
+    print(f"[Model] model loading done: {model_id}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:

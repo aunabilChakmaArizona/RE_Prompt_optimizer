@@ -63,9 +63,25 @@ def enrich_feedback_samples(feedback_samples, shots_by_id: Dict[str, dict]) -> N
 
 
 def load_data_assets(args, data_dir: str) -> Tuple[Dict, Dict, Dict, Dict]:
+
+    print("[Data] loading dataset")
+
     train_samples = load_train_samples(data_dir=data_dir, filename=args.train_samples)
     feedback_pool = train_samples
     train_shot_index = build_shot_index(feedback_pool)
+    total_train_instances = sum(
+        len(instances) for instances in feedback_pool.values()
+        if isinstance(instances, list)
+    )
+
+    print(
+        f"[Data] train_samples={args.train_samples} "
+        f"relations={len(feedback_pool)} instances={total_train_instances}"
+    )
+    print(
+        f"[Data] dataset_prefix={args.dataset_prefix} "
+        f"dev_split={args.dev_split} test_split={args.test_split}"
+    )
 
     dev_data = load_split_episodes(
         split=args.dev_split,
@@ -81,6 +97,12 @@ def load_data_assets(args, data_dir: str) -> Tuple[Dict, Dict, Dict, Dict]:
         ep_start=args.test_ep_start,
         ep_end=args.test_ep_end,
     )
+    
+    print(
+        f"[Data] dev_episodes={len(dev_data.get('episodes', []))} "
+        f"test_episodes={len(test_data.get('episodes', []))}"
+    )
+    print("[Data] dataset loaded")
 
     return feedback_pool, train_shot_index, dev_data, test_data
 
