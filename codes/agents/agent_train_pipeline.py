@@ -41,6 +41,15 @@ def build_feedback_pool(shots: Dict) -> Dict[str, List[dict]]:
 
 
 def build_shot_index(shots: Dict) -> Dict[str, dict]:
+    if not shots:
+        return {}
+    first_value = next(iter(shots.values()))
+    if isinstance(first_value, list):
+        index: Dict[str, dict] = {}
+        for instances in shots.values():
+            for inst in instances:
+                index[inst["id"]] = inst
+        return index
     return shots
 
 
@@ -55,9 +64,8 @@ def enrich_feedback_samples(feedback_samples, shots_by_id: Dict[str, dict]) -> N
 
 def load_data_assets(args, data_dir: str) -> Tuple[Dict, Dict, Dict, Dict]:
     train_samples = load_train_samples(data_dir=data_dir, filename=args.train_samples)
-    train_shots = train_samples.get("shots", {})
-    feedback_pool = build_feedback_pool(train_shots)
-    train_shot_index = build_shot_index(train_shots)
+    feedback_pool = train_samples
+    train_shot_index = build_shot_index(feedback_pool)
 
     dev_data = load_split_episodes(
         split=args.dev_split,
