@@ -38,6 +38,14 @@ def _extract_feedback(text: str) -> str:
     return text[start + 3 : end].strip()
 
 
+def _has_feedback_tag(text: str) -> bool:
+    start = text.find("<f>")
+    if start == -1:
+        return False
+    end = text.find("</f>", start + 3)
+    return end != -1
+
+
 def generate_feedback_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
@@ -64,10 +72,20 @@ def generate_feedback_fn(
             )
         )
 
-    raw_feedback_texts = run_prompts(
-        prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
-    )
-    feedback_texts = [_extract_feedback(text) for text in raw_feedback_texts]
+    max_attempts = 3
+    raw_feedback_texts: List[str] = []
+    feedback_texts: List[str] = []
+    for attempt in range(1, max_attempts + 1):
+        raw_feedback_texts = run_prompts(
+            prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
+        )
+        feedback_texts = [_extract_feedback(text) for text in raw_feedback_texts]
+        if all(_has_feedback_tag(text) for text in raw_feedback_texts):
+            break
+        if attempt < max_attempts:
+            print(
+                f"[agent_generate_feedback] missing <f> tag; retry {attempt}/{max_attempts}"
+            )
     feedback_samples.feedback_prompts = prompts
     feedback_samples.raw_feedback_texts = raw_feedback_texts
     feedback_samples.feedback_texts = feedback_texts
