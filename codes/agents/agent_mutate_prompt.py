@@ -70,6 +70,8 @@ def mutate_prompt_fn(
 
     prompt = prompt.replace("#LIST_OF_PLACEHOLDERS#", str(INFERENCE_PROMPT_PLACEHODERS_V1))
 
+    print(f"[agent_mutate_prompt] mutation prompt:\n{prompt}")
+
     max_attempts = 10
     for attempt in range(1, max_attempts + 1):
         raw_response = run_prompt(
@@ -83,6 +85,8 @@ def mutate_prompt_fn(
             continue
         candidate = _extract_between(raw_response, "p")
         if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
+            print(f"[agent_mutate_prompt] new inference prompt:\n{candidate}")
+
             return candidate, raw_response, prompt
 
         print(f"[agent_mutate_prompt] missing placeholders; retry {attempt}/{max_attempts}")
