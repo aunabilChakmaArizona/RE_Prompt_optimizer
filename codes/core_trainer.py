@@ -21,8 +21,8 @@ from agents.agent_train_pipeline import build_root_node, load_model_and_data
 
 def main() -> None:
     args = parse_args()
+
     data_dir = resolve_data_dir(args.data_dir)
-    
     run_dir = create_run_dir(args.trainings_dir, args.model)
     log_file, original_stdout, original_stderr = setup_logging(run_dir)
 
@@ -39,7 +39,7 @@ def main() -> None:
         _, _, rng, _, _, _, _, funcs = load_model_and_data(
             args, data_dir, eval_output_dir, args.seed
         )
-        sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs
+        sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs 
 
         # root = build_root_node()
 

@@ -12,18 +12,13 @@ from transformers.utils import is_flash_attn_2_available
 def _default_device_map(device_map: Optional[str]) -> str:
     if device_map:
         return device_map
-    env_device = os.getenv("DEVICE_MAP") or os.getenv("CUDA_DEVICE")
-    if env_device:
-        return env_device
     if torch.cuda.is_available():
-        return "cuda:0"
+        return "cuda"
     return "cpu"
 
 
 def _default_dtype(device_map: str) -> torch.dtype:
-    if device_map != "cpu" and torch.cuda.is_available():
-        return torch.bfloat16
-    return torch.float32
+    return torch.bfloat16
 
 
 def _default_attn_implementation(device_map: str) -> str | None:
