@@ -19,6 +19,8 @@ class GraphNode:
     ):
         self.inference_prompt = inference_prompt
         self.node_id = node_id
+        self.is_dead = False
+        self.mutation_failures = 0
 
         # Graph structure
         self.parent = parent

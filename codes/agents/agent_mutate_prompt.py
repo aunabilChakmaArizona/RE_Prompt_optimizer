@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import List, Optional
 
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
@@ -24,6 +24,10 @@ def _pad_list(items: List[str], size: int) -> List[str]:
     return items + [""] * (size - len(items))
 
 
+def _contains_placeholders(prompt: str, placeholders: List[str]) -> bool:
+    return all(ph in prompt for ph in placeholders)
+
+
 def mutate_prompt_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
@@ -32,18 +36,18 @@ def mutate_prompt_fn(
     model,
     tokenizer,
     max_new_tokens: int = 512,
-) -> str:
+) -> Optional[str]:
     base_prompt = node.mutation_prompt or MUTATION_PROMPT_V1
 
     samples = feedback_samples.selected_samples
     feedback_texts = [
         getattr(sample, "feedback_text", "") for sample in feedback_samples.selected_samples
     ]
-    feedback_texts = _pad_list([t for t in feedback_texts if t.strip()], 3)
+    # feedback_texts = _pad_list([t for t in feedback_texts if t.strip()], 3)
 
     def get_attr(i: int, name: str) -> str:
-        if i >= len(samples):
-            return ""
+        # if i >= len(samples):
+        #     return ""
         return getattr(samples[i], name, "")
 
     prompt = base_prompt
@@ -66,11 +70,20 @@ def mutate_prompt_fn(
 
     prompt = prompt.replace("#LIST_OF_PLACEHOLDERS#", str(INFERENCE_PROMPT_PLACEHODERS_V1))
 
-    raw_response = run_prompt(
-        prompt,
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=max_new_tokens,
-    )
+    max_attempts = 10
+    for attempt in range(1, max_attempts + 1):
+        raw_response = run_prompt(
+            prompt,
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+        )
+        candidate = _extract_between(raw_response, "p")
+        if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
+            return candidate
 
-    return _extract_between(raw_response, "p")
+        print(f"[mutation] missing placeholders; retry {attempt}/{max_attempts}")
+
+    node.is_dead = True
+    print("[mutation] node marked dead (too many placeholder failures)")
+    return None

@@ -11,7 +11,7 @@ from agents.agent_select_feedback import select_feedback_samples
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
 RunInferenceFn = Callable[..., FeedbackSamples]
 GenerateFeedbackFn = Callable[..., FeedbackSamples]
-MutatePromptFn = Callable[..., str]
+MutatePromptFn = Callable[..., Optional[str]]
 EvaluateFn = Callable[..., float]
 IterationHook = Callable[[int, GraphNode, GraphNode], None]
 
@@ -78,15 +78,18 @@ class EvolutionarySearch:
         return weights
 
     def sample_parent(self) -> GraphNode:
+        alive_nodes = [node for node in self.population if not node.is_dead]
+        if not alive_nodes:
+            raise RuntimeError("No active nodes available for mutation")
         scores = []
-        for node in self.population:
+        for node in alive_nodes:
             val_score = node.val_score
             if val_score is None:
                 scores.append(None)
             else:
                 scores.append(val_score.get("f1_mean"))
         weights = self._softmax_weights(scores)
-        return self.rng.choices(self.population, weights=weights, k=1)[0]
+        return self.rng.choices(alive_nodes, weights=weights, k=1)[0]
 
     def best_node(self) -> GraphNode:
         return max(self.population, key=self._score_or_neg_inf)
@@ -112,6 +115,9 @@ class EvolutionarySearch:
         for iteration in range(self.max_iterations):
             iter_start = time.monotonic()
             print(f"[evolutionary_search] iteration {iteration + 1}/{self.max_iterations} start")
+            if not any(not node.is_dead for node in self.population):
+                print("[evolutionary_search] no active nodes left; stopping")
+                break
             parent = self.sample_parent()
             print("[evolutionary_search] sample feedback")
 
@@ -136,6 +142,9 @@ class EvolutionarySearch:
             new_prompt = mutate_prompt_fn(
                 parent, feedback_samples, dataset_type=self.dataset_type
             )
+            if new_prompt is None:
+                print("[evolutionary_search] mutation failed; parent marked dead")
+                continue
             child = GraphNode(
                 inference_prompt=new_prompt,
                 parent=parent,
