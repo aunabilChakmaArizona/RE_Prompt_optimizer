@@ -119,6 +119,17 @@ def evaluate_fn(
                 break
         episode_predictions.append(predicted_relation)
 
+    assert len(episode_labels) == len(episode_predictions) == len(episodes)
+
+    metrics = compute_prf_stats(episode_labels, episode_predictions, n_chunks=n_chunks)
+    elapsed = time.perf_counter() - start_time
+    print(
+        f"[agent_evaluate] evaluate_fn: done in {elapsed:.2f}s, "
+        f"precision={metrics['precision_mean'] * 100:.2f}±{metrics['precision_std'] * 100:.2f}, "
+        f"recall={metrics['recall_mean'] * 100:.2f}±{metrics['recall_std'] * 100:.2f}, "
+        f"f1={metrics['f1_mean'] * 100:.2f}±{metrics['f1_std'] * 100:.2f}"
+    )
+
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(
@@ -133,17 +144,9 @@ def evaluate_fn(
                     "predictions": episode_predictions,
                     "pair_labels": pair_labels,
                     "pair_predictions": pair_predictions,
+                    "metrics": metrics,
                 },
                 handle,
             )
         print(f"[agent_evaluate] evaluate_fn: saved labels/predictions to {output_path}")
-
-    metrics = compute_prf_stats(episode_labels, episode_predictions, n_chunks=n_chunks)
-    elapsed = time.perf_counter() - start_time
-    print(
-        f"[agent_evaluate] evaluate_fn: done in {elapsed:.2f}s, "
-        f"precision={metrics['precision_mean'] * 100:.2f}±{metrics['precision_std'] * 100:.2f}, "
-        f"recall={metrics['recall_mean'] * 100:.2f}±{metrics['recall_std'] * 100:.2f}, "
-        f"f1={metrics['f1_mean'] * 100:.2f}±{metrics['f1_std'] * 100:.2f}"
-    )
     return metrics
