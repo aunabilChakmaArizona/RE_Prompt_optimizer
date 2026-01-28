@@ -78,6 +78,9 @@ def mutate_prompt_fn(
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
         )
+        if not re.search(r"<p>.*?</p>", raw_response, flags=re.DOTALL | re.IGNORECASE):
+            print(f"[agent_mutate_prompt] missing <p> tag; retry {attempt}/{max_attempts}")
+            continue
         candidate = _extract_between(raw_response, "p")
         if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
             return candidate, raw_response, prompt
