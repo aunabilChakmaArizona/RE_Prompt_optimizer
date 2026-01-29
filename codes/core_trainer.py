@@ -4,6 +4,7 @@ import os
 import time
 
 from agents.agent_evolutionary_search import EvolutionarySearch
+from agents.agent_memory import clear_iteration_memory
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
@@ -69,6 +70,7 @@ def main() -> None:
             evaluate_fn=evaluate,
             selection_mode=args.selection_mode,
             overall_start_time=overall_start,
+            on_iteration_end=clear_iteration_memory,
         )
 
         print("[core_trainer] evaluating best on test")

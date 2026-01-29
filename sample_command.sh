@@ -11,3 +11,5 @@ python /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer/codes/core_trainer
   --feedback-sample-size 100
 
 python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:2"
+
+nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 20 &
