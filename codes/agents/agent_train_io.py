@@ -4,9 +4,10 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from agents.agent_graph_node import GraphNode
+from agents.agent_feedback_samples import FeedbackSample, FeedbackSamples
 
 
 class Tee:
@@ -66,15 +67,58 @@ def write_args(run_dir: str, args: object) -> None:
         json.dump(vars(args), handle, indent=2)
 
 
+def serialize_feedback_sample(sample: FeedbackSample) -> Dict[str, object]:
+    return {
+        "id_1shot": sample.id_1shot,
+        "id_query": sample.id_query,
+        "inference": sample.inference,
+        "label": sample.label,
+        "relation": sample.relation,
+        "support_sentence": sample.support_sentence,
+        "query_sentence": sample.query_sentence,
+        "feedback_prompt": sample.feedback_prompt,
+        "raw_feedback_text": sample.raw_feedback_text,
+        "feedback_text": sample.feedback_text,
+    }
+
+
+def serialize_feedback_samples(samples: FeedbackSamples) -> Dict[str, object]:
+    return {
+        "all_samples": [serialize_feedback_sample(s) for s in samples.all_samples],
+        "selected_samples": [serialize_feedback_sample(s) for s in samples.selected_samples],
+        "feedback_prompts": list(samples.feedback_prompts),
+        "raw_feedback_texts": list(samples.raw_feedback_texts),
+        "feedback_texts": list(samples.feedback_texts),
+    }
+
+
 def serialize_node(node: GraphNode) -> Dict[str, object]:
+    data_entries: List[Dict[str, Optional[object]]] = []
+    for feedback_samples, child in node.data:
+        data_entries.append(
+            {
+                "feedback_samples": serialize_feedback_samples(feedback_samples),
+                "child_id": child.node_id if child is not None else None,
+            }
+        )
     return {
         "node_id": node.node_id,
         "parent_id": node.parent.node_id if node.parent else None,
         "children_ids": [child.node_id for child in node.children],
         "inference_prompt": node.inference_prompt,
+        "is_dead": node.is_dead,
+        "mutation_failures": node.mutation_failures,
         "feedback": node.feedback,
+        "raw_feedback_texts": list(node.raw_feedback_texts),
+        "feedback_prompts_used": list(node.feedback_prompts_used),
+        "feedback_prompt": node.feedback_prompt,
+        "mutation_prompt": node.mutation_prompt,
+        "example_generation_prompt": node.example_generation_prompt,
+        "mutation_prompt_used": node.mutation_prompt_used,
+        "raw_mutation_response": node.raw_mutation_response,
         "val_score": node.val_score,
         "test_score": node.test_score,
+        "data": data_entries,
     }
 
 
