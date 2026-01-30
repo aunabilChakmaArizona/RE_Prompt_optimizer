@@ -63,6 +63,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-n-chunks", type=int, default=3)
     parser.add_argument("--max-new-tokens", type=int, default=1500)
     parser.add_argument(
+        "--log-every",
+        type=int,
+        default=100,
+        help="Log/progress update frequency in batches for tqdm",
+    )
+    parser.add_argument(
         "--trainings-dir",
         default=default_trainings_dir(),
         help="Output root for training runs",

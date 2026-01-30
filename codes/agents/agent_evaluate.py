@@ -46,6 +46,7 @@ def evaluate_fn(
     output_dir: str | None = None,
     yes_token_id: int | None = None,
     no_token_id: int | None = None,
+    log_every: int = 100,
 ) -> float:
     if output_dir and eval_id is None:
         raise ValueError("eval_id is required when output_dir is provided.")
@@ -105,6 +106,7 @@ def evaluate_fn(
         batch_size=batch_size,
         yes_token_id=yes_token_id,
         no_token_id=no_token_id,
+        log_every=log_every,
     )
 
     episode_predictions: List[str] = []

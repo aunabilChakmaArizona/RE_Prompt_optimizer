@@ -10,17 +10,19 @@ python /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer/codes/core_trainer
   --max-iterations 5 \
   --feedback-sample-size 100
 
-python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:2"
-
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 20 &
 nohup python -u core_trainer.py --model "google/gemma-3-12b-it" --device-map "cuda:2" --max-iterations 20 > nohup_gemma12.out 2>&1 &
 
-nohup python -u core_trainer.py --model "google/gemma-3-12b-it" --device-map "cuda:2" --max-iterations 20 --feedback-prompt "correct_v1" > nohup_gemma12.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-12b-it" --device-map "cuda:1" --max-iterations 20 --feedback-prompt "correct_v1" > nohup_gemma12_corrects.out 2>&1 &
 
 
- parser.add_argument(
-        "--feedback-prompt",
-        default="correct_and_mistakes_v1",
-        choices=["correct_and_mistakes_v1", "correct_v1", "mistakes_v1"],
-        help="Feedback inference prompt variant",
-    )
+# models
+Qwen/Qwen3-4B
+Qwen/Qwen3-8B
+Qwen/Qwen3-14B
+google/gemma-3-4b-it
+google/gemma-3-12b-it
+
+#
+"--feedback-prompt",
+choices=["correct_and_mistakes_v1", "correct_v1", "mistakes_v1"]

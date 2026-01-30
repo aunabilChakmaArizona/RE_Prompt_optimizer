@@ -136,6 +136,7 @@ def build_training_functions(
             batch_size=args.inference_batch_size,
             yes_token_id=yes_token_id,
             no_token_id=no_token_id,
+            log_every=args.log_every,
         )
 
     def generate_feedback(node: GraphNode, feedback_samples):
@@ -181,6 +182,7 @@ def build_training_functions(
             output_dir=eval_output_dir,
             yes_token_id=yes_token_id,
             no_token_id=no_token_id,
+            log_every=args.log_every,
         )
 
     return sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate

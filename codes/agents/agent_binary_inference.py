@@ -74,8 +74,13 @@ def run_binary_inference(
 
     try:
         tokenizer.padding_side = "left"
-        for batch_index, batch in enumerate(
-            tqdm(_batched(list(prompts), batch_size), total=num_batches),
+    for batch_index, batch in enumerate(
+            tqdm(
+                _batched(list(prompts), batch_size),
+                total=num_batches,
+                miniters=log_every,
+                mininterval=0.0,
+            ),
             start=1,
         ):
             if use_chat_template:
