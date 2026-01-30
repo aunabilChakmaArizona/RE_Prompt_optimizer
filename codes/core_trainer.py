@@ -7,8 +7,8 @@ from agents.agent_evolutionary_search import EvolutionarySearch
 from agents.agent_memory import clear_iteration_memory
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
-    FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
-    MUTATION_PROMPT_V1,
+    FEEDBACK_PROMPT_MAP,
+    MUTATION_PROMPT_MAP,
 )
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
@@ -47,15 +47,22 @@ def main() -> None:
         )
         sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs 
 
-        root = build_root_node()
+        feedback_prompt = FEEDBACK_PROMPT_MAP[args.feedback_prompt]
+        mutation_prompt = MUTATION_PROMPT_MAP[args.mutation_prompt]
+
+        root = build_root_node(
+            feedback_prompt=feedback_prompt,
+            mutation_prompt=mutation_prompt,
+            example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+        )
 
         search = EvolutionarySearch(
             root=root,
             max_iterations=args.max_iterations,
             feedback_sample_size=args.feedback_sample_size,
             population_sampling_temperature=args.population_sampling_temperature,
-            feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
-            mutation_prompt=MUTATION_PROMPT_V1,
+            feedback_prompt=feedback_prompt,
+            mutation_prompt=mutation_prompt,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
             rng=rng,
         )

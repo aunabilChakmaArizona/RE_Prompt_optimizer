@@ -12,9 +12,7 @@ from agents.agent_models import load_model_and_tokenizer
 from agents.agent_mutate_prompt import mutate_prompt_fn as _mutate_prompt_fn
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
-    FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
     INFERENCE_PROMPT_V1,
-    MUTATION_PROMPT_V1,
 )
 from agents.agent_run_inference import run_inference_fn as _run_inference_fn
 from agents.agent_sample_feedback import sample_feedback_fn as _sample_feedback_fn
@@ -188,12 +186,16 @@ def build_training_functions(
     return sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate
 
 
-def build_root_node() -> GraphNode:
+def build_root_node(
+    feedback_prompt: str,
+    mutation_prompt: str,
+    example_generation_prompt: str = EXAMPLE_GENERATION_PROMPT_V1,
+) -> GraphNode:
     return GraphNode(
         inference_prompt=INFERENCE_PROMPT_V1,
-        feedback_prompt=FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
-        mutation_prompt=MUTATION_PROMPT_V1,
-        example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+        feedback_prompt=feedback_prompt,
+        mutation_prompt=mutation_prompt,
+        example_generation_prompt=example_generation_prompt,
         node_id=0,
     )
 

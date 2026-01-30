@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
-from agents.agent_prompts import MUTATION_PROMPT_V1, INFERENCE_PROMPT_PLACEHODERS_V1
+from agents.agent_prompts import INFERENCE_PROMPT_PLACEHODERS_V1
 from agents.agent_relation_utils import get_relation_description
 
 
@@ -37,7 +37,7 @@ def mutate_prompt_fn(
     tokenizer,
     max_new_tokens: int = 512,
 ) -> Optional[Tuple[str, str, str]]:
-    base_prompt = node.mutation_prompt or MUTATION_PROMPT_V1
+    base_prompt = node.mutation_prompt
 
     samples = feedback_samples.selected_samples
     feedback_texts = [

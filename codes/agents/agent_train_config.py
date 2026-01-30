@@ -41,6 +41,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--population-sampling-temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
+        "--feedback-prompt",
+        default="correct_and_mistakes_v1",
+        choices=["correct_and_mistakes_v1", "correct_v1", "mistakes_v1"],
+        help="Feedback inference prompt variant",
+    )
+    parser.add_argument(
+        "--mutation-prompt",
+        default="v1",
+        choices=["v1"],
+        help="Mutation prompt variant",
+    )
+    parser.add_argument(
         "--device-map",
         default="cuda:0",
         help="Device map override (e.g., cuda:0, cuda:1, cpu, auto)",

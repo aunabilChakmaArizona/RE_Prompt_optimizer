@@ -87,7 +87,6 @@ LLM Inference: #INFERENCE#
 You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
 '''
 
-
 MUTATION_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising and improving prompts based on feedback from previous model predictions.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
@@ -137,7 +136,6 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
-
 INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplify the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
@@ -173,3 +171,14 @@ Output in the following format.
 ...
 N: your Nth example sentence
 '''
+
+
+FEEDBACK_PROMPT_MAP = {
+    "correct_and_mistakes_v1": FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
+    "correct_v1": FEEDBACK_INFERENCE_PROMPT_CORRECT_V1,
+    "mistakes_v1": FEEDBACK_INFERENCE_PROMPT_MISTAKES_V1,
+}
+
+MUTATION_PROMPT_MAP = {
+    "v1": MUTATION_PROMPT_V1,
+}

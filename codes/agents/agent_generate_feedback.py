@@ -5,7 +5,6 @@ from typing import List
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompts
-from agents.agent_prompts import FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
 from agents.agent_relation_utils import get_relation_description
 
 
@@ -55,7 +54,7 @@ def generate_feedback_fn(
     tokenizer,
     batch_size: int = 4,
 ) -> FeedbackSamples:
-    base_prompt = node.feedback_prompt or FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1
+    base_prompt = node.feedback_prompt
 
     prompts: List[str] = []
     for sample in feedback_samples.selected_samples:
