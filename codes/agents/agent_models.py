@@ -43,6 +43,7 @@ def load_model_and_tokenizer(
     model_kwargs = {
         "dtype": _default_dtype(device_map),
         "trust_remote_code": True,
+        # "local_files_only": True,
         "device_map": device_map,
     }
     if attn_implementation:

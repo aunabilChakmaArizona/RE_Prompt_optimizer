@@ -37,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-iterations", type=int, default=20)
     parser.add_argument("--feedback-sample-size", type=int, default=100)
     parser.add_argument("--num-shots", type=int, default=1, help="Number of examples in prompt")
-    parser.add_argument("--selection-mode", default="mixed")
+    parser.add_argument("--selection-mode", type=str, default="mixed")
     parser.add_argument("--population-sampling-temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(

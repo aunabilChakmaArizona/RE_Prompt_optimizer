@@ -74,7 +74,7 @@ def run_binary_inference(
 
     try:
         tokenizer.padding_side = "left"
-    for batch_index, batch in enumerate(
+        for batch_index, batch in enumerate(
             tqdm(
                 _batched(list(prompts), batch_size),
                 total=num_batches,
