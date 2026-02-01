@@ -66,7 +66,7 @@ def parse_args() -> argparse.Namespace:
         "--log-every",
         type=int,
         default=100,
-        help="Log/progress update frequency in batches for tqdm",
+        help="Log/progress update frequency in batches",
     )
     parser.add_argument(
         "--trainings-dir",
