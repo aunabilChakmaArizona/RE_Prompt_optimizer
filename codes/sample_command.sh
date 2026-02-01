@@ -1,10 +1,17 @@
-
+# general feedback
 nohup python -u core_trainer.py --model "google/gemma-3-12b-it" --device-map "cuda:2" --max-iterations 20 > nohup_gemma12.out 2>&1 &
+
+# specific feedback
 nohup python -u core_trainer.py --model "google/gemma-3-12b-it" --device-map "cuda:3" --max-iterations 20 --feedback-prompt "correct_v1" --selection-mode "correct" > nohup_gemma12_corrects.out 2>&1 &
 nohup python -u core_trainer.py --model "Qwen/Qwen3-14B" --device-map "cuda:1" --max-iterations 20 --feedback-prompt "mistakes_v1" --selection-mode "mistakes" > nohup_qwen14_mistakes.out 2>&1 &
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --max-iterations 10 --feedback-prompt "mistakes_v1" --selection-mode "mistakes" > nohup_qwen4_mistakes.out 2>&1 &
 nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:2" --max-iterations 10 --feedback-prompt "mistakes_v1" --selection-mode "mistakes" > nohup_gemma4_mistakes.out 2>&1 &
 nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:2" --max-iterations 10 --feedback-prompt "correct_v1" --selection-mode "correct" > nohup_gemma4_corrects.out 2>&1 &
+
+# random
+nohup python -u core_trainer.py --model "google/gemma-3-12b-it" --device-map "cuda:3" --max-iterations 10 --update-mode "random" --mutation-prompt "random_v1" > nohup_gemma12_random_mutation.out 2>&1 &
+nohup python -u core_trainer.py --model "Qwen/Qwen3-14B" --device-map "cuda:1" --max-iterations 10 --update-mode "random" --mutation-prompt "random_v1" > nohup_qwen14_random_mutation.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:2" --max-iterations 10 --update-mode "random" --mutation-prompt "random_v1" > nohup_gemma4_random_mutation.out 2>&1 &
 
 # models
 Qwen/Qwen3-4B
