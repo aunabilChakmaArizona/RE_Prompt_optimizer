@@ -76,6 +76,7 @@ def main() -> None:
             mutate_prompt_fn=mutate_prompt,
             evaluate_fn=evaluate,
             selection_mode=args.selection_mode,
+            update_mode=args.update_mode,
             overall_start_time=overall_start,
             on_iteration_end=clear_iteration_memory,
         )

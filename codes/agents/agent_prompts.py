@@ -136,6 +136,24 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
+MUTATION_RANDOM_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts by making random changes to improve generalization.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below a prompt that is used by another LLM to make an inference for the task:
+```
+#INFERENCE_PROMPT#
+```
+
+Carefully read the prompt. Your task is to generate a revised form of the prompt by making random modifications so that the other LLM can improve its generalization when using the prompt.
+You may modify, add, remove, or rephrase any word, phrase, or content in the current prompt to enhance generalization.
+
+Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#). These placeholders must remain exactly the same. Only the surrounding instructional text may be revised.
+
+You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
 INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplify the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
@@ -181,4 +199,5 @@ FEEDBACK_PROMPT_MAP = {
 
 MUTATION_PROMPT_MAP = {
     "v1": MUTATION_PROMPT_V1,
+    "random_v1": MUTATION_RANDOM_PROMPT_V1,
 }

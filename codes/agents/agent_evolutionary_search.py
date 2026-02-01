@@ -102,6 +102,7 @@ class EvolutionarySearch:
         mutate_prompt_fn: MutatePromptFn,
         evaluate_fn: EvaluateFn,
         selection_mode: str = "mixed",
+        update_mode: str = "feedback",
         overall_start_time: Optional[float] = None,
         on_iteration_end: Optional[IterationHook] = None,
     ) -> tuple[GraphNode, List[GraphNode]]:
@@ -136,20 +137,23 @@ class EvolutionarySearch:
                 print("[agent_evolutionary_search] no active nodes left; stopping")
                 break
             parent = self.sample_parent()
-            _log_step("[agent_evolutionary_search] sample feedback")
-
-            feedback_samples = sample_feedback_fn(self.feedback_sample_size)
-            _log_step("[agent_evolutionary_search] run inference")
-            feedback_samples = run_inference_fn(parent, feedback_samples)
-            _log_step("[agent_evolutionary_search] select feedback samples")
-            feedback_samples = select_feedback_samples(
-                feedback_samples,
-                selection_mode=selection_mode,
-                rng=self.rng,
-            )
-            _log_step("[agent_evolutionary_search] generate feedback text")
-            feedback_samples = generate_feedback_fn(parent, feedback_samples)
-            feedback_text = self._format_feedback_text(feedback_samples)
+            feedback_text = ""
+            if update_mode == "feedback":
+                _log_step("[agent_evolutionary_search] sample feedback")
+                feedback_samples = sample_feedback_fn(self.feedback_sample_size)
+                _log_step("[agent_evolutionary_search] run inference")
+                feedback_samples = run_inference_fn(parent, feedback_samples)
+                _log_step("[agent_evolutionary_search] select feedback samples")
+                feedback_samples = select_feedback_samples(
+                    feedback_samples,
+                    selection_mode=selection_mode,
+                    rng=self.rng,
+                )
+                _log_step("[agent_evolutionary_search] generate feedback text")
+                feedback_samples = generate_feedback_fn(parent, feedback_samples)
+                feedback_text = self._format_feedback_text(feedback_samples)
+            else:
+                feedback_samples = FeedbackSamples()
 
             _log_step("[agent_evolutionary_search] mutate prompt")
             mutation_result = mutate_prompt_fn(parent, feedback_samples)

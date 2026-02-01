@@ -37,6 +37,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-iterations", type=int, default=20)
     parser.add_argument("--feedback-sample-size", type=int, default=100)
     parser.add_argument("--num-shots", type=int, default=1, help="Number of examples in prompt")
+    parser.add_argument(
+        "--update-mode",
+        type=str,
+        default="feedback",
+        choices=["feedback", "random"],
+        help="Prompt update mode",
+    )
     parser.add_argument("--selection-mode", type=str, default="mixed")
     parser.add_argument("--population-sampling-temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
@@ -49,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mutation-prompt",
         default="v1",
-        choices=["v1"],
+        choices=["v1", "random_v1"],
         help="Mutation prompt variant",
     )
     parser.add_argument(

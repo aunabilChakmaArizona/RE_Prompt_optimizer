@@ -40,14 +40,14 @@ def mutate_prompt_fn(
     base_prompt = node.mutation_prompt
 
     samples = feedback_samples.selected_samples
-    feedback_texts = [
-        getattr(sample, "feedback_text", "") for sample in feedback_samples.selected_samples
-    ]
-    # feedback_texts = _pad_list([t for t in feedback_texts if t.strip()], 3)
+    feedback_texts = _pad_list(
+        [getattr(sample, "feedback_text", "") for sample in feedback_samples.selected_samples],
+        3,
+    )
 
     def get_attr(i: int, name: str) -> str:
-        # if i >= len(samples):
-        #     return ""
+        if i >= len(samples):
+            return ""
         return getattr(samples[i], name, "")
 
     prompt = base_prompt
