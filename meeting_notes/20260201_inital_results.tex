@@ -1,0 +1,167 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[
+  paperwidth=13in,
+  paperheight=15in,
+  margin=0.5in
+]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+\newcommand{\tacred}{FS-TACRED}
+\newcommand{\qwensmall}{Qwen3-4B}
+\newcommand{\gemmasmall}{Gemma3-4B}
+
+\begin{document}
+
+
+\section{Experiment Recap}
+We explored four strategies to optimize a prompt:
+\begin{enumerate}
+    \item Updating the prompt using feedback on both correct predictions and mistakes
+    \item Updating the prompt using feedback only on correct predictions
+    \item Updating the prompt using feedback only on mistakes
+    \item Updating the prompt by making random changes (no feedback on correct predictions or mistakes)
+\end{enumerate}
+
+Sample prompts are shown in Table~\ref{tab:prompts}.
+
+\section{Analysis of Results and Prompts}
+\begin{itemize}
+    \item Applying random changes was the most efficient approach, yielding the highest F1 improvement over the baseline. The optimized prompts remain very similar to the initial prompt, with only minor modifications to the statements.
+    \item Using feedback on both correct predictions and mistakes was the second-best approach. The optimized prompts are substantially longer than the initial prompt and include many additional instructions learned from the feedback.
+    \item Using feedback only from correct predictions was the least efficient approach.
+\end{itemize}
+
+\section{Discussion and Future Work}
+\begin{itemize}
+    \item We started from a standard baseline prompt that already contains basic task details (e.g., what the task is) and instructions (e.g., how to decide yes/no). The formats of the optimized prompts do not differ significantly from this baseline but only consist of additional instructions.
+    
+    In contrast, the GEPA paper starts from a very simple prompt, typically containing only one or two sentences. The optimized prompts then grow larger and more detailed, allowing them to evolve more freely from the baseline.
+    
+    We are considering whether we should also experiment with a very simple starting prompt. An example of such a prompt is shown in Table~\ref{tab:starting-prompts}.
+
+    \item I am still exploring how to design the crossover operation. A simple approach would be to sample the two best-performing prompts and ask the LLM to merge them using a separate meta-prompt. 
+In the GEPA paper, a crossover operation is performed differently: instead of generating a new prompt, they merge two systems by selecting the best-performing prompt within each shared module. 
+For example, suppose System~1 uses prompts $(P1\_M1, P2\_M2)$ for Module~1 and Module~2, respectively, and System~2 uses prompts $(P1'\_M1, P2'\_M2)$. 
+The merge operation selects the best-performing prompt for each module independently. As a result, a new System~3 may be composed of $(P1'\_M1, P2\_M2)$.
+
+\end{itemize}
+
+\section{Prompts}
+\label{sec:prompts}
+
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l}
+\toprule
+\midrule
+Our initial prompt\\
+\midrule
+You are given a relation name, a description of the relation in brackets, a support sentence that exemplify the relation, and a query sentence.\\
+\\
+A relation connects the Subject and the Object entities. \\
+The Subject and the Object entities are indicated with subject and object tags, respectively. \\
+You need to decide whether the relation holds between the Subject and the Object in the query sentence.\\
+\\
+Relation name: "\#RELATION\#" (\#RELATION\_DESCRIPTION\#)\\
+\\
+\#SUPPORT\_SENTENCE\_BLOCK\#\\
+\\
+Query Sentence: \#QUERY\_SENTENCE\#\\
+\\
+If the relation holds between the Subject and Object in the query sentence, say "yes"; otherwise, say "no". Output only "yes" or "no", and nothing else. \\
+
+\midrule
+Optimized prompt by random updates using Qwen3-4B\\
+\midrule
+You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence. \\
+The relation links two entities: the Subject and the Object, which are indicated with subject and object tags, respectively. \\
+Your task is to assess whether the relation described applies between the Subject and the Object in the query sentence.\\
+\\
+Relation name: "\#RELATION\#" (\#RELATION\_DESCRIPTION\#)\\
+\\
+\#SUPPORT\_SENTENCE\_BLOCK\#\\
+\\
+Query Sentence: \#QUERY\_SENTENCE\#\\
+\\
+Determine if the relation is present between the Subject and the Object in the query sentence. Answer with "yes" if the relation is present, and "no" if it is not. \\
+Only respond with "yes" or "no", and nothing else. \\
+
+\midrule
+Optimized prompt by random updates using Qwen3-14B\\
+\midrule
+You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.\\
+\\
+A relation describes how the Subject and Object entities are connected in a sentence. \\
+The Subject and Object entities are marked with subject and object tags, respectively. \\
+Your task is to determine if the relation is accurately represented between the Subject and Object in the query sentence.\\
+\\
+Relation name: "\#RELATION\#" (\#RELATION\_DESCRIPTION\#)\\
+\\
+\#SUPPORT\_SENTENCE\_BLOCK\#\\
+\\
+Query Sentence: \#QUERY\_SENTENCE\#\\
+\\
+If the relation is correctly expressed between the Subject and Object in the query sentence, respond with "yes"; \\
+otherwise, respond with "no". Provide only "yes" or "no" as your answer, and no additional text.\\
+
+\midrule
+Optimized prompt using feedbacks on corrects and mistakes by Qwen3-14B\\
+\midrule
+You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.\\
+\\
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. \\
+You need to carefully analyze the query sentence to determine whether the relation holds between the Subject and the Object. \\
+Pay close attention to the nature of the relationship described by the relation name and ensure that the sentence explicitly or implicitly supports that connection.\\
+\\
+Relation name: \#RELATION\# (\#RELATION\_DESCRIPTION\#)\\
+\\
+\#SUPPORT\_SENTENCE\_BLOCK\#\\
+\\
+Query Sentence: \#QUERY\_SENTENCE\#\\
+\\
+When evaluating, consider whether the Subject and Object are in the correct roles (e.g., one is the parent of the other, or the other is the country of birth, etc.) \\
+and whether the sentence provides direct or contextual evidence for the relation. \\
+Be especially careful to confirm that the Subject and Object match the expected entity types for the relation \\
+(e.g., an organization for *org:* relations, a person for *person:* relations, etc.). \\
+Avoid making assumptions based on partial or ambiguous information, and be cautious of conflating related concepts \\
+(e.g., citizenship vs. birthplace, location vs. familial relationship, merger vs. dissolution). \\
+\\
+If the relation holds between the Subject and Object in the query sentence, say "yes"; otherwise, say "no". Output only "yes" or "no", and nothing else. \\
+
+\bottomrule
+\end{tabular}
+\caption{Prompt examples}
+\label{tab:prompts}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l}
+\toprule
+Given a relation, a support example, and a query, classify whether the relation holds in the query sentence. \\
+Answer with yes or no only. \\
+\bottomrule
+\end{tabular}
+\caption{Simplest initial prompt starter (perhaps to explore next)}
+\label{tab:starting-prompts}
+\end{table}
+
+% \paragraph{Notes on GEPA paper}
+% \begin{itemize}
+%     \item They start from a simlpest instruction (i.e. few sentence only) and their prompt results into a large prompt after optimization.
+%     That is why I see that the scores of the child nodes are significantly higher than the root node.
+%     \item The best resulting prompt may come from any path .. So an extensive search (exploration+eploitation) of the tree is highly important
+%     \item ** Bascially, if a actual prompt has two parts: Instruction and Input, they optimize the Intruction part of the prompt. ***
+% \end{itemize}
+
+
+
+% \bibliographystyle{plain}  
+% \bibliography{custom}    
+
+\end{document}
