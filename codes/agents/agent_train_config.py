@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
         "--update-mode",
         type=str,
         default="feedback",
-        choices=["feedback", "random"],
+        choices=["feedback", "no_feedback"],
         help="Prompt update mode",
     )
     parser.add_argument("--selection-mode", type=str, default="mixed")
@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mutation-prompt",
         default="v1",
-        choices=["v1", "random_v1"],
+        choices=["v1", "random_v1", "no_feedback_v1"],
         help="Mutation prompt variant",
     )
     parser.add_argument(
