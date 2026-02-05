@@ -164,6 +164,16 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 Output the edited text enclosed within the <p> and </p> tags.
 '''
 
+MUTATION_RANDOM_PROMPT_V2 = '''Make changes to the text below. You may add, remove, replace, or edit any part of the text.
+
+```
+#INFERENCE_PROMPT#
+```
+
+Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#). These placeholders must remain exactly the same.
+Output the edited text enclosed within the <p> and </p> tags.
+'''
+
 INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplify the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
@@ -210,5 +220,6 @@ FEEDBACK_PROMPT_MAP = {
 MUTATION_PROMPT_MAP = {
     "v1": MUTATION_PROMPT_V1,
     "random_v1": MUTATION_RANDOM_PROMPT_V1,
+    "random_v2": MUTATION_RANDOM_PROMPT_V2,
     "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V1
 }
