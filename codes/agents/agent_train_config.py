@@ -60,6 +60,26 @@ def parse_args() -> argparse.Namespace:
         help="Mutation prompt variant",
     )
     parser.add_argument(
+        "--feedback-open-tag",
+        default="<f>",
+        help="Opening tag to wrap feedback output (default: <f>)",
+    )
+    parser.add_argument(
+        "--feedback-close-tag",
+        default="</f>",
+        help="Closing tag to wrap feedback output (default: </f>)",
+    )
+    parser.add_argument(
+        "--prompt-open-tag",
+        default="<p>",
+        help="Opening tag to wrap mutated prompt output (default: <p>)",
+    )
+    parser.add_argument(
+        "--prompt-close-tag",
+        default="</p>",
+        help="Closing tag to wrap mutated prompt output (default: </p>)",
+    )
+    parser.add_argument(
         "--device-map",
         default="cuda:0",
         help="Device map override (e.g., cuda:0, cuda:1, cpu, auto)",

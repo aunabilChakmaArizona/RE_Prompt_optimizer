@@ -9,6 +9,7 @@ from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_PROMPT_MAP,
     MUTATION_PROMPT_MAP,
+    apply_tag_overrides,
 )
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
@@ -47,8 +48,20 @@ def main() -> None:
         )
         sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs 
 
-        feedback_prompt = FEEDBACK_PROMPT_MAP[args.feedback_prompt]
-        mutation_prompt = MUTATION_PROMPT_MAP[args.mutation_prompt]
+        feedback_prompt = apply_tag_overrides(
+            FEEDBACK_PROMPT_MAP[args.feedback_prompt],
+            feedback_open_tag=args.feedback_open_tag,
+            feedback_close_tag=args.feedback_close_tag,
+            prompt_open_tag=args.prompt_open_tag,
+            prompt_close_tag=args.prompt_close_tag,
+        )
+        mutation_prompt = apply_tag_overrides(
+            MUTATION_PROMPT_MAP[args.mutation_prompt],
+            feedback_open_tag=args.feedback_open_tag,
+            feedback_close_tag=args.feedback_close_tag,
+            prompt_open_tag=args.prompt_open_tag,
+            prompt_close_tag=args.prompt_close_tag,
+        )
 
         root = build_root_node(
             feedback_prompt=feedback_prompt,

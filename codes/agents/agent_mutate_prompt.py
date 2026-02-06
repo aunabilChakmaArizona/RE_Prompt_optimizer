@@ -10,8 +10,8 @@ from agents.agent_prompts import INFERENCE_PROMPT_PLACEHODERS_V1
 from agents.agent_relation_utils import get_relation_description
 
 
-def _extract_between(text: str, tag: str) -> str:
-    pattern = rf"<{tag}>(.*?)</{tag}>"
+def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
+    pattern = rf"{re.escape(open_tag)}(.*?){re.escape(close_tag)}"
     match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
     if not match:
         return text.strip()
@@ -36,6 +36,8 @@ def mutate_prompt_fn(
     model,
     tokenizer,
     max_new_tokens: int = 512,
+    prompt_open_tag: str = "<p>",
+    prompt_close_tag: str = "</p>",
 ) -> Optional[Tuple[str, str, str]]:
     base_prompt = node.mutation_prompt
 
@@ -80,10 +82,13 @@ def mutate_prompt_fn(
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
         )
-        if not re.search(r"<p>.*?</p>", raw_response, flags=re.DOTALL | re.IGNORECASE):
-            print(f"[agent_mutate_prompt] missing <p> tag; retry {attempt}/{max_attempts}")
+        tag_pattern = rf"{re.escape(prompt_open_tag)}(.*?){re.escape(prompt_close_tag)}"
+        if not re.search(tag_pattern, raw_response, flags=re.DOTALL | re.IGNORECASE):
+            print(
+                f"[agent_mutate_prompt] missing {prompt_open_tag} tag; retry {attempt}/{max_attempts}"
+            )
             continue
-        candidate = _extract_between(raw_response, "p")
+        candidate = _extract_between(raw_response, prompt_open_tag, prompt_close_tag)
         if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
             print(f"[agent_mutate_prompt] new inference prompt:\n{candidate}")
 

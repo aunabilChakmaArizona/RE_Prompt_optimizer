@@ -27,21 +27,21 @@ def _format_feedback_prompt(
     return prompt
 
 
-def _extract_feedback(text: str) -> str:
-    start = text.find("<f>")
+def _extract_feedback(text: str, open_tag: str, close_tag: str) -> str:
+    start = text.find(open_tag)
     if start == -1:
         return text.strip()
-    end = text.find("</f>", start + 3)
+    end = text.find(close_tag, start + len(open_tag))
     if end == -1:
         return text.strip()
-    return text[start + 3 : end].strip()
+    return text[start + len(open_tag) : end].strip()
 
 
-def _has_feedback_tag(text: str) -> bool:
-    start = text.find("<f>")
+def _has_feedback_tag(text: str, open_tag: str, close_tag: str) -> bool:
+    start = text.find(open_tag)
     if start == -1:
         return False
-    end = text.find("</f>", start + 3)
+    end = text.find(close_tag, start + len(open_tag))
     return end != -1
 
 
@@ -53,6 +53,8 @@ def generate_feedback_fn(
     model,
     tokenizer,
     batch_size: int = 4,
+    feedback_open_tag: str = "<f>",
+    feedback_close_tag: str = "</f>",
 ) -> FeedbackSamples:
     base_prompt = node.feedback_prompt
 
@@ -78,12 +80,18 @@ def generate_feedback_fn(
         raw_feedback_texts = run_prompts(
             prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
         )
-        feedback_texts = [_extract_feedback(text) for text in raw_feedback_texts]
-        if all(_has_feedback_tag(text) for text in raw_feedback_texts):
+        feedback_texts = [
+            _extract_feedback(text, feedback_open_tag, feedback_close_tag)
+            for text in raw_feedback_texts
+        ]
+        if all(
+            _has_feedback_tag(text, feedback_open_tag, feedback_close_tag)
+            for text in raw_feedback_texts
+        ):
             break
         if attempt < max_attempts:
             print(
-                f"[agent_generate_feedback] missing <f> tag; retry {attempt}/{max_attempts}"
+                f"[agent_generate_feedback] missing {feedback_open_tag} tag; retry {attempt}/{max_attempts}"
             )
     feedback_samples.feedback_prompts = prompts
     feedback_samples.raw_feedback_texts = raw_feedback_texts

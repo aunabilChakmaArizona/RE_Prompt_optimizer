@@ -223,3 +223,18 @@ MUTATION_PROMPT_MAP = {
     "random_v2": MUTATION_RANDOM_PROMPT_V2,
     "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V1
 }
+
+
+def apply_tag_overrides(
+    prompt: str,
+    *,
+    feedback_open_tag: str,
+    feedback_close_tag: str,
+    prompt_open_tag: str,
+    prompt_close_tag: str,
+) -> str:
+    if feedback_open_tag and feedback_close_tag:
+        prompt = prompt.replace("<f>", feedback_open_tag).replace("</f>", feedback_close_tag)
+    if prompt_open_tag and prompt_close_tag:
+        prompt = prompt.replace("<p>", prompt_open_tag).replace("</p>", prompt_close_tag)
+    return prompt
