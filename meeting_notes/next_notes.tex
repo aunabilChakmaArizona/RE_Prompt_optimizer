@@ -1,0 +1,60 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[
+  paperwidth=8.5in,
+  paperheight=11in,
+  margin=0.5in
+]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+\newcommand{\tacred}{FS-TACRED}
+\newcommand{\qwensmall}{Qwen3-4B}
+\newcommand{\gemmasmall}{Gemma3-4B}
+
+\begin{document}
+
+\begin{itemize}
+    \item The task we are solving requires random luck because we are directly deriving the answer. 
+    In other works on APO, the optimized prompts contain a lot of instructions, and without reasoning directly conclude to yes or no is difficult.
+    For direct yes or no answers: it requires luck i.e. random search of the prompt. - my hypothesis
+    \item "where to focus" / "where is the important thing" - based important selection of prompt parts from parents
+    \item take the difference between child and parent as important items that improved the scores
+    \item use LLM itself to identify the differences in the prompt between parent and child that caused the improvement 
+    \item Evaluating on the full evaluation set can be expensive (i.e. if I use reasoning). "Automatic Prompt Optimization with “Gradient Descent” and Beam Search" - solves this as multi-arm / multi-bandit problem. check that.
+    \item 1-shot to K-shot VS showing how to solve as examples
+  \end{itemize}
+
+\paragraph{Top approaches}
+\begin{itemize}
+  \item GEPA merge: Combine different best sub-modules from different systems to be single best systems
+  \item Error taxonomy - updates the prompt only once - i think it is inspired by GRPO i.e. doing batch udpate rather than single update
+  \item Evoprompt - a + x (b - c)
+  \item SPO - no full validation rather they do pairwise self-judge by LLM based on outputs of different prompts
+  \item PromptAgent - uses MCTS to explore new prompt (passes rewards to parent nodes)
+  \item a mixed of IO and EO approach - from the Teach better or show smarter
+  \item My idea: show trace of changes of the prompt during mutation: that will show the differences and the impact
+\end{itemize}
+
+\paragraph{What is necessary}
+\begin{itemize}
+  \item Grouping of errors - best learning 
+  \item Merging best subsystems (multi-agent)
+  \item Show trace of changes (idea similar to: CMA-ES (Covariance Matrix Adaptation ES) , DE (used in Evoprompt), or Lamarckian \& Baldwinian Evolution (classic framing) Often implemented via local search + GA, also called memetic algorithms)
+  \item MCTS - for search 
+  \item Examples Optimization (Random and Mutation from pool)
+\end{itemize}
+
+* Use MCTS + UCT for search (exploration + exploitation) \\
+Step per iteration:
+\begin{enumerate}
+\item Select a system (one prompt per system)
+\item 
+\end{enumerate}
+
+% \bibliographystyle{plain}  
+% \bibliography{custom}    
+
+\end{document}
