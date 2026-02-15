@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import pickle
 import random
@@ -16,27 +17,63 @@ from transformers.utils import is_flash_attn_2_available
 # =========================
 # Config (no CLI args)
 # =========================
-MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
+MODEL_ID = "Qwen/Qwen3-4B"
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "data"))
 DATASET_TYPE = "fs_tacred"
 DEV_SPLIT = "dev"  # validation split
 DEV_EP_START = 0
 DEV_EP_END = None  # None for full split
 
-DEVICE_MAP = None  # None -> auto (cuda if available else cpu)
+DEVICE_MAP = "cuda:2"  # None -> auto (cuda if available else cpu)
 USE_CHAT_TEMPLATE = True
 ADD_GENERATION_PROMPT = True
-ENABLE_THINKING = False  # passed to apply_chat_template when supported
+ENABLE_THINKING = True  # passed to apply_chat_template when supported
 
-BATCH_SIZE = 8
-MAX_NEW_TOKENS = 256
+BATCH_SIZE = 50
+MAX_NEW_TOKENS = 1000
 MAX_INPUT_TOKENS = None  # e.g. 4096 or None
 
 N_CHUNKS = 3  # for mean/std computation
 SEED = 42
 
+SAVE_RAW_RESPONSES = True
+RAW_OUTPUT_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "qwen4_raw_responses_wf.json")
+)
 
-INFERENCE_PROMPT = """You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
+
+INFERENCE_PROMPT_GEMMA4_WF = """
+You are an expert at recognizing connections between entities in text. You will be given a relationship definition, a clear example sentence demonstrating that relationship, and a new sentence. Your task is to decide if the same relationship exists between the subject and object entities in the new sentence.
+
+Here's how to approach this task:
+
+1.  Carefully analyze the provided relationship definition and example sentence to fully understand the nature of the connection.
+2.  Identify the subject and object entities within the new sentence.
+3.  Determine if the relationship described in the example sentence also applies to the subject and object in the new sentence.
+4.  Analyze and answer with a concise "yes" or "no" – just one word.
+
+Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
+
+#SUPPORT_SENTENCE_BLOCK#
+
+Query Sentence: #QUERY_SENTENCE#
+
+Do reasoning for analysing. Then output the final answer here using tags: [d]yes[/d] or [d]no[/d].
+"""
+
+INFERENCE_PROMPT_GEMMA4_CMF = """You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence. Your task is to determine if the query sentence demonstrates the specified relation between the Subject and Object entities, as indicated by the support sentence.
+
+The Subject and Object entities are clearly marked within the sentence. You need to analyze the query sentence to see if it exhibits the same connection as described in the support sentence.  Focus on whether the subject and object share a direct and defined relationship, as illustrated by the example.  If the query sentence suggests the specified relation, respond with "yes"; otherwise, respond with "no".
+
+Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
+
+#SUPPORT_SENTENCE_BLOCK#
+
+Query Sentence: #QUERY_SENTENCE#
+
+Consider the context and specific wording of the query sentence carefully to determine if it aligns with the relationship described in the support instance. Do reasoning for analysing. Then output the final answer here using tags: [d]yes[/d] or [d]no[/d]."""
+
+INFERENCE_PROMPT_QWEN4_CMF = """You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
 
@@ -46,10 +83,29 @@ Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
 
 Query Sentence: #QUERY_SENTENCE#
 
-Your reasoning goes here. Think step by step about whether the relation holds.
-Then output the final answer here using tags: [d]yes[/d] or [d]no[/d].
+When evaluating whether the relation holds, carefully consider the following:
+- The relation must directly connect the Subject and Object entities as defined by the relation description.
+- The Subject must be the entity described in the relation (e.g., a person for "per:spouse").
+- The Object must be the specific entity that represents the relation's value (e.g., a city for "per:city_of_birth").
+- Pay attention to explicit connections such as "born in," "died of," or "spouse of" that establish the relation.
+- Be cautious of ambiguous phrases or geopolitical terms that may not directly indicate the relation.
+- Ensure that the subject and object are correctly identified and that the relation is explicitly or implicitly expressed in the query.
+
+If the relation holds between the Subject and Object in the query sentence, say using tags [d]yes[/d]; otherwise, [d]no[/d] and nothing else.
 """
 
+INFERENCE_PROMPT_QWEN4_WF = """You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence. Your task is to determine whether the relation described holds between the Subject and Object entities in the query sentence.
+
+A relation connects two entities: the Subject and the Object. These entities are marked in the text with "subject" and "object" tags, respectively. You must analyze the query sentence to see if the relation described in the relation name and description is accurately represented between the Subject and Object entities.
+
+Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
+
+#SUPPORT_SENTENCE_BLOCK#
+
+Query Sentence: #QUERY_SENTENCE#
+
+Based on the query sentence, determine if the relation holds between the Subject and Object. If it does, respond using tags [d]yes[/d]; otherwise, [d]no[/d] and nothing else.
+"""
 
 RELATION_DESCRIPTION = {
     "org:alternate_names": "an organization's alternate names",
@@ -103,7 +159,7 @@ def _default_device_map(device_map: Optional[str]) -> str:
     if device_map:
         return device_map
     if torch.cuda.is_available():
-        return "cuda"
+        return "cuda:3"
     return "cpu"
 
 
@@ -270,12 +326,15 @@ def run_reasoned_inference(
     add_generation_prompt: bool,
     enable_thinking: bool,
     max_input_tokens: Optional[int],
-) -> List[str]:
+    save_raw: bool,
+    raw_output_file: str,
+) -> Tuple[List[str], List[str]]:
     if not prompts:
-        return []
+        return [], []
 
     start_time = time.perf_counter()
     predictions: List[str] = []
+    raw_responses: List[str] = []
     target_device = getattr(model, "device", None)
 
     for batch_index, batch in enumerate(_batched(list(prompts), batch_size), start=1):
@@ -323,15 +382,30 @@ def run_reasoned_inference(
         input_len = model_inputs["input_ids"].shape[1]
         generated = output_ids[:, input_len:]
         decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
-        predictions.extend([_extract_decision(text) for text in decoded])
+        for prompt, text in zip(batch, decoded):
+            raw_responses.append(text)
+            predictions.append(_extract_decision(text))
+            # defer saving until all outputs are collected
 
-        if batch_index % 20 == 0 or batch_index == (len(prompts) + batch_size - 1) // batch_size:
-            elapsed = time.perf_counter() - start_time
-            print(f"[independent] processed {batch_index} batches in {elapsed:.2f}s", flush=True)
+        elapsed = time.perf_counter() - start_time
+        print(f"[independent] processed {batch_index} batches in {elapsed:.2f}s", flush=True)
+        if batch_index % 20 == 0 and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        del model_inputs, output_ids, generated, decoded
 
     elapsed = time.perf_counter() - start_time
     print(f"[independent] inference done in {elapsed:.2f}s")
-    return predictions
+    if save_raw:
+        payload = {
+            str(idx + 1): {"prompt": p, "response": r}
+            for idx, (p, r) in enumerate(zip(prompts, raw_responses))
+        }
+        with open(raw_output_file, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        print(f"[independent] raw responses saved to {raw_output_file}")
+
+    return predictions, raw_responses
 
 
 def _chunk_indices(total: int, n_chunks: int) -> List[Tuple[int, int]]:
@@ -463,7 +537,7 @@ def main() -> None:
 
             prompts.append(
                 format_inference_prompt(
-                    base_prompt=INFERENCE_PROMPT,
+                    base_prompt=INFERENCE_PROMPT_QWEN4_WF,
                     relation=relation,
                     relation_description=relation_description,
                     support_sentences=support_sentences,
@@ -476,7 +550,7 @@ def main() -> None:
 
     print(f"[independent] total prompts={len(prompts)} batch_size={BATCH_SIZE}")
 
-    pair_predictions = run_reasoned_inference(
+    pair_predictions, _raw_responses = run_reasoned_inference(
         prompts,
         model=model,
         tokenizer=tokenizer,
@@ -486,6 +560,8 @@ def main() -> None:
         add_generation_prompt=ADD_GENERATION_PROMPT,
         enable_thinking=ENABLE_THINKING,
         max_input_tokens=MAX_INPUT_TOKENS,
+        save_raw=SAVE_RAW_RESPONSES,
+        raw_output_file=RAW_OUTPUT_FILE,
     )
 
     episode_predictions: List[str] = []
