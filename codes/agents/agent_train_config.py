@@ -17,7 +17,7 @@ def default_trainings_dir() -> str:
 def resolve_data_dir(data_dir: Optional[str]) -> str:
     return data_dir or default_data_dir()
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run evolutionary prompt optimization.")
     parser.add_argument("--model", required=True, help="HF model id")
     parser.add_argument("--dataset-type", default="fs_tacred", help="Dataset type")
@@ -100,4 +100,18 @@ def parse_args() -> argparse.Namespace:
         default=default_trainings_dir(),
         help="Output root for training runs",
     )
-    return parser.parse_args()
+    return parser
+
+
+def get_arg_defaults() -> dict:
+    parser = build_parser()
+    defaults = {}
+    for action in parser._actions:
+        if action.dest in ("help",) or action.default is argparse.SUPPRESS:
+            continue
+        defaults[action.dest] = action.default
+    return defaults
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()

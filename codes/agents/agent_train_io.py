@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from agents.agent_graph_node import GraphNode
 from agents.agent_feedback_samples import FeedbackSample, FeedbackSamples
+from agents.agent_train_config import get_arg_defaults
 
 
 class Tee:
@@ -63,8 +64,10 @@ def restore_logging(
 
 
 def write_args(run_dir: str, args: object) -> None:
+    full_args = get_arg_defaults()
+    full_args.update(vars(args))
     with open(os.path.join(run_dir, "args.json"), "w", encoding="utf-8") as handle:
-        json.dump(vars(args), handle, indent=2)
+        json.dump(full_args, handle, indent=2)
 
 
 def serialize_feedback_sample(sample: FeedbackSample) -> Dict[str, object]:

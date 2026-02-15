@@ -35,6 +35,13 @@ nohup python -u core_trainer.py --model "Qwen/Qwen3-14B" --device-map "cuda:2" -
 nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --max-iterations 10 --update-mode "no_feedback" --mutation-prompt "random_v2" --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]" > nohup_gemma4_pure_random_v2.out 2>&1 &
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 10 --update-mode "no_feedback" --mutation-prompt "random_v2" > nohup_qwen4_pure_random_v2.out 2>&1 &
 
+#qwen large
+nohup python -u core_trainer.py --model "Qwen/Qwen3-32B" --device-map "cuda:0" --max-iterations 10 --feedback-prompt "correct_v1" --selection-mode "correct" > nohup_qwen32_corrects.out 2>&1 &
+nohup python -u core_trainer.py --model "Qwen/Qwen3-32B" --device-map "cuda:0" --max-iterations 10 --feedback-prompt "mistakes_v1" --selection-mode "mistakes" > nohup_qwen32_mistakes.out 2>&1 &
+nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --max-iterations 10 --update-mode "no_feedback" --mutation-prompt "random_v2" > nohup_qwen32_pure_random_v2.out 2>&1 &
+nohup python -u core_trainer.py --model "Qwen/Qwen3-32B" --device-map "cuda:0" --max-iterations 10 > nohup_qwen32.out 2>&1 &
+
+
 # tags custom
   --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
 
