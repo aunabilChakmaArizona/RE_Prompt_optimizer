@@ -7,27 +7,34 @@ from typing import Dict, List, Sequence
 
 from agents.agent_binary_inference import run_binary_inference
 from agents.agent_graph_node import GraphNode
-from agents.agent_prompts import INFERENCE_PROMPT_V1
 from agents.agent_data_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
+from agents.agent_prompts import compose_inference_prompt
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_scorer import NO_RELATION
 from agents.agent_relation_utils import get_relation_description
 
 
-def _format_inference_prompt(
-    base_prompt: str,
+def _build_inference_prompt(
+    node: GraphNode,
     relation: str,
     relation_description: str,
     support_sentences: Sequence[str],
     query_sentence: str,
 ) -> str:
     support_block = build_support_block(support_sentences)
-    prompt = base_prompt
-    prompt = prompt.replace("#RELATION#", relation)
-    prompt = prompt.replace("#RELATION_DESCRIPTION#", relation_description)
-    prompt = prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
-    prompt = prompt.replace("#QUERY_SENTENCE#", query_sentence)
-    return prompt
+    example_query_sentence = support_sentences[0] if support_sentences else query_sentence
+    return compose_inference_prompt(
+        inference_mode=node.inference_mode,
+        inference_prompt=node.inference_prompt,
+        inference_instruction_prompt=node.inference_instruction_prompt,
+        inference_example_prompt=node.inference_example_prompt,
+        inference_input_prompt=node.inference_input_prompt,
+        relation=relation,
+        relation_description=relation_description,
+        support_block=support_block,
+        query_sentence=query_sentence,
+        example_query_sentence=example_query_sentence,
+    )
 
 
 def evaluate_fn(
@@ -52,9 +59,7 @@ def evaluate_fn(
         raise ValueError("eval_id is required when output_dir is provided.")
 
     start_time = time.perf_counter()
-    base_prompt = node.inference_prompt or INFERENCE_PROMPT_V1
-
-    print(f"[agent_evaluate] evaluate_fn: base_prompt=\n{base_prompt}")
+    print(f"[agent_evaluate] evaluate_fn: base_prompt=\n{node.inference_prompt}")
 
     prompts: List[str] = []
     pair_labels: List[str] = []
@@ -77,8 +82,8 @@ def evaluate_fn(
             relation_description = get_relation_description(relation, dt=dataset_type)
 
             prompts.append(
-                _format_inference_prompt(
-                    base_prompt=base_prompt,
+                _build_inference_prompt(
+                    node=node,
                     relation=relation,
                     relation_description=relation_description,
                     support_sentences=support_sentences,

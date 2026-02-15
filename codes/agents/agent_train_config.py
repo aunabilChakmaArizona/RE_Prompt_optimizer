@@ -4,6 +4,8 @@ import argparse
 import os
 from typing import Optional
 
+from agents.agent_prompts import INFERENCE_MODE_CHOICES, INFERENCE_MODE_NON_SEPARATE
+
 
 def default_data_dir() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "data"))
@@ -58,6 +60,17 @@ def build_parser() -> argparse.ArgumentParser:
         default="v1",
         choices=["v1", "random_v1", "random_v2", "no_feedback_v1"],
         help="Mutation prompt variant",
+    )
+    parser.add_argument(
+        "--inference-mode",
+        type=str,
+        default=INFERENCE_MODE_NON_SEPARATE,
+        choices=list(INFERENCE_MODE_CHOICES),
+        help=(
+            "Inference prompt mode: non_separate uses INFERENCE_PROMPT_V1; "
+            "separate_no_examples uses instruction+input; "
+            "separate_with_examples uses instruction+example+input."
+        ),
     )
     parser.add_argument(
         "--feedback-open-tag",

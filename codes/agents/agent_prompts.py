@@ -340,6 +340,88 @@ MUTATION_PROMPT_MAP = {
     "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V1
 }
 
+MUTATION_PROMPT_MAP_V2 = {
+    "v1": MUTATION_PROMPT_V2,
+    "random_v1": MUTATION_RANDOM_PROMPT_V3,
+    "random_v2": MUTATION_RANDOM_PROMPT_V4,
+    "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V2,
+}
+
+INFERENCE_MODE_SEPARATE_NO_EXAMPLES = "separate_no_examples"
+INFERENCE_MODE_SEPARATE_WITH_EXAMPLES = "separate_with_examples"
+INFERENCE_MODE_NON_SEPARATE = "non_separate"
+INFERENCE_MODE_CHOICES = (
+    INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+    INFERENCE_MODE_SEPARATE_WITH_EXAMPLES,
+    INFERENCE_MODE_NON_SEPARATE,
+)
+
+
+def resolve_mutation_prompt(prompt_key: str, inference_mode: str) -> str:
+    if inference_mode == INFERENCE_MODE_NON_SEPARATE:
+        return MUTATION_PROMPT_MAP[prompt_key]
+    if inference_mode in (
+        INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+        INFERENCE_MODE_SEPARATE_WITH_EXAMPLES,
+    ):
+        return MUTATION_PROMPT_MAP_V2[prompt_key]
+    raise ValueError(f"Unsupported inference_mode: {inference_mode}")
+
+
+def compose_inference_prompt(
+    *,
+    inference_mode: str,
+    inference_prompt: str,
+    inference_instruction_prompt: str = "",
+    inference_example_prompt: str = "",
+    inference_input_prompt: str = "",
+    relation: str,
+    relation_description: str,
+    support_block: str,
+    query_sentence: str,
+    example_query_sentence: str,
+) -> str:
+    if inference_mode == INFERENCE_MODE_NON_SEPARATE:
+        prompt = inference_prompt or INFERENCE_PROMPT_V1
+        prompt = prompt.replace("#RELATION#", relation)
+        prompt = prompt.replace("#RELATION_DESCRIPTION#", relation_description)
+        prompt = prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
+        prompt = prompt.replace("#QUERY_SENTENCE#", query_sentence)
+        return prompt
+
+    if inference_mode == INFERENCE_MODE_SEPARATE_NO_EXAMPLES:
+        instruction_prompt = (
+            inference_instruction_prompt or inference_prompt or INFERENCE_INSTRUCTION_PROMPT_V1
+        )
+        input_prompt = inference_input_prompt or INFERENCE_INPUT_PROMPT_V1
+        input_prompt = input_prompt.replace("#RELATION#", relation)
+        input_prompt = input_prompt.replace("#RELATION_DESCRIPTION#", relation_description)
+        input_prompt = input_prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
+        input_prompt = input_prompt.replace("#QUERY_SENTENCE#", query_sentence)
+        return instruction_prompt + input_prompt
+
+    # todo: this will be iterative i.e. K examples
+    if inference_mode == INFERENCE_MODE_SEPARATE_WITH_EXAMPLES:
+        instruction_prompt = (
+            inference_instruction_prompt or inference_prompt or INFERENCE_INSTRUCTION_PROMPT_V1
+        )
+        example_prompt = inference_example_prompt or INFERENCE_EXAMPLE_PROMPT_V1
+        example_prompt = example_prompt.replace("#RELATION#", relation)
+        example_prompt = example_prompt.replace("#RELATION_DESCRIPTION#", relation_description)
+        example_prompt = example_prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
+        example_prompt = example_prompt.replace("#QUERY_SENTENCE#", example_query_sentence)
+        example_prompt = example_prompt.replace("#BINARY_ANSWER#", "yes")
+
+        input_prompt = inference_input_prompt or INFERENCE_INPUT_PROMPT_V1
+        input_prompt = input_prompt.replace("#RELATION#", relation)
+        input_prompt = input_prompt.replace("#RELATION_DESCRIPTION#", relation_description)
+        input_prompt = input_prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
+        input_prompt = input_prompt.replace("#QUERY_SENTENCE#", query_sentence)
+
+        return instruction_prompt + example_prompt + input_prompt
+
+    raise ValueError(f"Unsupported inference_mode: {inference_mode}")
+
 
 def apply_tag_overrides(
     prompt: str,

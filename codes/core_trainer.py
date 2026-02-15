@@ -8,8 +8,8 @@ from agents.agent_memory import clear_iteration_memory
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_PROMPT_MAP,
-    MUTATION_PROMPT_MAP,
     apply_tag_overrides,
+    resolve_mutation_prompt,
 )
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
@@ -56,7 +56,7 @@ def main() -> None:
             prompt_close_tag=args.prompt_close_tag,
         )
         mutation_prompt = apply_tag_overrides(
-            MUTATION_PROMPT_MAP[args.mutation_prompt],
+            resolve_mutation_prompt(args.mutation_prompt, args.inference_mode),
             feedback_open_tag=args.feedback_open_tag,
             feedback_close_tag=args.feedback_close_tag,
             prompt_open_tag=args.prompt_open_tag,
@@ -66,6 +66,7 @@ def main() -> None:
         root = build_root_node(
             feedback_prompt=feedback_prompt,
             mutation_prompt=mutation_prompt,
+            inference_mode=args.inference_mode,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
         )
 

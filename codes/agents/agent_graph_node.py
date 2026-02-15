@@ -7,6 +7,10 @@ class GraphNode:
     def __init__(
         self,
         inference_prompt: str,
+        inference_mode: str = "non_separate",
+        inference_instruction_prompt: str = "",
+        inference_example_prompt: str = "",
+        inference_input_prompt: str = "",
         parent: Optional["GraphNode"] = None,
         feedback: str = "",
         raw_feedback_texts: Optional[List[str]] = None,
@@ -21,6 +25,10 @@ class GraphNode:
         test_score: Optional[float] = None,
     ):
         self.inference_prompt = inference_prompt
+        self.inference_mode = inference_mode
+        self.inference_instruction_prompt = inference_instruction_prompt
+        self.inference_example_prompt = inference_example_prompt
+        self.inference_input_prompt = inference_input_prompt
         self.node_id = node_id
         self.is_dead = False
         self.mutation_failures = 0

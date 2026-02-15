@@ -5,26 +5,31 @@ from typing import List
 from agents.agent_binary_inference import run_binary_inference
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
-from agents.agent_prompts import INFERENCE_PROMPT_V1
 from agents.agent_data_utils import build_support_block
+from agents.agent_prompts import compose_inference_prompt
 from agents.agent_relation_utils import get_relation_description
 
 
-def _format_inference_prompt(
-    base_prompt: str,
+def _build_inference_prompt(
+    node: GraphNode,
     relation: str,
     relation_description: str,
     support_sentence: str,
     query_sentence: str,
-    num_shots: int,
 ) -> str:
     support_block = build_support_block([support_sentence])
-    prompt = base_prompt
-    prompt = prompt.replace("#RELATION#", relation)
-    prompt = prompt.replace("#RELATION_DESCRIPTION#", relation_description)
-    prompt = prompt.replace("#SUPPORT_SENTENCE_BLOCK#", support_block)
-    prompt = prompt.replace("#QUERY_SENTENCE#", query_sentence)
-    return prompt
+    return compose_inference_prompt(
+        inference_mode=node.inference_mode,
+        inference_prompt=node.inference_prompt,
+        inference_instruction_prompt=node.inference_instruction_prompt,
+        inference_example_prompt=node.inference_example_prompt,
+        inference_input_prompt=node.inference_input_prompt,
+        relation=relation,
+        relation_description=relation_description,
+        support_block=support_block,
+        query_sentence=query_sentence,
+        example_query_sentence=support_sentence,
+    )
 
 
 def run_inference_fn(
@@ -32,7 +37,6 @@ def run_inference_fn(
     feedback_samples: FeedbackSamples,
     *,
     dataset_type: str,
-    num_shots: int = 1,
     model,
     tokenizer,
     batch_size: int = 8,
@@ -40,18 +44,15 @@ def run_inference_fn(
     no_token_id: int | None = None,
     log_every: int = 100,
 ) -> FeedbackSamples:
-    base_prompt = node.inference_prompt or INFERENCE_PROMPT_V1
-
     prompts: List[str] = []
     for sample in feedback_samples.all_samples:
         relation = sample.relation
-        prompt = _format_inference_prompt(
-            base_prompt=base_prompt,
+        prompt = _build_inference_prompt(
+            node=node,
             relation=relation,
             relation_description=get_relation_description(relation, dt=dataset_type),
             support_sentence=sample.support_sentence,
             query_sentence=sample.query_sentence,
-            num_shots=num_shots,
         )
         prompts.append(prompt)
 

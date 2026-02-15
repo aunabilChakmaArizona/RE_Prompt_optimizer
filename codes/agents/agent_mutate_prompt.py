@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
-from agents.agent_prompts import INFERENCE_PROMPT_PLACEHODERS_V1
+from agents.agent_prompts import INFERENCE_MODE_NON_SEPARATE, INFERENCE_PROMPT_PLACEHODERS_V1
 from agents.agent_relation_utils import get_relation_description
 
 
@@ -89,9 +89,12 @@ def mutate_prompt_fn(
             )
             continue
         candidate = _extract_between(raw_response, prompt_open_tag, prompt_close_tag)
+        if node.inference_mode != INFERENCE_MODE_NON_SEPARATE:
+            print(f"[agent_mutate_prompt] new inference prompt:\n{candidate}")
+            return candidate, raw_response, prompt
+
         if _contains_placeholders(candidate, INFERENCE_PROMPT_PLACEHODERS_V1):
             print(f"[agent_mutate_prompt] new inference prompt:\n{candidate}")
-
             return candidate, raw_response, prompt
 
         print(f"[agent_mutate_prompt] missing placeholders; retry {attempt}/{max_attempts}")

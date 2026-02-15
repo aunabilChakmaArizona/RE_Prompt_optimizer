@@ -5,6 +5,7 @@ from typing import Callable, List, Optional, Sequence
 
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
+from agents.agent_prompts import INFERENCE_MODE_NON_SEPARATE
 from agents.agent_select_feedback import select_feedback_samples
 
 
@@ -161,8 +162,15 @@ class EvolutionarySearch:
                 print("[agent_evolutionary_search] mutation failed; parent marked dead")
                 continue
             new_prompt, raw_mutation_response, mutation_prompt_used = mutation_result
+            child_instruction_prompt = parent.inference_instruction_prompt
+            if parent.inference_mode != INFERENCE_MODE_NON_SEPARATE:
+                child_instruction_prompt = new_prompt
             child = GraphNode(
                 inference_prompt=new_prompt,
+                inference_mode=parent.inference_mode,
+                inference_instruction_prompt=child_instruction_prompt,
+                inference_example_prompt=parent.inference_example_prompt,
+                inference_input_prompt=parent.inference_input_prompt,
                 parent=parent,
                 feedback=feedback_text,
                 raw_feedback_texts=getattr(feedback_samples, "raw_feedback_texts", None),
