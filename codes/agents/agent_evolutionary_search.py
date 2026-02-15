@@ -143,7 +143,12 @@ class EvolutionarySearch:
                 _log_step("[agent_evolutionary_search] sample feedback")
                 feedback_samples = sample_feedback_fn(self.feedback_sample_size)
                 _log_step("[agent_evolutionary_search] run inference")
-                feedback_samples = run_inference_fn(parent, feedback_samples)
+                feedback_samples = run_inference_fn(
+                    parent,
+                    feedback_samples,
+                    evolution_iteration=iteration + 1,
+                    evolution_max_iterations=self.max_iterations,
+                )
                 _log_step("[agent_evolutionary_search] select feedback samples")
                 feedback_samples = select_feedback_samples(
                     feedback_samples,
@@ -184,7 +189,12 @@ class EvolutionarySearch:
             )
             self._next_node_id += 1
             _log_step("[agent_evolutionary_search] evaluate child")
-            child.val_score = evaluate_fn(child, "validation")
+            child.val_score = evaluate_fn(
+                child,
+                "validation",
+                evolution_iteration=iteration + 1,
+                evolution_max_iterations=self.max_iterations,
+            )
 
             _log_step("[agent_evolutionary_search] update graph")
             parent.add_child_from_feedback(feedback_samples, child)

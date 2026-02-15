@@ -131,7 +131,13 @@ def build_training_functions(
         enrich_feedback_samples(samples, train_shot_index)
         return samples
 
-    def run_inference(node: GraphNode, feedback_samples):
+    def run_inference(
+        node: GraphNode,
+        feedback_samples,
+        *,
+        evolution_iteration: int | None = None,
+        evolution_max_iterations: int | None = None,
+    ):
         return _run_inference_fn(
             node,
             feedback_samples,
@@ -142,6 +148,8 @@ def build_training_functions(
             yes_token_id=yes_token_id,
             no_token_id=no_token_id,
             log_every=args.log_every,
+            evolution_iteration=evolution_iteration,
+            evolution_max_iterations=evolution_max_iterations,
         )
 
     def generate_feedback(node: GraphNode, feedback_samples):
@@ -168,7 +176,13 @@ def build_training_functions(
             prompt_close_tag=args.prompt_close_tag,
         )
 
-    def evaluate(node: GraphNode, split: str):
+    def evaluate(
+        node: GraphNode,
+        split: str,
+        *,
+        evolution_iteration: int | None = None,
+        evolution_max_iterations: int | None = None,
+    ):
         eval_id = node.node_id if node.node_id is not None else 0
         if split == "validation":
             episodes = dev_data["episodes"]
@@ -192,6 +206,8 @@ def build_training_functions(
             yes_token_id=yes_token_id,
             no_token_id=no_token_id,
             log_every=args.log_every,
+            evolution_iteration=evolution_iteration,
+            evolution_max_iterations=evolution_max_iterations,
         )
 
     return sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate

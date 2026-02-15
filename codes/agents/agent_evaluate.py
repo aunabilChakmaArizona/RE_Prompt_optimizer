@@ -54,6 +54,8 @@ def evaluate_fn(
     yes_token_id: int | None = None,
     no_token_id: int | None = None,
     log_every: int = 100,
+    evolution_iteration: int | None = None,
+    evolution_max_iterations: int | None = None,
 ) -> float:
     if output_dir and eval_id is None:
         raise ValueError("eval_id is required when output_dir is provided.")
@@ -112,6 +114,8 @@ def evaluate_fn(
         yes_token_id=yes_token_id,
         no_token_id=no_token_id,
         log_every=log_every,
+        evolution_iteration=evolution_iteration,
+        evolution_max_iterations=evolution_max_iterations,
     )
 
     episode_predictions: List[str] = []

@@ -43,6 +43,8 @@ def run_inference_fn(
     yes_token_id: int | None = None,
     no_token_id: int | None = None,
     log_every: int = 100,
+    evolution_iteration: int | None = None,
+    evolution_max_iterations: int | None = None,
 ) -> FeedbackSamples:
     prompts: List[str] = []
     for sample in feedback_samples.all_samples:
@@ -64,6 +66,8 @@ def run_inference_fn(
         yes_token_id=yes_token_id,
         no_token_id=no_token_id,
         log_every=log_every,
+        evolution_iteration=evolution_iteration,
+        evolution_max_iterations=evolution_max_iterations,
     )
 
     for sample, pred in zip(feedback_samples.all_samples, predictions):

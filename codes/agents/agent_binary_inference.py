@@ -44,6 +44,8 @@ def run_binary_inference(
     no_token: str = "no",
     yes_token_id: int | None = None,
     no_token_id: int | None = None,
+    evolution_iteration: int | None = None,
+    evolution_max_iterations: int | None = None,
 ) -> List[str]:
     if not prompts:
         return []
@@ -70,6 +72,12 @@ def run_binary_inference(
     predictions: List[str] = []
     target_device = getattr(model, "device", None)
     original_padding_side = getattr(tokenizer, "padding_side", "right")
+    if evolution_iteration is None:
+        iteration_prefix = ""
+    elif evolution_max_iterations is None:
+        iteration_prefix = f"iter {evolution_iteration} "
+    else:
+        iteration_prefix = f"iter {evolution_iteration}/{evolution_max_iterations} "
 
     try:
         tokenizer.padding_side = "left"
@@ -109,7 +117,7 @@ def run_binary_inference(
             if log_every and (batch_index % log_every == 0 or batch_index == num_batches):
                 batch_elapsed = time.perf_counter() - start_time
                 print(
-                    f"[agent_binary_inference] Processed {batch_index}/{num_batches} batches "
+                    f"[agent_binary_inference] {iteration_prefix} Processed {batch_index}/{num_batches} batches "
                     f"in {batch_elapsed:.2f}s",
                     flush=True,
                 )
