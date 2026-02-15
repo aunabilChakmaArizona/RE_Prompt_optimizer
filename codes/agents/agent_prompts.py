@@ -136,6 +136,54 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
+# updated from V1 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
+MUTATION_PROMPT_V2 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising and improving prompts based on feedback from previous model predictions.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below a prompt that is used by another LLM to make an inference for the task:
+```
+#INFERENCE_PROMPT#
+```
+
+Using this prompt, another LLM was tested on three instances of the task. Below, you are given the inputs, the inference made by the other LLM, and feedback for each task.
+```
+Task 1
+Relation: #RELATION_1#
+Relation Description: #RELATION_DESCRIPTION_1#
+Support Instance: #SUPPORT_INSTANCE_1#
+Query Sentence: #QUERY_1#
+Ground-Truth Label: #LABEL_1#
+LLM Inference: #INFERENCE_1#
+Feedback: #FEEDBACK_1#
+
+Task 2
+Relation: #RELATION_2#
+Relation Description: #RELATION_DESCRIPTION_2#
+Support Instance: #SUPPORT_INSTANCE_2#
+Query Sentence: #QUERY_2#
+Ground-Truth Label: #LABEL_2#
+LLM Inference: #INFERENCE_2#
+Feedback: #FEEDBACK_2#
+
+Task 3
+Relation: #RELATION_3#
+Relation Description: #RELATION_DESCRIPTION_3#
+Support Instance: #SUPPORT_INSTANCE_3#
+Query Sentence: #QUERY_3#
+Ground-Truth Label: #LABEL_3#
+LLM Inference: #INFERENCE_3#
+Feedback: #FEEDBACK_3#
+```
+
+Carefully read the inputs, outputs, and feedback to identify problems with the current prompt. 
+Your task is to generate a revised form of the prompt so that the other LLM can improve the model’s generalization when using the prompt. 
+You may modify, add to, or remove any instructions or content in the current prompt in order to improve the prediction and enhance generalization.
+
+You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
 MUTATION_NO_FEEDBACK_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
@@ -154,6 +202,23 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
+# updated from V1 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
+MUTATION_NO_FEEDBACK_PROMPT_V2 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below a prompt that is used by another LLM to make an inference for the task:
+```
+#INFERENCE_PROMPT#
+```
+
+Carefully read the prompt. Your task is to generate a revised form of the prompt by making modifications so that the other LLM can improve its generalization when using the prompt.
+You may modify, add, remove, or rephrase any word, phrase, or content in the current prompt to enhance generalization.
+
+You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
 MUTATION_RANDOM_PROMPT_V1 = '''Make random changes to the text below. You may add, remove, replace, or edit any part of the text.
 
 ```
@@ -164,6 +229,17 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 Output the edited text enclosed within the <p> and </p> tags.
 '''
 
+# updated from V1 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
+MUTATION_RANDOM_PROMPT_V3 = '''Make random changes to the text below. You may add, remove, replace, or edit any part of the text.
+
+```
+#INFERENCE_PROMPT#
+```
+
+Output the edited text enclosed within the <p> and </p> tags.
+'''
+
+# corrected random prompt from V1 - "random" term removed
 MUTATION_RANDOM_PROMPT_V2 = '''Make changes to the text below. You may add, remove, replace, or edit any part of the text.
 
 ```
@@ -174,7 +250,17 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 Output the edited text enclosed within the <p> and </p> tags.
 '''
 
-INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplify the relation, and a query sentence.
+# updated from V2 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
+MUTATION_RANDOM_PROMPT_V4 = '''Make changes to the text below. You may add, remove, replace, or edit any part of the text.
+
+```
+#INFERENCE_PROMPT#
+```
+
+Output the edited text enclosed within the <p> and </p> tags.
+'''
+
+INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
 
@@ -188,6 +274,36 @@ If the relation holds between the Subject and Object in the query sentence, say 
 '''
 
 INFERENCE_PROMPT_PLACEHODERS_V1 = ["#RELATION#", "#RELATION_DESCRIPTION#", "#QUERY_SENTENCE#", "#SUPPORT_SENTENCE_BLOCK#"]
+
+INFERENCE_INSTRUCTION_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
+
+If the relation holds between the Subject and Object in the query sentence, say "yes"; otherwise, say "no". Output only "yes" or "no", and nothing else.
+'''
+
+INFERENCE_EXAMPLE_PROMPT_V1 = f'''
+Example:
+
+Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
+
+#SUPPORT_SENTENCE_BLOCK#
+
+Query Sentence: #QUERY_SENTENCE#
+
+Answer: #BINARY_ANSWER#
+'''
+
+INFERENCE_INPUT_PROMPT_V1 = f'''
+Input:
+
+Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
+
+#SUPPORT_SENTENCE_BLOCK#
+
+Query Sentence: #QUERY_SENTENCE#
+
+Answer: '''
 
 
 EXAMPLE_GENERATION_PROMPT_V1 = '''You are given a relation name, the description of the relation, and a support sentence that exemplifies the relation.
