@@ -61,7 +61,7 @@ def evaluate_fn(
         raise ValueError("eval_id is required when output_dir is provided.")
 
     start_time = time.perf_counter()
-    print(f"[agent_evaluate] evaluate_fn: base_prompt=\n{node.inference_prompt}")
+    print(f"[agent_evaluate] evaluate_fn: insturction_prompt=\n{node.inference_prompt}")
 
     prompts: List[str] = []
     pair_labels: List[str] = []
@@ -99,6 +99,9 @@ def evaluate_fn(
             episode_labels.append(query_relation)
         else:
             episode_labels.append(NO_RELATION)
+
+    if prompts:
+        print(f"[agent_evaluate] evaluate_fn: sample full prompt=\n{prompts[0]}")
 
     print(
         f"[agent_evaluate] evaluate_fn: split={split}, episodes={len(episodes)}, "
