@@ -1,13 +1,14 @@
 from typing import Optional, List, Tuple
 
 from agents.agent_feedback_samples import FeedbackSamples
+from agents.agent_prompts import INFERENCE_MODE_SEPARATE_NO_EXAMPLES
 
 
 class GraphNode:
     def __init__(
         self,
         inference_prompt: str,
-        inference_mode: str = "non_separate",
+        inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
         inference_instruction_prompt: str = "",
         inference_example_prompt: str = "",
         inference_input_prompt: str = "",

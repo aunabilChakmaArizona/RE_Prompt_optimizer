@@ -200,7 +200,7 @@ def build_training_functions(
 def build_root_node(
     feedback_prompt: str,
     mutation_prompt: str,
-    inference_mode: str = INFERENCE_MODE_NON_SEPARATE,
+    inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     example_generation_prompt: str = EXAMPLE_GENERATION_PROMPT_V1,
 ) -> GraphNode:
     if inference_mode == INFERENCE_MODE_NON_SEPARATE:

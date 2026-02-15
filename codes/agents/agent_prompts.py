@@ -390,9 +390,7 @@ def compose_inference_prompt(
         return prompt
 
     if inference_mode == INFERENCE_MODE_SEPARATE_NO_EXAMPLES:
-        instruction_prompt = (
-            inference_instruction_prompt or inference_prompt or INFERENCE_INSTRUCTION_PROMPT_V1
-        )
+        instruction_prompt = inference_instruction_prompt
         input_prompt = inference_input_prompt or INFERENCE_INPUT_PROMPT_V1
         input_prompt = input_prompt.replace("#RELATION#", relation)
         input_prompt = input_prompt.replace("#RELATION_DESCRIPTION#", relation_description)
@@ -402,9 +400,7 @@ def compose_inference_prompt(
 
     # todo: this will be iterative i.e. K examples
     if inference_mode == INFERENCE_MODE_SEPARATE_WITH_EXAMPLES:
-        instruction_prompt = (
-            inference_instruction_prompt or inference_prompt or INFERENCE_INSTRUCTION_PROMPT_V1
-        )
+        instruction_prompt = inference_instruction_prompt
         example_prompt = inference_example_prompt or INFERENCE_EXAMPLE_PROMPT_V1
         example_prompt = example_prompt.replace("#RELATION#", relation)
         example_prompt = example_prompt.replace("#RELATION_DESCRIPTION#", relation_description)

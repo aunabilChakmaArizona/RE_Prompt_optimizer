@@ -4,7 +4,7 @@ import argparse
 import os
 from typing import Optional
 
-from agents.agent_prompts import INFERENCE_MODE_CHOICES, INFERENCE_MODE_NON_SEPARATE
+from agents.agent_prompts import INFERENCE_MODE_CHOICES, INFERENCE_MODE_SEPARATE_NO_EXAMPLES
 
 
 def default_data_dir() -> str:
@@ -64,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--inference-mode",
         type=str,
-        default=INFERENCE_MODE_NON_SEPARATE,
+        default=INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
         choices=list(INFERENCE_MODE_CHOICES),
         help=(
             "Inference prompt mode: non_separate uses INFERENCE_PROMPT_V1; "
