@@ -39,15 +39,36 @@ def _select_mixed(
 ) -> List[FeedbackSample]:
     if k <= 0:
         return []
+    if k == 1:
+        return _take_random(rng, mistakes + correct, 1)
+
     if mistakes and correct:
         selected = [
             rng.choice(mistakes),
             rng.choice(correct),
         ]
-        remaining_pool = [s for s in mistakes + correct if s not in selected]
-        selected += _take_random(rng, remaining_pool, k - 2)
+
+        remaining_mistakes = [s for s in mistakes if s is not selected[0]]
+        remaining_correct = [s for s in correct if s is not selected[1]]
+
+        # Balance the random pool so one class cannot dominate extra picks.
+        balanced_size = min(len(remaining_mistakes), len(remaining_correct))
+        balanced_mistakes = _take_random(rng, remaining_mistakes, balanced_size)
+        balanced_correct = _take_random(rng, remaining_correct, balanced_size)
+        balanced_pool = balanced_mistakes + balanced_correct
+
+        extra_selected = _take_random(rng, balanced_pool, k - 2)
+        if len(extra_selected) < (k - 2):
+            leftovers = [
+                s
+                for s in remaining_mistakes + remaining_correct
+                if s not in extra_selected
+            ]
+            extra_selected += _take_random(rng, leftovers, (k - 2) - len(extra_selected))
+
+        selected += extra_selected
         rng.shuffle(selected)
-        return selected
+        return selected[:k]
 
     if mistakes:
         return _take_random(rng, mistakes, k)
