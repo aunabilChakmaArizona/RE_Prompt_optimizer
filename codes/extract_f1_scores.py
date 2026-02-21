@@ -99,7 +99,7 @@ for path in files:
         print(f"Better-than-base mean: {mean_better}")
         print(f"Better-than-base std (population): {std_better}")
         print(f"Gain over base (better only): {mean_better - base:.2f}")
-
+    print()
     mean_k = statistics.mean(k_values) if k_values else None
     if mean_k is None:
         print("Gain over base (all K): n/a")
