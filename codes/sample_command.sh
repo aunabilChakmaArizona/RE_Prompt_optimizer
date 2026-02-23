@@ -44,11 +44,10 @@ nohup python -u core_trainer.py --model "Qwen/Qwen3-32B" --device-map "cuda:0" -
 
 ##### new format of prompts_v2
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 20 --update-mode "no_feedback" --mutation-prompt "no_feedback_v1" > nohup_outs/nohup_v2_qwen4_no_feedback.out 2>&1 &
-nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 20 > nohup_outs/nohup_v2_qwen4_feedback_corrects_and_mistakes.out 2>&1 &
 nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --update-mode "no_feedback" --mutation-prompt "no_feedback_v1" > nohup_outs/nohup_v2_gemma4_no_feedback.out 2>&1 &
 nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 > nohup_outs/nohup_v2_gemma4_feedback_corrects_and_mistakes.out 2>&1 &
-nohup python -u core_trainer.py --model "Qwen/Qwen3-14B" --device-map "cuda:1" --max-iterations 20 --update-mode "no_feedback" --mutation-prompt "no_feedback_v1" > nohup_outs/nohup_v2_qwen14_no_feedback.out 2>&1 &
-
+nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 20 > nohup_outs/nohup_v2_qwen4_feedback_corrects_and_mistakes.out 2>&1 &
+nohup python -u core_trainer.py --model "Qwen/Qwen3-14B" --device-map "cuda:2" --max-iterations 20 --update-mode "no_feedback" --mutation-prompt "no_feedback_v1" > nohup_outs/nohup_v2_qwen14_no_feedback.out 2>&1 &
 
 # tags custom
   --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
