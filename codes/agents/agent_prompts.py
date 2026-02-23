@@ -219,6 +219,23 @@ You may modify, add, remove, or rephrase any word, phrase, or content in the cur
 You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
+MUTATION_TRACES_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below some order of prompts that are used by another LLM to make an inference for the task.
+The prompts are evolved. The validation scores of corresponding prompts are also provided.
+
+#INFERENCE_PROMPT_TRACES#
+
+
+Carefully read lastest prompts and its earlier forms. Your task is to generate a new of the prompt by making modifications so that the other LLM can improve its generalization when using the prompt.
+You may modify, add, remove, or rephrase any word, phrase, or content in the current prompt to enhance generalization. 
+
+You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
 MUTATION_RANDOM_PROMPT_V1 = '''Make random changes to the text below. You may add, remove, replace, or edit any part of the text.
 
 ```
