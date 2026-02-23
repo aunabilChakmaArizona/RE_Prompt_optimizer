@@ -1,4 +1,4 @@
-FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at a particular yes/no decision, for both correct and incorrect predictions.
+FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing feedback explaining why a relation extraction system arrived at a particular yes/no decision, for both correct and incorrect predictions.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
@@ -26,10 +26,10 @@ Label: #LABEL#
 LLM Inference: #INFERENCE#
 ```
 
-You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
+Please reason through the problem, but provide your final feedback only within the <f> and </f> tags.
 '''
 
-FEEDBACK_INFERENCE_PROMPT_CORRECT_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this correct prediction.
+FEEDBACK_INFERENCE_PROMPT_CORRECT_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing feedback explaining why a relation extraction system arrived at this correct prediction.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
@@ -55,10 +55,10 @@ Label: #LABEL#
 LLM Inference: #INFERENCE#
 ```
 
-You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
+Please reason through the problem, but provide your final feedback only within the <f> and </f> tags.
 '''
 
-FEEDBACK_INFERENCE_PROMPT_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing reasoning-based feedback explaining why a relation extraction system arrived at this incorrect prediction.
+FEEDBACK_INFERENCE_PROMPT_MISTAKES_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing feedback explaining why a relation extraction system arrived at this incorrect prediction.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
@@ -84,7 +84,7 @@ Label: #LABEL#
 LLM Inference: #INFERENCE#
 ```
 
-You may perform reasoning internally, but provide only your final remarks or official feedback within the <f> and </f> tags.
+Please reason through the problem, but provide your final feedback only within the <f> and </f> tags.
 '''
 
 MUTATION_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising and improving prompts based on feedback from previous model predictions.
@@ -133,7 +133,7 @@ You may modify, add to, or remove any instructions or content in the current pro
 
 Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#). These placeholders must remain exactly the same. Only the surrounding instructional text may be revised.
 
-You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 # updated from V1 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
@@ -181,7 +181,7 @@ Carefully read the inputs, outputs, and feedback to identify problems with the c
 Your task is to generate a revised form of the prompt so that the other LLM can improve the model’s generalization when using the prompt. 
 You may modify, add to, or remove any instructions or content in the current prompt in order to improve the prediction and enhance generalization.
 
-You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 MUTATION_NO_FEEDBACK_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
@@ -199,7 +199,7 @@ You may modify, add, remove, or rephrase any word, phrase, or content in the cur
 
 Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#). These placeholders must remain exactly the same. Only the surrounding instructional text may be revised.
 
-You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 # updated from V1 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
@@ -216,7 +216,7 @@ You are given below a prompt that is used by another LLM to make an inference fo
 Carefully read the prompt. Your task is to generate a revised form of the prompt by making modifications so that the other LLM can improve its generalization when using the prompt.
 You may modify, add, remove, or rephrase any word, phrase, or content in the current prompt to enhance generalization.
 
-You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 MUTATION_TRACES_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
@@ -233,7 +233,7 @@ The prompts are evolved. The validation scores of corresponding prompts are also
 Carefully read lastest prompts and its earlier forms. Your task is to generate a new of the prompt by making modifications so that the other LLM can improve its generalization when using the prompt.
 You may modify, add, remove, or rephrase any word, phrase, or content in the current prompt to enhance generalization. 
 
-You may perform reasoning internally, but output only the revised prompt enclosed within the <p> and </p> tags.
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 MUTATION_RANDOM_PROMPT_V1 = '''Make random changes to the text below. You may add, remove, replace, or edit any part of the text.
@@ -312,7 +312,7 @@ Answer: #BINARY_ANSWER#
 '''
 
 INFERENCE_INPUT_PROMPT_V1 = f'''
-Input:
+Input -
 
 Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
 

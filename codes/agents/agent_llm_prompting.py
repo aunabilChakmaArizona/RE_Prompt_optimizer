@@ -69,7 +69,7 @@ def run_prompt(
     max_new_tokens: int = 256,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
-    enable_thinking: bool = False,
+    enable_thinking: bool = True,
     **gen_kwargs,
 ) -> str:
     return run_prompts(
