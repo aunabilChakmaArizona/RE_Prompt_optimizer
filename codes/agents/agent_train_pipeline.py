@@ -12,6 +12,7 @@ from agents.agent_models import load_model_and_tokenizer
 from agents.agent_mutate_prompt import mutate_prompt_fn as _mutate_prompt_fn
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
+    INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1,
     INFERENCE_INPUT_PROMPT_V1,
     INFERENCE_EXAMPLE_PROMPT_V1,
     INFERENCE_INSTRUCTION_PROMPT_V1,
@@ -222,16 +223,19 @@ def build_root_node(
     if inference_mode == INFERENCE_MODE_NON_SEPARATE:
         inference_prompt = INFERENCE_PROMPT_V1
         instruction_prompt = ""
+        answer_instruction_prompt = ""
         example_prompt = ""
         input_prompt = ""
     elif inference_mode == INFERENCE_MODE_SEPARATE_NO_EXAMPLES:
         inference_prompt = INFERENCE_INSTRUCTION_PROMPT_V1
         instruction_prompt = INFERENCE_INSTRUCTION_PROMPT_V1
+        answer_instruction_prompt = INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1
         example_prompt = ""
         input_prompt = INFERENCE_INPUT_PROMPT_V1
     elif inference_mode == INFERENCE_MODE_SEPARATE_WITH_EXAMPLES:
         inference_prompt = INFERENCE_INSTRUCTION_PROMPT_V1
         instruction_prompt = INFERENCE_INSTRUCTION_PROMPT_V1
+        answer_instruction_prompt = INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1
         example_prompt = INFERENCE_EXAMPLE_PROMPT_V1
         input_prompt = INFERENCE_INPUT_PROMPT_V1
     else:
@@ -241,6 +245,7 @@ def build_root_node(
         inference_prompt=inference_prompt,
         inference_mode=inference_mode,
         inference_instruction_prompt=instruction_prompt,
+        inference_answer_instruction_prompt=answer_instruction_prompt,
         inference_example_prompt=example_prompt,
         inference_input_prompt=input_prompt,
         feedback_prompt=feedback_prompt,

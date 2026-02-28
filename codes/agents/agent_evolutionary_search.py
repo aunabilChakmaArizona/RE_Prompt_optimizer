@@ -174,6 +174,7 @@ class EvolutionarySearch:
                 inference_prompt=new_prompt,
                 inference_mode=parent.inference_mode,
                 inference_instruction_prompt=child_instruction_prompt,
+                inference_answer_instruction_prompt=parent.inference_answer_instruction_prompt,
                 inference_example_prompt=parent.inference_example_prompt,
                 inference_input_prompt=parent.inference_input_prompt,
                 parent=parent,

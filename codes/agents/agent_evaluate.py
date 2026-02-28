@@ -27,6 +27,7 @@ def _build_inference_prompt(
         inference_mode=node.inference_mode,
         inference_prompt=node.inference_prompt,
         inference_instruction_prompt=node.inference_instruction_prompt,
+        inference_answer_instruction_prompt=node.inference_answer_instruction_prompt,
         inference_example_prompt=node.inference_example_prompt,
         inference_input_prompt=node.inference_input_prompt,
         relation=relation,

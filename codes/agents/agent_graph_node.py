@@ -10,6 +10,7 @@ class GraphNode:
         inference_prompt: str,
         inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
         inference_instruction_prompt: str = "",
+        inference_answer_instruction_prompt: str = "",
         inference_example_prompt: str = "",
         inference_input_prompt: str = "",
         parent: Optional["GraphNode"] = None,
@@ -28,6 +29,7 @@ class GraphNode:
         self.inference_prompt = inference_prompt
         self.inference_mode = inference_mode
         self.inference_instruction_prompt = inference_instruction_prompt
+        self.inference_answer_instruction_prompt = inference_answer_instruction_prompt
         self.inference_example_prompt = inference_example_prompt
         self.inference_input_prompt = inference_input_prompt
         self.node_id = node_id

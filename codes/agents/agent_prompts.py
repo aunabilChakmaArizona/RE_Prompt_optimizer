@@ -296,11 +296,16 @@ INFERENCE_INSTRUCTION_PROMPT_V1 = f'''You are given a relation name, a descripti
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.
 
-If the relation holds between the Subject and Object in the query sentence, say "yes"; otherwise, say "no". Output only "yes" or "no", and nothing else.
+If the relation holds between the Subject and Object in the query sentence, answer "yes"; otherwise, answer "no". 
+
+'''
+
+INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1 = '''
+Output only "yes" or "no" as answer, with no explanation or additional text.
 '''
 
 INFERENCE_EXAMPLE_PROMPT_V1 = f'''
-Example:
+==
 
 Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
 
@@ -309,10 +314,11 @@ Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
 Query Sentence: #QUERY_SENTENCE#
 
 Answer: #BINARY_ANSWER#
+
 '''
 
 INFERENCE_INPUT_PROMPT_V1 = f'''
-Input -
+==
 
 Relation name: "#RELATION#" (#RELATION_DESCRIPTION#)
 
@@ -390,6 +396,7 @@ def compose_inference_prompt(
     inference_mode: str,
     inference_prompt: str,
     inference_instruction_prompt: str = "",
+    inference_answer_instruction_prompt: str = "",
     inference_example_prompt: str = "",
     inference_input_prompt: str = "",
     relation: str,
@@ -407,7 +414,13 @@ def compose_inference_prompt(
         return prompt
 
     if inference_mode == INFERENCE_MODE_SEPARATE_NO_EXAMPLES:
-        instruction_prompt = inference_instruction_prompt
+        instruction_prompt = (
+            (inference_instruction_prompt or INFERENCE_INSTRUCTION_PROMPT_V1)
+            + (
+                inference_answer_instruction_prompt
+                or INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1
+            )
+        )
         input_prompt = inference_input_prompt or INFERENCE_INPUT_PROMPT_V1
         input_prompt = input_prompt.replace("#RELATION#", relation)
         input_prompt = input_prompt.replace("#RELATION_DESCRIPTION#", relation_description)
@@ -417,7 +430,13 @@ def compose_inference_prompt(
 
     # todo: this will be iterative i.e. K examples
     if inference_mode == INFERENCE_MODE_SEPARATE_WITH_EXAMPLES:
-        instruction_prompt = inference_instruction_prompt
+        instruction_prompt = (
+            (inference_instruction_prompt or INFERENCE_INSTRUCTION_PROMPT_V1)
+            + (
+                inference_answer_instruction_prompt
+                or INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1
+            )
+        )
         example_prompt = inference_example_prompt or INFERENCE_EXAMPLE_PROMPT_V1
         example_prompt = example_prompt.replace("#RELATION#", relation)
         example_prompt = example_prompt.replace("#RELATION_DESCRIPTION#", relation_description)
