@@ -50,9 +50,16 @@ nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cud
 
 ##### new multim-mode mutations
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:2" --max-iterations 20 --mutation-group-id "group_4" --update-mode "no_feedback" > nohup_outs/nohup_v2_qwen4_group4.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_4" --update-mode "no_feedback" > nohup_outs/nohup_v2_gemma4_group4.out 2>&1 &
+
+nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:2" --max-iterations 20 --mutation-group-id "group_5" --update-mode "no_feedback" > nohup_outs/nohup_v2_qwen4_group5.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_5" --update-mode "no_feedback" > nohup_outs/nohup_v2_gemma4_group5.out 2>&1 &
+
+nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 20 --mutation-group-id "group_6" > nohup_outs/nohup_v2_qwen4_group6.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --max-iterations 20 --mutation-group-id "group_6" > nohup_outs/nohup_v2_gemma4_group6.out 2>&1 &
 
 # tags custom
-  --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
+--feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
 
 # models
 Qwen/Qwen3-4B

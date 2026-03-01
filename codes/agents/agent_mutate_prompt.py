@@ -39,8 +39,11 @@ def _format_node_score(node: GraphNode) -> str:
     if isinstance(score, dict):
         f1_mean = score.get("f1_mean")
         if f1_mean is not None:
-            return str(f1_mean)
-    return str(score)
+            return f"{float(f1_mean) * 100:.2f}"
+    try:
+        return f"{float(score) * 100:.2f}"
+    except (TypeError, ValueError):
+        return str(score)
 
 
 def _build_inference_prompt_traces(node: GraphNode, max_depth: int = 3) -> str:
