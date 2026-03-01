@@ -58,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mutation-prompt",
         default="v1",
-        choices=["v1", "random_v1", "random_v2", "no_feedback_v1"],
+        choices=["v1", "random_v1", "random_v2", "no_feedback_v1", "traces_v1"],
         help="Mutation prompt variant",
     )
     parser.add_argument(

@@ -6,7 +6,11 @@ from typing import List, Optional, Tuple
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
-from agents.agent_prompts import INFERENCE_MODE_NON_SEPARATE, INFERENCE_PROMPT_PLACEHODERS_V1
+from agents.agent_prompts import (
+    INFERENCE_MODE_NON_SEPARATE,
+    INFERENCE_PROMPT_PLACEHODERS_V1,
+    MUTATION_TRACES_PROMPT_SEGMENT_V1,
+)
 from agents.agent_relation_utils import get_relation_description
 
 
@@ -26,6 +30,37 @@ def _pad_list(items: List[str], size: int) -> List[str]:
 
 def _contains_placeholders(prompt: str, placeholders: List[str]) -> bool:
     return all(ph in prompt for ph in placeholders)
+
+
+def _format_node_score(node: GraphNode) -> str:
+    score = getattr(node, "val_score", None)
+    if score is None:
+        return "N/A"
+    if isinstance(score, dict):
+        f1_mean = score.get("f1_mean")
+        if f1_mean is not None:
+            return str(f1_mean)
+    return str(score)
+
+
+def _build_inference_prompt_traces(node: GraphNode, max_depth: int = 3) -> str:
+    lineage: List[GraphNode] = []
+    cursor: Optional[GraphNode] = node
+    while cursor is not None and len(lineage) < max_depth:
+        lineage.append(cursor)
+        cursor = cursor.parent
+
+    # Present oldest -> latest to show evolution order.
+    lineage.reverse()
+
+    segments: List[str] = []
+    for idx, history_node in enumerate(lineage, start=1):
+        segment = MUTATION_TRACES_PROMPT_SEGMENT_V1
+        segment = segment.replace("#PROMPT_NUMBER#", str(idx))
+        segment = segment.replace("#PROMPT#", history_node.inference_prompt)
+        segment = segment.replace("#SCORE#", _format_node_score(history_node))
+        segments.append(segment.strip())
+    return "\n\n".join(segments)
 
 
 def mutate_prompt_fn(
@@ -54,6 +89,7 @@ def mutate_prompt_fn(
 
     prompt = base_prompt
     prompt = prompt.replace("#INFERENCE_PROMPT#", node.inference_prompt)
+    prompt = prompt.replace("#INFERENCE_PROMPT_TRACES#", _build_inference_prompt_traces(node))
 
     for idx in range(3):
         relation = get_attr(idx, "relation")

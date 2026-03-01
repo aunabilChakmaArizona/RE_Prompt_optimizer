@@ -238,6 +238,9 @@ Please reason through the problem, but output only the revised prompt enclosed w
 '''
 
 MUTATION_TRACES_PROMPT_SEGMENT_V1= ''' 
+==
+Prompt #PROMPT_NUMBER#
+
 ```
 #PROMPT#
 ```
@@ -370,6 +373,7 @@ MUTATION_PROMPT_MAP = {
     "random_v1": MUTATION_RANDOM_PROMPT_V3,
     "random_v2": MUTATION_RANDOM_PROMPT_V4,
     "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V2,
+    "traces_v1": MUTATION_TRACES_PROMPT_V1,
 }
 
 INFERENCE_MODE_SEPARATE_NO_EXAMPLES = "separate_no_examples"
@@ -465,6 +469,3 @@ def apply_tag_overrides(
     if prompt_open_tag and prompt_close_tag:
         prompt = prompt.replace("<p>", prompt_open_tag).replace("</p>", prompt_close_tag)
     return prompt
-
-
-# MUTATION_TRACES_PROMPT_V1 and MUTATION_TRACES_PROMPT_SEGMENT_V1 (multiple of these will replace the #INFERENCE_PROMPT_TRACES#) using these make a new mutation type where we show the upto latest 3 states of the sampled prompt (i.e. with parent and grand parent) with validation score
