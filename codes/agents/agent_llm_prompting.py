@@ -14,7 +14,7 @@ def run_prompts(
     *,
     model,
     tokenizer,
-    max_new_tokens: int = 1500, # todo: check all of the prompts that will use it whether 1000 is sufficient
+    max_new_tokens: int = 3000,
     batch_size: int = 8,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
@@ -66,7 +66,7 @@ def run_prompt(
     *,
     model,
     tokenizer,
-    max_new_tokens: int = 256,
+    max_new_tokens: int = 3000,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
     enable_thinking: bool = True,

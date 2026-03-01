@@ -35,7 +35,7 @@ def mutate_prompt_fn(
     dataset_type: str,
     model,
     tokenizer,
-    max_new_tokens: int = 512,
+    max_new_tokens: int = 3000,
     prompt_open_tag: str = "<p>",
     prompt_close_tag: str = "</p>",
 ) -> Optional[Tuple[str, str, str]]:

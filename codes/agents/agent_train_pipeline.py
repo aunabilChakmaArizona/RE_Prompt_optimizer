@@ -161,6 +161,7 @@ def build_training_functions(
             model=model,
             tokenizer=tokenizer,
             batch_size=args.feedback_batch_size,
+            max_new_tokens=args.max_new_tokens,
             feedback_open_tag=args.feedback_open_tag,
             feedback_close_tag=args.feedback_close_tag,
         )

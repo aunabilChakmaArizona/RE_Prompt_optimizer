@@ -224,16 +224,25 @@ MUTATION_TRACES_PROMPT_V1 = '''You are an expert prompt generator for a relation
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
 
-You are given below some order of prompts that are used by another LLM to make an inference for the task.
-The prompts are evolved. The validation scores of corresponding prompts are also provided.
+You are given a short sequence of prompts that were previously used by another LLM to perform inference for this task. 
+These prompts represent successive evolutions of the same prompt and may include up to three versions (for example, a root prompt only, or the root prompt with one or two evolved descendants). Each prompt is provided with a validation score.
 
 #INFERENCE_PROMPT_TRACES#
 
+Carefully read the latest prompt and any earlier versions provided. Analyze how the prompt has evolved and how changes may have affected generalization performance, using the validation scores as guidance.
 
-Carefully read lastest prompts and its earlier forms. Your task is to generate a new of the prompt by making modifications so that the other LLM can improve its generalization when using the prompt.
-You may modify, add, remove, or rephrase any word, phrase, or content in the current prompt to enhance generalization. 
+Your task is to generate a revised version of the prompt that improves generalization for the relation extraction inference task. You may modify, add, remove, or rephrase any part of the latest prompt to enhance generalization. 
+If fewer prompt versions are provided, base your reasoning only on the available information.
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
+MUTATION_TRACES_PROMPT_SEGMENT_V1= ''' 
+```
+#PROMPT#
+```
+
+Score: #SCORE#
 '''
 
 MUTATION_RANDOM_PROMPT_V1 = '''Make random changes to the text below. You may add, remove, replace, or edit any part of the text.
@@ -456,3 +465,6 @@ def apply_tag_overrides(
     if prompt_open_tag and prompt_close_tag:
         prompt = prompt.replace("<p>", prompt_open_tag).replace("</p>", prompt_close_tag)
     return prompt
+
+
+# MUTATION_TRACES_PROMPT_V1 and MUTATION_TRACES_PROMPT_SEGMENT_V1 (multiple of these will replace the #INFERENCE_PROMPT_TRACES#) using these make a new mutation type where we show the upto latest 3 states of the sampled prompt (i.e. with parent and grand parent) with validation score

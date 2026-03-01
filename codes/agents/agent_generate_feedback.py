@@ -53,6 +53,7 @@ def generate_feedback_fn(
     model,
     tokenizer,
     batch_size: int = 4,
+    max_new_tokens: int = 3000,
     feedback_open_tag: str = "<f>",
     feedback_close_tag: str = "</f>",
 ) -> FeedbackSamples:
@@ -78,7 +79,11 @@ def generate_feedback_fn(
     feedback_texts: List[str] = []
     for attempt in range(1, max_attempts + 1):
         raw_feedback_texts = run_prompts(
-            prompts, model=model, tokenizer=tokenizer, batch_size=batch_size
+            prompts,
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+            batch_size=batch_size,
         )
         feedback_texts = [
             _extract_feedback(text, feedback_open_tag, feedback_close_tag)
