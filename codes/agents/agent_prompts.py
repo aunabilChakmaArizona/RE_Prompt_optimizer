@@ -357,13 +357,6 @@ FEEDBACK_PROMPT_MAP = {
 }
 
 MUTATION_PROMPT_MAP = {
-    "v1": MUTATION_PROMPT_V1,
-    "random_v1": MUTATION_RANDOM_PROMPT_V1,
-    "random_v2": MUTATION_RANDOM_PROMPT_V2,
-    "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V1
-}
-
-MUTATION_PROMPT_MAP_V2 = {
     "v1": MUTATION_PROMPT_V2,
     "random_v1": MUTATION_RANDOM_PROMPT_V3,
     "random_v2": MUTATION_RANDOM_PROMPT_V4,
@@ -381,13 +374,8 @@ INFERENCE_MODE_CHOICES = (
 
 
 def resolve_mutation_prompt(prompt_key: str, inference_mode: str) -> str:
-    if inference_mode == INFERENCE_MODE_NON_SEPARATE:
+    if inference_mode in INFERENCE_MODE_CHOICES:
         return MUTATION_PROMPT_MAP[prompt_key]
-    if inference_mode in (
-        INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
-        INFERENCE_MODE_SEPARATE_WITH_EXAMPLES,
-    ):
-        return MUTATION_PROMPT_MAP_V2[prompt_key]
     raise ValueError(f"Unsupported inference_mode: {inference_mode}")
 
 
