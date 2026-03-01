@@ -4,7 +4,11 @@ import argparse
 import os
 from typing import Optional
 
-from agents.agent_prompts import INFERENCE_MODE_CHOICES, INFERENCE_MODE_SEPARATE_NO_EXAMPLES
+from agents.agent_prompts import (
+    INFERENCE_MODE_CHOICES,
+    INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+    MUTATION_PROMPT_GROUP_MAP,
+)
 
 
 def default_data_dir() -> str:
@@ -60,6 +64,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="v1",
         choices=["v1", "random_v1", "random_v2", "no_feedback_v1", "traces_v1"],
         help="Mutation prompt variant",
+    )
+    parser.add_argument(
+        "--mutation-group-id",
+        type=str,
+        default=None,
+        choices=list(MUTATION_PROMPT_GROUP_MAP.keys()),
+        help=(
+            "Optional mutation prompt group. If set, this overrides --mutation-prompt "
+            "and applies group prompts in round-robin per iteration."
+        ),
     )
     parser.add_argument(
         "--inference-mode",

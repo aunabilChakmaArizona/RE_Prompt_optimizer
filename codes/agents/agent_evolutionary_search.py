@@ -26,6 +26,7 @@ class EvolutionarySearch:
         population_sampling_temperature: float = 1.0,
         feedback_prompt: str = "",
         mutation_prompt: str = "",
+        mutation_prompts: Optional[List[str]] = None,
         example_generation_prompt: str = "",
         rng: Optional[random.Random] = None,
     ):
@@ -36,6 +37,10 @@ class EvolutionarySearch:
         self.population_sampling_temperature = population_sampling_temperature
         self.feedback_prompt = feedback_prompt
         self.mutation_prompt = mutation_prompt
+        self.mutation_prompts = (
+            mutation_prompts if mutation_prompts is not None and len(mutation_prompts) > 0
+            else [mutation_prompt]
+        )
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
         if self.root.node_id is None:
@@ -161,8 +166,15 @@ class EvolutionarySearch:
             else:
                 feedback_samples = FeedbackSamples()
 
+            iteration_mutation_prompt = self.mutation_prompts[
+                iteration % len(self.mutation_prompts)
+            ]
             _log_step("[agent_evolutionary_search] mutate prompt")
-            mutation_result = mutate_prompt_fn(parent, feedback_samples)
+            mutation_result = mutate_prompt_fn(
+                parent,
+                feedback_samples,
+                mutation_prompt_override=iteration_mutation_prompt,
+            )
             if mutation_result is None:
                 print("[agent_evolutionary_search] mutation failed; parent marked dead")
                 continue
@@ -182,7 +194,7 @@ class EvolutionarySearch:
                 raw_feedback_texts=getattr(feedback_samples, "raw_feedback_texts", None),
                 feedback_prompts_used=getattr(feedback_samples, "feedback_prompts", None),
                 feedback_prompt=self.feedback_prompt,
-                mutation_prompt=self.mutation_prompt,
+                mutation_prompt=iteration_mutation_prompt,
                 example_generation_prompt=self.example_generation_prompt,
                 mutation_prompt_used=mutation_prompt_used,
                 raw_mutation_response=raw_mutation_response,

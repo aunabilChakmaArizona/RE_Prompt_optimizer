@@ -166,7 +166,12 @@ def build_training_functions(
             feedback_close_tag=args.feedback_close_tag,
         )
 
-    def mutate_prompt(node: GraphNode, feedback_samples):
+    def mutate_prompt(
+        node: GraphNode,
+        feedback_samples,
+        *,
+        mutation_prompt_override: str | None = None,
+    ):
         return _mutate_prompt_fn(
             node,
             feedback_samples,
@@ -176,6 +181,7 @@ def build_training_functions(
             max_new_tokens=args.max_new_tokens,
             prompt_open_tag=args.prompt_open_tag,
             prompt_close_tag=args.prompt_close_tag,
+            mutation_prompt_override=mutation_prompt_override,
         )
 
     def evaluate(

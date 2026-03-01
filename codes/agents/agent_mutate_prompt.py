@@ -73,8 +73,9 @@ def mutate_prompt_fn(
     max_new_tokens: int = 3000,
     prompt_open_tag: str = "<p>",
     prompt_close_tag: str = "</p>",
+    mutation_prompt_override: Optional[str] = None,
 ) -> Optional[Tuple[str, str, str]]:
-    base_prompt = node.mutation_prompt
+    base_prompt = mutation_prompt_override or node.mutation_prompt
 
     samples = feedback_samples.selected_samples
     feedback_texts = _pad_list(

@@ -376,6 +376,16 @@ MUTATION_PROMPT_MAP = {
     "traces_v1": MUTATION_TRACES_PROMPT_V1,
 }
 
+MUTATION_PROMPT_GROUP_MAP = {
+    "group_1": ["no_feedback_v1"],
+    "group_2": ["v1"],
+    "group_3": ["random_v2"],
+    "group_4": ["traces_v1"],
+    "group_5": ["no_feedback_v1", "traces_v1"],
+    "group_6": ["v1", "traces_v1"],
+    "group_7": ["random_v2", "traces_v1"],
+}
+
 INFERENCE_MODE_SEPARATE_NO_EXAMPLES = "separate_no_examples"
 INFERENCE_MODE_SEPARATE_WITH_EXAMPLES = "separate_with_examples"
 INFERENCE_MODE_NON_SEPARATE = "non_separate"
@@ -390,6 +400,13 @@ def resolve_mutation_prompt(prompt_key: str, inference_mode: str) -> str:
     if inference_mode in INFERENCE_MODE_CHOICES:
         return MUTATION_PROMPT_MAP[prompt_key]
     raise ValueError(f"Unsupported inference_mode: {inference_mode}")
+
+
+def resolve_mutation_prompts_from_group(group_id: str, inference_mode: str) -> list[str]:
+    if inference_mode not in INFERENCE_MODE_CHOICES:
+        raise ValueError(f"Unsupported inference_mode: {inference_mode}")
+    keys = MUTATION_PROMPT_GROUP_MAP[group_id]
+    return [MUTATION_PROMPT_MAP[key] for key in keys]
 
 
 def compose_inference_prompt(

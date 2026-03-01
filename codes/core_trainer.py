@@ -10,6 +10,7 @@ from agents.agent_prompts import (
     FEEDBACK_PROMPT_MAP,
     apply_tag_overrides,
     resolve_mutation_prompt,
+    resolve_mutation_prompts_from_group,
 )
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
@@ -55,13 +56,36 @@ def main() -> None:
             prompt_open_tag=args.prompt_open_tag,
             prompt_close_tag=args.prompt_close_tag,
         )
-        mutation_prompt = apply_tag_overrides(
-            resolve_mutation_prompt(args.mutation_prompt, args.inference_mode),
-            feedback_open_tag=args.feedback_open_tag,
-            feedback_close_tag=args.feedback_close_tag,
-            prompt_open_tag=args.prompt_open_tag,
-            prompt_close_tag=args.prompt_close_tag,
-        )
+        if args.mutation_group_id is not None:
+            mutation_prompts = [
+                apply_tag_overrides(
+                    prompt,
+                    feedback_open_tag=args.feedback_open_tag,
+                    feedback_close_tag=args.feedback_close_tag,
+                    prompt_open_tag=args.prompt_open_tag,
+                    prompt_close_tag=args.prompt_close_tag,
+                )
+                for prompt in resolve_mutation_prompts_from_group(
+                    args.mutation_group_id, args.inference_mode
+                )
+            ]
+            print(
+                "[core_trainer] mutation_group_id:",
+                args.mutation_group_id,
+                "round_robin_len:",
+                len(mutation_prompts),
+            )
+        else:
+            mutation_prompts = [
+                apply_tag_overrides(
+                    resolve_mutation_prompt(args.mutation_prompt, args.inference_mode),
+                    feedback_open_tag=args.feedback_open_tag,
+                    feedback_close_tag=args.feedback_close_tag,
+                    prompt_open_tag=args.prompt_open_tag,
+                    prompt_close_tag=args.prompt_close_tag,
+                )
+            ]
+        mutation_prompt = mutation_prompts[0]
 
         root = build_root_node(
             feedback_prompt=feedback_prompt,
@@ -77,6 +101,7 @@ def main() -> None:
             population_sampling_temperature=args.population_sampling_temperature,
             feedback_prompt=feedback_prompt,
             mutation_prompt=mutation_prompt,
+            mutation_prompts=mutation_prompts,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
             rng=rng,
         )
