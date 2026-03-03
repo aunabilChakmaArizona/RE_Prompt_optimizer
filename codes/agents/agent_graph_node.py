@@ -22,6 +22,9 @@ class GraphNode:
         example_generation_prompt: str = "",
         mutation_prompt_used: str = "",
         raw_mutation_response: Optional[str] = None,
+        differentiation_prompt_used: str = "",
+        raw_differentiation_response: Optional[str] = None,
+        differentiation: str = "",
         node_id: Optional[int] = None,
         val_score: Optional[float] = None,
         test_score: Optional[float] = None,
@@ -51,6 +54,9 @@ class GraphNode:
         self.example_generation_prompt = example_generation_prompt
         self.mutation_prompt_used = mutation_prompt_used
         self.raw_mutation_response = raw_mutation_response
+        self.differentiation_prompt_used = differentiation_prompt_used
+        self.raw_differentiation_response = raw_differentiation_response
+        self.differentiation = differentiation
 
         # Scores
         self.val_score = val_score
