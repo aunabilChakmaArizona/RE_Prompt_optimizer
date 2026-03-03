@@ -52,6 +52,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--selection-mode", type=str, default="mixed")
     parser.add_argument("--population-sampling-temperature", type=float, default=1.0)
+    parser.add_argument(
+        "--do-sample",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable/disable sampling during LLM text generation",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--feedback-prompt",
@@ -125,13 +131,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--feedback-max-new-tokens",
         type=int,
-        default=1500,
+        default=5000,
         help="Max new tokens for feedback generation prompts",
     )
     parser.add_argument(
         "--max-new-tokens",
         type=int,
-        default=3000,
+        default=5000,
         help="Max new tokens for non-feedback prompting (e.g., mutation)",
     )
     parser.add_argument(

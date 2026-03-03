@@ -162,6 +162,7 @@ def build_training_functions(
             tokenizer=tokenizer,
             batch_size=args.feedback_batch_size,
             max_new_tokens=args.feedback_max_new_tokens,
+            do_sample=args.do_sample,
             feedback_open_tag=args.feedback_open_tag,
             feedback_close_tag=args.feedback_close_tag,
         )
@@ -180,6 +181,7 @@ def build_training_functions(
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=args.max_new_tokens,
+            do_sample=args.do_sample,
             prompt_open_tag=args.prompt_open_tag,
             prompt_close_tag=args.prompt_close_tag,
             mutation_prompt_override=mutation_prompt_override,

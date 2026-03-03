@@ -107,7 +107,8 @@ def mutate_prompt_fn(
     dataset_type: str,
     model,
     tokenizer,
-    max_new_tokens: int = 3000,
+    max_new_tokens: int = 5000,
+    do_sample: bool = True,
     prompt_open_tag: str = "<p>",
     prompt_close_tag: str = "</p>",
     mutation_prompt_override: Optional[str] = None,
@@ -160,6 +161,7 @@ def mutate_prompt_fn(
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
         )
         tag_pattern = rf"{re.escape(prompt_open_tag)}(.*?){re.escape(prompt_close_tag)}"
         if not re.search(tag_pattern, raw_response, flags=re.DOTALL | re.IGNORECASE):
@@ -178,6 +180,7 @@ def mutate_prompt_fn(
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
         )
         core_difference = _extract_between(raw_differentiation_response, "<d>", "</d>")
 
