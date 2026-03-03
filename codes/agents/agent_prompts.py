@@ -136,6 +136,7 @@ Do not change any placeholder tokens enclosed in # (e.g., #LIST_OF_PLACEHOLDERS#
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
+# todo: "change the term TASK to test input"
 # updated from V1 - this is for new format of prompts (Instruction + Examples + Input prompt) - e.g. removed the requirement of having placeholders
 MUTATION_PROMPT_V2 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising and improving prompts based on feedback from previous model predictions.
 
@@ -288,6 +289,39 @@ MUTATION_RANDOM_PROMPT_V4 = '''Make changes to the text below. You may add, remo
 
 Output the edited text enclosed within the <p> and </p> tags.
 '''
+
+DIFFERENTIATE_PROMPT = """You are an expert prompt differencing agent. You are given a parent prompt and a child prompt. Your task is to output all edit operations needed to transform the parent prompt into the child prompt.
+
+Parent prompt:
+```
+#PROMPT1#
+```
+
+Child prompt:
+```
+#PROMPT2#
+```
+
+Rules:
+- Output all changes in top-to-bottom order.
+- Describe each change using the smallest meaningful unit and do not restate unchanged text.
+- Use short, instruction-style edits.
+- One edit operation per line (word, sentence, or paragraph).
+
+Allowed edits:
+- Replace "X" with "Y"
+- Add "X"
+- Remove "X"
+
+Please reason through the problem, but output only the edits as a numbered list enclosed within <d> and </d> tags.
+
+Format:
+<d>
+1. Replace / Add / Remove operation
+...
+n. Replace / Add / Remove operation
+</d>
+"""
 
 INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
 
