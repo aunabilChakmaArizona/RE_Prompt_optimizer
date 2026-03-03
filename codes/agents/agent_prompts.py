@@ -232,7 +232,7 @@ These prompts represent successive evolutions of the same prompt and may include
 
 Carefully read the latest prompt and any earlier versions provided. Analyze how the prompt has evolved and how changes may have affected generalization performance, using the validation scores as guidance.
 
-Your task is to generate a revised version of the prompt that improves generalization for the relation extraction inference task. You may modify, add, remove, or rephrase any part of the latest prompt to enhance generalization. 
+Your task is to generate a revised version of the latest prompt that improves generalization for the relation extraction inference task. You may modify, add, remove, or rephrase any part of the latest prompt to enhance generalization. 
 If fewer prompt versions are provided, base your reasoning only on the available information.
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
@@ -244,6 +244,37 @@ Prompt #PROMPT_NUMBER#
 
 ```
 #PROMPT#
+```
+
+Score: #SCORE#
+'''
+
+MUTATION_TRACES_DIFFERENCES_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given a short sequence of prompts that were previously used by another LLM to perform inference for this task. 
+These prompts represent successive evolutions of the same prompt and may include up to three versions (for example, a root prompt only, or the root prompt with one or two evolved descendants). 
+The root prompt is provided in full, and each subsequent prompt is provided as the edit operations applied to its immediate parent prompt (e.g., the third prompt contains edits applied to the second prompt). 
+Each prompt is provided with a validation score.
+
+#INFERENCE_PROMPT_TRACES#
+
+Carefully read the latest prompt and any earlier versions provided. Analyze how the prompt has evolved and how changes may have affected generalization performance, using the validation scores as guidance.
+
+Your task is to generate a revised version of the latest prompt that improves generalization for the relation extraction inference task. You may modify, add, remove, or rephrase any part of the latest prompt to enhance generalization. 
+If fewer prompt versions are provided, base your reasoning only on the available information.
+
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
+MUTATION_TRACES_DIFFERENCES_PROMPT_SEGMENT_V1= ''' 
+==
+Prompt #PROMPT_NUMBER#
+
+```
+#PROMPT_CONTENT#
 ```
 
 Score: #SCORE#
