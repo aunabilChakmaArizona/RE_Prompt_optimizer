@@ -152,7 +152,7 @@ class EvolutionarySearch:
                 break
             parent = self.sample_parent()
             feedback_text = ""
-            if update_mode == "feedback":
+            if update_mode == "feedback": #todo: this is redundant to run during traces mutation
                 _log_step("[agent_evolutionary_search] sample feedback")
                 feedback_samples = sample_feedback_fn(self.feedback_sample_size)
                 _log_step("[agent_evolutionary_search] run inference")
