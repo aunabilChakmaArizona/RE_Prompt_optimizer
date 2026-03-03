@@ -10,6 +10,7 @@ from agents.agent_prompts import (
     DIFFERENTIATE_PROMPT,
     INFERENCE_MODE_NON_SEPARATE,
     INFERENCE_PROMPT_PLACEHODERS_V1,
+    MUTATION_TRACES_DIFFERENCES_PROMPT_SEGMENT_V1,
     MUTATION_TRACES_PROMPT_SEGMENT_V1,
 )
 from agents.agent_relation_utils import get_relation_description
@@ -67,6 +68,38 @@ def _build_inference_prompt_traces(node: GraphNode, max_depth: int = 3) -> str:
     return "\n\n".join(segments)
 
 
+def _build_inference_prompt_traces_with_differences(
+    node: GraphNode, max_depth: int = 3
+) -> str:
+    lineage: List[GraphNode] = []
+    cursor: Optional[GraphNode] = node
+    while cursor is not None and len(lineage) < max_depth:
+        lineage.append(cursor)
+        cursor = cursor.parent
+
+    # Present oldest -> latest to show evolution order.
+    lineage.reverse()
+
+    segments: List[str] = []
+    for idx, history_node in enumerate(lineage, start=1):
+        segment = MUTATION_TRACES_DIFFERENCES_PROMPT_SEGMENT_V1
+        segment = segment.replace("#PROMPT_NUMBER#", str(idx))
+
+        if idx == 1:
+            prompt_content = history_node.inference_prompt
+        else:
+            prompt_content = (getattr(history_node, "differentiation", "") or "").strip()
+
+        segment = segment.replace("#PROMPT_CONTENT#", prompt_content)
+        segment = segment.replace("#SCORE#", _format_node_score(history_node))
+        segments.append(segment.strip())
+    return "\n\n".join(segments)
+
+
+def _should_use_difference_traces(mutation_prompt_key: str) -> bool:
+    return "diff" in mutation_prompt_key
+
+
 def mutate_prompt_fn(
     node: GraphNode,
     feedback_samples: FeedbackSamples,
@@ -78,6 +111,7 @@ def mutate_prompt_fn(
     prompt_open_tag: str = "<p>",
     prompt_close_tag: str = "</p>",
     mutation_prompt_override: Optional[str] = None,
+    mutation_prompt_key_override: Optional[str] = None,
 ) -> Optional[Tuple[str, str, str, str, str, str]]:
     base_prompt = mutation_prompt_override or node.mutation_prompt
 
@@ -94,7 +128,11 @@ def mutate_prompt_fn(
 
     prompt = base_prompt
     prompt = prompt.replace("#INFERENCE_PROMPT#", node.inference_prompt)
-    prompt = prompt.replace("#INFERENCE_PROMPT_TRACES#", _build_inference_prompt_traces(node))
+    if _should_use_difference_traces(mutation_prompt_key_override or ""):
+        traces = _build_inference_prompt_traces_with_differences(node)
+    else:
+        traces = _build_inference_prompt_traces(node)
+    prompt = prompt.replace("#INFERENCE_PROMPT_TRACES#", traces)
 
     for idx in range(3):
         relation = get_attr(idx, "relation")

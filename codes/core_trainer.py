@@ -8,9 +8,9 @@ from agents.agent_memory import clear_iteration_memory
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_PROMPT_MAP,
+    MUTATION_PROMPT_GROUP_MAP,
     apply_tag_overrides,
     resolve_mutation_prompt,
-    resolve_mutation_prompts_from_group,
 )
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
@@ -57,17 +57,16 @@ def main() -> None:
             prompt_close_tag=args.prompt_close_tag,
         )
         if args.mutation_group_id is not None:
+            mutation_prompt_keys = MUTATION_PROMPT_GROUP_MAP[args.mutation_group_id]
             mutation_prompts = [
                 apply_tag_overrides(
-                    prompt,
+                    resolve_mutation_prompt(key, args.inference_mode),
                     feedback_open_tag=args.feedback_open_tag,
                     feedback_close_tag=args.feedback_close_tag,
                     prompt_open_tag=args.prompt_open_tag,
                     prompt_close_tag=args.prompt_close_tag,
                 )
-                for prompt in resolve_mutation_prompts_from_group(
-                    args.mutation_group_id, args.inference_mode
-                )
+                for key in mutation_prompt_keys
             ]
             print(
                 "[core_trainer] mutation_group_id:",
@@ -76,6 +75,7 @@ def main() -> None:
                 len(mutation_prompts),
             )
         else:
+            mutation_prompt_keys = [args.mutation_prompt]
             mutation_prompts = [
                 apply_tag_overrides(
                     resolve_mutation_prompt(args.mutation_prompt, args.inference_mode),
@@ -102,6 +102,7 @@ def main() -> None:
             feedback_prompt=feedback_prompt,
             mutation_prompt=mutation_prompt,
             mutation_prompts=mutation_prompts,
+            mutation_prompt_keys=mutation_prompt_keys,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
             rng=rng,
         )

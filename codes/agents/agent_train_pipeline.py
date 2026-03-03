@@ -171,6 +171,7 @@ def build_training_functions(
         feedback_samples,
         *,
         mutation_prompt_override: str | None = None,
+        mutation_prompt_key_override: str | None = None,
     ):
         return _mutate_prompt_fn(
             node,
@@ -182,6 +183,7 @@ def build_training_functions(
             prompt_open_tag=args.prompt_open_tag,
             prompt_close_tag=args.prompt_close_tag,
             mutation_prompt_override=mutation_prompt_override,
+            mutation_prompt_key_override=mutation_prompt_key_override,
         )
 
     def evaluate(

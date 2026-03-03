@@ -27,6 +27,7 @@ class EvolutionarySearch:
         feedback_prompt: str = "",
         mutation_prompt: str = "",
         mutation_prompts: Optional[List[str]] = None,
+        mutation_prompt_keys: Optional[List[str]] = None,
         example_generation_prompt: str = "",
         rng: Optional[random.Random] = None,
     ):
@@ -41,6 +42,13 @@ class EvolutionarySearch:
             mutation_prompts if mutation_prompts is not None and len(mutation_prompts) > 0
             else [mutation_prompt]
         )
+        self.mutation_prompt_keys = (
+            mutation_prompt_keys
+            if mutation_prompt_keys is not None and len(mutation_prompt_keys) > 0
+            else ["" for _ in self.mutation_prompts]
+        )
+        if len(self.mutation_prompt_keys) != len(self.mutation_prompts):
+            raise ValueError("mutation_prompt_keys and mutation_prompts must have same length")
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
         if self.root.node_id is None:
@@ -169,11 +177,15 @@ class EvolutionarySearch:
             iteration_mutation_prompt = self.mutation_prompts[
                 iteration % len(self.mutation_prompts)
             ]
+            iteration_mutation_prompt_key = self.mutation_prompt_keys[
+                iteration % len(self.mutation_prompt_keys)
+            ]
             _log_step("[agent_evolutionary_search] mutate prompt")
             mutation_result = mutate_prompt_fn(
                 parent,
                 feedback_samples,
                 mutation_prompt_override=iteration_mutation_prompt,
+                mutation_prompt_key_override=iteration_mutation_prompt_key,
             )
             if mutation_result is None:
                 print("[agent_evolutionary_search] mutation failed; parent marked dead")

@@ -439,6 +439,7 @@ MUTATION_PROMPT_MAP = {
     "random_v2": MUTATION_RANDOM_PROMPT_V4,
     "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V2,
     "traces_v1": MUTATION_TRACES_PROMPT_V1,
+    "traces_differences_v1": MUTATION_TRACES_DIFFERENCES_PROMPT_V1,
 }
 
 MUTATION_PROMPT_GROUP_MAP = {
@@ -449,6 +450,9 @@ MUTATION_PROMPT_GROUP_MAP = {
     "group_5": ["no_feedback_v1", "traces_v1"],
     "group_6": ["v1", "traces_v1"],
     "group_7": ["random_v2", "traces_v1"],
+    "group_8": ["traces_differences_v1"],
+    "group_9": ["no_feedback_v1", "traces_differences_v1"],
+    "group_10": ["v1", "traces_differences_v1"],
 }
 
 INFERENCE_MODE_SEPARATE_NO_EXAMPLES = "separate_no_examples"
