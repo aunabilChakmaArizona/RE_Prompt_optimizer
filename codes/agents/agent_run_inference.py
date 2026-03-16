@@ -5,9 +5,9 @@ from typing import List
 from agents.agent_binary_inference import run_binary_inference
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
-from agents.agent_data_utils import build_support_block
 from agents.agent_prompts import compose_inference_prompt
 from agents.agent_relation_utils import get_relation_description
+from agents.agent_utils import build_support_block
 
 
 def _build_inference_prompt(

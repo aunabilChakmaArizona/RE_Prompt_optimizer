@@ -131,13 +131,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--feedback-max-new-tokens",
         type=int,
-        default=5000,
+        default=10000,
         help="Max new tokens for feedback generation prompts",
     )
     parser.add_argument(
         "--max-new-tokens",
         type=int,
-        default=5000,
+        default=10000,
         help="Max new tokens for non-feedback prompting (e.g., mutation)",
     )
     parser.add_argument(
@@ -150,6 +150,42 @@ def build_parser() -> argparse.ArgumentParser:
         "--trainings-dir",
         default=default_trainings_dir(),
         help="Output root for training runs",
+    )
+    parser.add_argument(
+        "--cluster-feedback-sample-size",
+        type=int,
+        default=2000,
+        help="Number of feedback samples used to build feedback categories.",
+    )
+    parser.add_argument(
+        "--cluster-category-min-count",
+        type=int,
+        default=2,
+        help="Minimum category count required to keep a category.",
+    )
+    parser.add_argument(
+        "--cluster-max-categories",
+        type=int,
+        default=10,
+        help="Maximum number of feedback categories to keep after sorting by count.",
+    )
+    parser.add_argument(
+        "--cluster-num-clusters",
+        type=int,
+        default=5,
+        help="Number of overlapping feedback clusters to build.",
+    )
+    parser.add_argument(
+        "--cluster-candidates-per-cluster",
+        type=int,
+        default=5,
+        help="Number of prompt candidates to sample per cluster.",
+    )
+    parser.add_argument(
+        "--cluster-coverage-ratio",
+        type=float,
+        default=0.5,
+        help="Fraction of kept categories covered by each cluster.",
     )
     return parser
 

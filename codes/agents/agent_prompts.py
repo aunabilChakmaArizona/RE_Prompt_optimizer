@@ -354,6 +354,51 @@ n. Replace / Add / Remove operation
 </d>
 """
 
+CLUSTER_CATEGORY_ASSIGNMENT_PROMPT = """You are an expert at categorizing feedback about model mistakes into reusable error categories. Use an existing category if the feedback fits, or create a new category if none match.
+
+Current feedback:
+```
+#FEEDBACK#
+```
+
+Existing categories:
+#CATEGORIES#
+
+Decide whether the feedback belongs to one of the existing categories.
+- If it matches an existing category, select that category id.
+- Otherwise create a new category with a short name and a concise description.
+- Prefer general, reusable categories that capture the underlying mistake.
+
+Please reason through the problem and return the assignment decision in exactly this format:
+<assignment>
+decision: existing OR new
+category_id: existing id, or NEW
+name: short category name
+description: concise category description
+</assignment>
+"""
+
+CLUSTER_MUTATION_PROMPT_V1 = """You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization based on grouped error categories.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given the current prompt:
+```
+#INFERENCE_PROMPT#
+```
+
+The following feedback categories summarize recurring mistakes made with this prompt:
+#CATEGORY_BLOCK#
+
+Each category describes a type of systematic error observed when the prompt is used.
+Carefully review the categories to identify weaknesses in the current prompt. 
+Your task is to generate a revised form of the prompt so that another LLM using it can avoid these error patterns and improve generalization.
+You may modify, add to, or remove any instructions or content in the current prompt in order to address the issues described by the categories.
+
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
+"""
+
 INFERENCE_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object in the query sentence.

@@ -7,6 +7,7 @@ from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_prompts import INFERENCE_MODE_NON_SEPARATE
 from agents.agent_select_feedback import select_feedback_samples
+from agents.agent_utils import score_node_or_neg_inf
 
 
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
@@ -63,15 +64,6 @@ class EvolutionarySearch:
             ]
         return "\n---\n".join([t for t in feedback_texts if t.strip()])
 
-    def _score_or_neg_inf(self, node: GraphNode) -> float:
-        val_score = node.val_score
-        if val_score is None:
-            return float("-inf")
-        score = val_score.get("f1_mean")
-        if score is None:
-            return float("-inf")
-        return float(score)
-
     def _softmax_weights(self, scores: Sequence[Optional[float]]) -> List[float]:
         if self.population_sampling_temperature <= 0:
             raise ValueError("population_sampling_temperature must be > 0")
@@ -106,7 +98,7 @@ class EvolutionarySearch:
         return self.rng.choices(alive_nodes, weights=weights, k=1)[0]
 
     def best_node(self) -> GraphNode:
-        return max(self.population, key=self._score_or_neg_inf)
+        return max(self.population, key=score_node_or_neg_inf)
 
     def run(
         self,

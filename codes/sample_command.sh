@@ -60,9 +60,17 @@ nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cud
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 20 --mutation-group-id "group_2" --feedback-prompt "mistakes_v1" --selection-mode "mistakes" > nohup_outs/nohup_v2_qwen4_group2_mistakes.out 2>&1 &
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 20 --mutation-group-id "group_2" --feedback-prompt "correct_v1" --selection-mode "correct" > nohup_outs/nohup_v2_qwen4_group2_corrects.out 2>&1 &
 
+-- with 5000 tokens limit
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_8" --update-mode "no_feedback" > nohup_outs/nohup_v2_qwen4_group8.out 2>&1 &
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_9" --update-mode "no_feedback" > nohup_outs/nohup_v2_qwen4_group9.out 2>&1 &
 nohup python -u core_trainer.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --max-iterations 20 --mutation-group-id "group_10" > nohup_outs/nohup_v2_qwen4_group10.out 2>&1 &
+
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_8" --update-mode "no_feedback" > nohup_outs/nohup_v2_gemma4_group8.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_9" --update-mode "no_feedback" > nohup_outs/nohup_v2_gemma4_group9.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:0" --max-iterations 20 --mutation-group-id "group_10" > nohup_outs/nohup_v2_gemma4_group10.out 2>&1 &
+
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_2" --feedback-prompt "mistakes_v1" --selection-mode "mistakes" > nohup_outs/nohup_v2_gemma4_group2_mistakes.out 2>&1 &
+nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cuda:3" --max-iterations 20 --mutation-group-id "group_2" --feedback-prompt "correct_v1" --selection-mode "correct" > nohup_outs/nohup_v2_gemma4_group2_corrects.out 2>&1 &
 
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"

@@ -7,11 +7,11 @@ from typing import Dict, List, Sequence
 
 from agents.agent_binary_inference import run_binary_inference
 from agents.agent_graph_node import GraphNode
-from agents.agent_data_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
 from agents.agent_prompts import compose_inference_prompt
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_scorer import NO_RELATION
 from agents.agent_relation_utils import get_relation_description
+from agents.agent_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
 
 
 def _build_inference_prompt(

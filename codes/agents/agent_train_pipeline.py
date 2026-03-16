@@ -4,7 +4,6 @@ import random
 from typing import Dict, List, Tuple
 
 from agents.agent_data_loader import load_split_episodes, load_train_samples
-from agents.agent_data_utils import get_sentence_with_tags
 from agents.agent_evaluate import evaluate_fn as _evaluate_fn
 from agents.agent_generate_feedback import generate_feedback_fn as _generate_feedback_fn
 from agents.agent_graph_node import GraphNode
@@ -23,6 +22,7 @@ from agents.agent_prompts import (
 )
 from agents.agent_run_inference import run_inference_fn as _run_inference_fn
 from agents.agent_sample_feedback import sample_feedback_fn as _sample_feedback_fn
+from agents.agent_utils import get_sentence_with_tags
 
 
 def _resolve_binary_token_id(tokenizer, base_token: str) -> int:
@@ -192,10 +192,13 @@ def build_training_functions(
         node: GraphNode,
         split: str,
         *,
+        eval_id_override: str | int | None = None,
         evolution_iteration: int | None = None,
         evolution_max_iterations: int | None = None,
     ):
-        eval_id = node.node_id if node.node_id is not None else 0
+        eval_id = eval_id_override if eval_id_override is not None else (
+            node.node_id if node.node_id is not None else 0
+        )
         if split == "validation":
             episodes = dev_data["episodes"]
             shots = dev_data

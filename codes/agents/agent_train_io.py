@@ -153,3 +153,8 @@ def save_population(
 def save_summary(run_dir: str, summary: Dict[str, object]) -> None:
     with open(os.path.join(run_dir, "summary.json"), "w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
+
+
+def save_json(run_dir: str, filename: str, payload: Dict[str, object]) -> None:
+    with open(os.path.join(run_dir, filename), "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
