@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Iterable, List, Sequence
 
 import torch
@@ -29,13 +30,14 @@ def run_prompts(
     outputs: List[str] = []
     target_device = getattr(model, "device", None)
     total_batches = math.ceil(len(prompts) / batch_size)
+    prompting_start = time.monotonic()
 
     for batch_index, batch in enumerate(_batched(list(prompts), batch_size), start=1):
         if do_log:
             print(
                 f"[agent_llm_prompting] processing prompts "
                 f"batch {batch_index}/{total_batches} "
-                f"(batch_size={len(batch)})"
+                f"(batch_size={len(batch)}, elapsed={time.monotonic() - prompting_start:.2f}s)"
             )
         if use_chat_template:
             formatted = [

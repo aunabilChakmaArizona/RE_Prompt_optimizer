@@ -187,6 +187,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.5,
         help="Fraction of kept categories covered by each cluster.",
     )
+    parser.add_argument(
+        "--category-feedback-examples-per-category",
+        type=int,
+        default=3,
+        help="Number of representative feedback texts to include per category in mutation prompts.",
+    )
+    parser.add_argument(
+        "--taxonomy-num-candidates",
+        type=int,
+        default=25,
+        help="Number of candidate prompts to generate from the full taxonomy.",
+    )
+    parser.add_argument(
+        "--taxonomy-top-k",
+        type=int,
+        default=5,
+        help="Number of top-performing prompts to keep from taxonomy search.",
+    )
     return parser
 
 

@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 import time
 
-from agents.agent_cluster_search import ClusterSearch
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_PROMPT_MAP,
     apply_tag_overrides,
 )
+from agents.agent_taxonomy_search import TaxonomySearch
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
     create_run_dir,
@@ -26,23 +26,23 @@ def main() -> None:
     args = parse_args()
 
     data_dir = resolve_data_dir(args.data_dir)
-    run_dir = create_run_dir(args.trainings_dir, f"{args.model}_cluster")
+    run_dir = create_run_dir(args.trainings_dir, f"{args.model}_taxonomy")
     log_file, original_stdout, original_stderr = setup_logging(run_dir)
 
     try:
-        print(f"[core_trainer_cluster] data directory: {data_dir}")
-        print("[core_trainer_cluster] run_dir:", run_dir)
-        print("[core_trainer_cluster] model:", args.model)
-        print("[core_trainer_cluster] dataset_type:", args.dataset_type)
+        print(f"[core_trainer_taxonomy] data directory: {data_dir}")
+        print("[core_trainer_taxonomy] run_dir:", run_dir)
+        print("[core_trainer_taxonomy] model:", args.model)
+        print("[core_trainer_taxonomy] dataset_type:", args.dataset_type)
         print(
-            f"[core_trainer_cluster] elapsed={time.monotonic() - overall_start:.2f}s (startup)"
+            f"[core_trainer_taxonomy] elapsed={time.monotonic() - overall_start:.2f}s (startup)"
         )
 
         write_args(run_dir, args)
         eval_output_dir = os.path.join(run_dir, "eval_outputs")
         os.makedirs(eval_output_dir, exist_ok=True)
 
-        model, tokenizer, rng, _, _, _, _, funcs = load_model_and_data(
+        model, tokenizer, _, _, _, _, _, funcs = load_model_and_data(
             args, data_dir, eval_output_dir, args.seed
         )
         sample_feedback, run_inference, generate_feedback, _, evaluate = funcs
@@ -57,22 +57,20 @@ def main() -> None:
 
         root = build_root_node(
             feedback_prompt=feedback_prompt,
-            mutation_prompt="cluster_search_v1",
+            mutation_prompt="taxonomy_search_v1",
             inference_mode=args.inference_mode,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
         )
 
-        search = ClusterSearch(
+        search = TaxonomySearch(
             root=root,
             model=model,
             tokenizer=tokenizer,
-            rng=rng,
             feedback_sample_size=args.cluster_feedback_sample_size,
             category_min_count=args.cluster_category_min_count,
             max_categories=args.cluster_max_categories,
-            num_clusters=args.cluster_num_clusters,
-            candidates_per_cluster=args.cluster_candidates_per_cluster,
-            cluster_coverage_ratio=args.cluster_coverage_ratio,
+            num_candidates=args.taxonomy_num_candidates,
+            top_k=args.taxonomy_top_k,
             feedback_examples_per_category=args.category_feedback_examples_per_category,
             prompt_open_tag=args.prompt_open_tag,
             prompt_close_tag=args.prompt_close_tag,
@@ -83,8 +81,8 @@ def main() -> None:
         )
 
         print(
-            f"[core_trainer_cluster] elapsed={time.monotonic() - overall_start:.2f}s "
-            "(before cluster search)"
+            f"[core_trainer_taxonomy] elapsed={time.monotonic() - overall_start:.2f}s "
+            "(before taxonomy search)"
         )
 
         results = search.run(
@@ -100,27 +98,27 @@ def main() -> None:
             "sampled_feedback_count": results.get("sampled_feedback_count", 0),
             "mistake_count": results.get("mistake_count", 0),
             "kept_categories": len(results.get("categories", [])),
-            "clusters": len(results.get("clusters", [])),
             "candidate_prompts": len(results.get("all_candidates", [])),
-            "best_prompts": len(results.get("best_prompts", [])),
+            "top_prompts": len(results.get("top_prompts", [])),
         }
         save_summary(run_dir, summary)
 
         save_json(
             run_dir,
-            "cluster_search_results.json",
+            "taxonomy_search_results.json",
             {
                 "summary": summary,
                 "root_node_id": results["root_node"].node_id,
                 "root_val_score": results["root_node"].val_score,
                 "categories": results.get("categories", []),
-                "clusters": results.get("clusters", []),
                 "candidate_results": results.get("candidate_results", []),
-                "best_prompts": results.get("best_prompts", []),
+                "top_prompts": results.get("top_prompts", []),
             },
         )
 
-        print(f"[core_trainer_cluster] done (elapsed={time.monotonic() - overall_start:.2f}s)")
+        print(
+            f"[core_trainer_taxonomy] done (elapsed={time.monotonic() - overall_start:.2f}s)"
+        )
     finally:
         restore_logging(log_file, original_stdout, original_stderr)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import time
 from typing import Callable, Dict, List, Optional, Sequence
 
 from agents.agent_feedback_samples import FeedbackSamples
@@ -77,10 +78,12 @@ def _assign_categories(
     next_category_id = 1
 
     total_feedbacks = len(feedback_texts)
+    categorize_start = time.monotonic()
     for feedback_index, feedback_text in enumerate(feedback_texts, start=1):
         print(
             "[agent_cluster_search] categorize feedback "
-            f"{feedback_index}/{total_feedbacks}"
+            f"{feedback_index}/{total_feedbacks} "
+            f"(elapsed={time.monotonic() - categorize_start:.2f}s)"
         )
         prompt = CLUSTER_CATEGORY_ASSIGNMENT_PROMPT
         prompt = prompt.replace("#FEEDBACK#", feedback_text)
@@ -174,17 +177,22 @@ def _build_cluster_assignments(
     return clusters
 
 
-def _format_category_block(categories: Sequence[Dict[str, object]]) -> str:
+def _format_category_block(
+    categories: Sequence[Dict[str, object]],
+    *,
+    feedback_examples_per_category: int,
+) -> str:
     blocks = []
     for category in categories:
-        feedback_examples = category.get("feedback_texts", [])[:3]
+        feedback_examples = category.get("feedback_texts", [])[
+            :feedback_examples_per_category
+        ]
         blocks.append(
             "\n".join(
                 [
                     f"- Category ID: {category['category_id']}",
                     f"  Name: {category['name']}",
                     f"  Description: {category['description']}",
-                    f"  Count: {category['count']}",
                     "  Representative feedback:",
                     *[f"    - {feedback_text}" for feedback_text in feedback_examples],
                 ]
@@ -218,6 +226,7 @@ class ClusterSearch:
         num_clusters: int = 5,
         candidates_per_cluster: int = 5,
         cluster_coverage_ratio: float = 0.5,
+        feedback_examples_per_category: int = 3,
         prompt_open_tag: str = "<p>",
         prompt_close_tag: str = "</p>",
         feedback_batch_size: int = 4,
@@ -235,6 +244,7 @@ class ClusterSearch:
         self.num_clusters = num_clusters
         self.candidates_per_cluster = candidates_per_cluster
         self.cluster_coverage_ratio = cluster_coverage_ratio
+        self.feedback_examples_per_category = feedback_examples_per_category
         self.prompt_open_tag = prompt_open_tag
         self.prompt_close_tag = prompt_close_tag
         self.feedback_batch_size = feedback_batch_size
@@ -254,7 +264,10 @@ class ClusterSearch:
         cluster: Dict[str, object],
         candidate_index: int,
     ) -> Optional[GraphNode]:
-        category_block = _format_category_block(cluster["categories"])
+        category_block = _format_category_block(
+            cluster["categories"],
+            feedback_examples_per_category=self.feedback_examples_per_category,
+        )
         prompt = CLUSTER_MUTATION_PROMPT_V1
         prompt = prompt.replace("#INFERENCE_PROMPT#", parent.inference_prompt)
         prompt = prompt.replace("#CATEGORY_BLOCK#", category_block)
