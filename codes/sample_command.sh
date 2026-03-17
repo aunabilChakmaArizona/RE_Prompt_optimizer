@@ -75,6 +75,10 @@ nohup python -u core_trainer.py --model "google/gemma-3-4b-it" --device-map "cud
 ### cluster codes
 nohup python -u core_trainer_cluster.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" > nohup_outs/nohup_cluster_qwen4.out 2>&1 &
 
+
+### taxonomy
+nohup python -u core_trainer_taxonomy.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" > nohup_outs/nohup_taxonomy_qwen4.out 2>&1 &
+
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
 

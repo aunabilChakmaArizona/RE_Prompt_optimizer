@@ -219,6 +219,10 @@ class TaxonomySearch:
         candidate_results: List[Dict[str, object]] = []
 
         for candidate_index in range(self.num_candidates):
+            print(
+                "[agent_taxonomy_search] run candidate prompt "
+                f"{candidate_index + 1}/{self.num_candidates}"
+            )
             child = self._mutate_from_taxonomy(self.root, categories, candidate_index)
             if child is None:
                 continue
