@@ -154,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cluster-feedback-sample-size",
         type=int,
-        default=2000,
+        default=500,
         help="Number of feedback samples used to build feedback categories.",
     )
     parser.add_argument(

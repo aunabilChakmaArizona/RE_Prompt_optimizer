@@ -76,7 +76,12 @@ def _assign_categories(
     categories: List[Dict[str, object]] = []
     next_category_id = 1
 
-    for feedback_text in feedback_texts:
+    total_feedbacks = len(feedback_texts)
+    for feedback_index, feedback_text in enumerate(feedback_texts, start=1):
+        print(
+            "[agent_cluster_search] categorize feedback "
+            f"{feedback_index}/{total_feedbacks}"
+        )
         prompt = CLUSTER_CATEGORY_ASSIGNMENT_PROMPT
         prompt = prompt.replace("#FEEDBACK#", feedback_text)
         prompt = prompt.replace(
