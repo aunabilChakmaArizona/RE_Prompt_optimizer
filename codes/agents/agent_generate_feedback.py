@@ -85,6 +85,7 @@ def generate_feedback_fn(
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
             batch_size=batch_size,
+            do_log=True,
             do_sample=do_sample,
         )
         feedback_texts = [

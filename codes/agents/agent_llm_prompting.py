@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Iterable, List, Sequence
 
 import torch
@@ -19,6 +20,7 @@ def run_prompts(
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
     enable_thinking: bool = True,
+    do_log: bool = False,
     **gen_kwargs,
 ) -> List[str]:
     if not prompts:
@@ -26,8 +28,15 @@ def run_prompts(
 
     outputs: List[str] = []
     target_device = getattr(model, "device", None)
+    total_batches = math.ceil(len(prompts) / batch_size)
 
-    for batch in _batched(list(prompts), batch_size):
+    for batch_index, batch in enumerate(_batched(list(prompts), batch_size), start=1):
+        if do_log:
+            print(
+                f"[agent_llm_prompting] processing prompts "
+                f"batch {batch_index}/{total_batches} "
+                f"(batch_size={len(batch)})"
+            )
         if use_chat_template:
             formatted = [
                 tokenizer.apply_chat_template(
