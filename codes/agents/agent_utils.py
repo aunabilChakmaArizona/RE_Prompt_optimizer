@@ -3,6 +3,9 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Sequence
 
+from agents.agent_llm_prompting import run_prompt
+from agents.agent_prompts import DIFFERENTIATE_PROMPT
+
 
 def score_node_or_neg_inf(node) -> float:
     score = getattr(node, "val_score", None)
@@ -66,3 +69,29 @@ def resolve_way_shots(way_ids: Sequence[int], shots: Dict) -> List[Dict]:
     #     resolved.append(shots["umbc_shots"][shot_id])
 
     return resolved
+
+
+def differentiate_prompts(
+    prompt_1: str,
+    prompt_2: str,
+    *,
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    do_sample: bool,
+) -> tuple[str, str, str]:
+    differentiate_prompt = DIFFERENTIATE_PROMPT.replace("#PROMPT1#", prompt_1).replace(
+        "#PROMPT2#", prompt_2
+    )
+    raw_response = run_prompt(
+        differentiate_prompt,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        do_sample=do_sample,
+    )
+    return (
+        raw_response,
+        extract_tagged_text(raw_response, "<d>", "</d>"),
+        differentiate_prompt,
+    )

@@ -7,14 +7,17 @@ from typing import Callable, Dict, List, Optional, Sequence
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
-from agents.agent_mutate_prompt import _extract_between
 from agents.agent_prompts import (
     CLUSTER_CATEGORY_ASSIGNMENT_PROMPT,
     CLUSTER_MUTATION_PROMPT_V1,
-    DIFFERENTIATE_PROMPT,
     INFERENCE_MODE_NON_SEPARATE,
 )
-from agents.agent_utils import extract_tagged_text, has_tagged_text, score_node_or_neg_inf
+from agents.agent_utils import (
+    differentiate_prompts,
+    extract_tagged_text,
+    has_tagged_text,
+    score_node_or_neg_inf,
+)
 
 
 RunInferenceFn = Callable[..., FeedbackSamples]
@@ -185,26 +188,15 @@ def _format_category_block(categories: Sequence[Dict[str, object]]) -> str:
     return "\n\n".join(blocks)
 
 
-def _differentiate_prompts(
-    prompt_1: str,
-    prompt_2: str,
-    *,
-    model,
-    tokenizer,
-    max_new_tokens: int,
-    do_sample: bool,
-) -> tuple[str, str]:
-    differentiate_prompt = DIFFERENTIATE_PROMPT.replace("#PROMPT1#", prompt_1).replace(
-        "#PROMPT2#", prompt_2
-    )
-    raw_response = run_prompt(
-        differentiate_prompt,
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=max_new_tokens,
-        do_sample=do_sample,
-    )
-    return raw_response, _extract_between(raw_response, "<d>", "</d>")
+def _log_categories(categories: Sequence[Dict[str, object]], *, label: str) -> None:
+    print(f"[agent_cluster_search] {label}: {len(categories)}")
+    for category in categories:
+        print(
+            "[agent_cluster_search] "
+            f"{label} category_id={category['category_id']} "
+            f"name={category['name']} count={category['count']} "
+            f"description={category['description']}"
+        )
 
 
 class ClusterSearch:
@@ -263,6 +255,8 @@ class ClusterSearch:
         prompt = prompt.replace("#CATEGORY_BLOCK#", category_block)
         prompt = prompt.replace("#PROMPT_OPEN_TAG#", self.prompt_open_tag)
         prompt = prompt.replace("#PROMPT_CLOSE_TAG#", self.prompt_close_tag)
+        
+        print(f"[agent_cluster_search] cluster mutation prompt:\n{prompt}")
 
         max_attempts = 10
         for attempt in range(1, max_attempts + 1):
@@ -284,8 +278,13 @@ class ClusterSearch:
             )
             if not candidate_prompt:
                 continue
+            print(f"[agent_cluster_search] new prompt:\n{candidate_prompt}")
 
-            raw_differentiation_response, differentiation = _differentiate_prompts(
+            (
+                raw_differentiation_response,
+                differentiation,
+                differentiation_prompt_used,
+            ) = differentiate_prompts(
                 parent.inference_prompt,
                 candidate_prompt,
                 model=self.model,
@@ -314,7 +313,7 @@ class ClusterSearch:
                 example_generation_prompt=parent.example_generation_prompt,
                 mutation_prompt_used=prompt,
                 raw_mutation_response=raw_response,
-                differentiation_prompt_used=DIFFERENTIATE_PROMPT,
+                differentiation_prompt_used=differentiation_prompt_used,
                 raw_differentiation_response=raw_differentiation_response,
                 differentiation=differentiation,
                 node_id=self._next_id(),
@@ -371,6 +370,7 @@ class ClusterSearch:
             max_new_tokens=self.feedback_max_new_tokens,
             do_sample=self.do_sample,
         )
+        _log_categories(categories, label="all_categories")
         categories = [
             category
             for category in categories
@@ -380,6 +380,7 @@ class ClusterSearch:
             key=lambda category: (-int(category["count"]), int(category["category_id"]))
         )
         categories = categories[: self.max_categories]
+        _log_categories(categories, label="final_categories")
 
         print(
             f"[agent_cluster_search] kept categories={len(categories)} "

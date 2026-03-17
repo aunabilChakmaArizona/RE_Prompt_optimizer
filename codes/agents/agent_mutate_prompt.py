@@ -7,13 +7,13 @@ from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
 from agents.agent_prompts import (
-    DIFFERENTIATE_PROMPT,
     INFERENCE_MODE_NON_SEPARATE,
     INFERENCE_PROMPT_PLACEHODERS_V1,
     MUTATION_TRACES_DIFFERENCES_PROMPT_SEGMENT_V1,
     MUTATION_TRACES_PROMPT_SEGMENT_V1,
 )
 from agents.agent_relation_utils import get_relation_description
+from agents.agent_utils import differentiate_prompts
 
 
 def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
@@ -170,19 +170,18 @@ def mutate_prompt_fn(
             )
             continue
         candidate = _extract_between(raw_response, prompt_open_tag, prompt_close_tag)
-        differentiate_prompt = (
-            DIFFERENTIATE_PROMPT.replace("#PROMPT1#", node.inference_prompt).replace(
-                "#PROMPT2#", candidate
-            )
-        )
-        raw_differentiation_response = run_prompt(
+        (
+            raw_differentiation_response,
+            core_difference,
             differentiate_prompt,
+        ) = differentiate_prompts(
+            node.inference_prompt,
+            candidate,
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
             do_sample=do_sample,
         )
-        core_difference = _extract_between(raw_differentiation_response, "<d>", "</d>")
 
         if node.inference_mode != INFERENCE_MODE_NON_SEPARATE:
             print(f"[agent_mutate_prompt] new inference prompt:\n{candidate}")
