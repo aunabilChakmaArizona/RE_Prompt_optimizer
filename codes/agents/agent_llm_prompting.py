@@ -16,6 +16,7 @@ def run_prompts(
     *,
     model,
     tokenizer,
+    system_message: str | None = None,
     max_new_tokens: int = 5000,
     batch_size: int = 8,
     use_chat_template: bool = True,
@@ -40,14 +41,21 @@ def run_prompts(
                 f"(batch_size={len(batch)}, elapsed={time.monotonic() - prompting_start:.2f}s)"
             )
         if use_chat_template:
+            messages_batch = []
+            for prompt in batch:
+                messages = []
+                if system_message:
+                    messages.append({"role": "system", "content": system_message})
+                messages.append({"role": "user", "content": prompt})
+                messages_batch.append(messages)
             formatted = [
                 tokenizer.apply_chat_template(
-                    [{"role": "user", "content": prompt}],
+                    messages,
                     tokenize=False,
                     add_generation_prompt=add_generation_prompt,
                     enable_thinking=enable_thinking,
                 )
-                for prompt in batch
+                for messages in messages_batch
             ]
         else:
             formatted = list(batch)
@@ -77,6 +85,7 @@ def run_prompt(
     *,
     model,
     tokenizer,
+    system_message: str | None = None,
     max_new_tokens: int = 5000,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
@@ -87,6 +96,7 @@ def run_prompt(
         [prompt],
         model=model,
         tokenizer=tokenizer,
+        system_message=system_message,
         max_new_tokens=max_new_tokens,
         batch_size=1,
         use_chat_template=use_chat_template,

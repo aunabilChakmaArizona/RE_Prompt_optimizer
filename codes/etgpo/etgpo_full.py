@@ -45,6 +45,11 @@ from collections import defaultdict
 from dataclasses import dataclass, asdict, field
 from copy import deepcopy
 
+CURRENT_DIR = Path(__file__).resolve().parent
+CODES_DIR = CURRENT_DIR.parent
+if str(CODES_DIR) not in sys.path:
+    sys.path.append(str(CODES_DIR))
+
 import dspy
 from dspy import GEPA, MIPROv2
 from scipy.stats import binom
@@ -54,6 +59,25 @@ from common.answer_equivalence import judge_answer
 from common.llm_interface import get_json_response_from_gpt
 from common.config import AGENT_MODEL
 from common.token_tracker import token_tracker, format_cost
+from agents.agent_data_loader import load_train_samples
+from agents.agent_data_loader import load_split_episodes
+from agents.agent_binary_inference import run_binary_inference, _resolve_binary_token_id
+from agents.agent_evaluate import evaluate_fn as evaluate_re_episode_fn
+from agents.agent_feedback_samples import FeedbackSample, FeedbackSamples
+from agents.agent_generate_feedback import generate_feedback_fn as generate_re_feedback_fn
+from agents.agent_graph_node import GraphNode
+from agents.agent_llm_prompting import run_prompt
+from agents.agent_metrics import compute_prf_stats
+from agents.agent_models import load_model_and_tokenizer
+from agents.agent_prompts import (
+    FEEDBACK_PROMPT_MAP,
+    INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+)
+from agents.agent_relation_utils import get_relation_description
+from agents.agent_run_inference import _build_inference_prompt as build_re_inference_prompt
+from agents.agent_scorer import NO_RELATION
+from agents.agent_sample_feedback import sample_feedback_fn
+from agents.agent_train_pipeline import build_root_node, enrich_feedback_samples
 
 
 # =============================================================================
@@ -80,6 +104,7 @@ DEFAULT_TAXONOMY_MODEL = AGENT_MODEL  # For taxonomy analysis and guidance gener
 
 # Base instruction for CoT
 BASE_COT_INSTRUCTION = "Please think step by step and then solve the task."
+RE_TASK_MODE = "relation_extraction_non_reasoning"
 
 # Generic error types
 GENERIC_ERROR_TYPES = "Calculation Error, Wrong Approach, Conceptual Misunderstanding, Missing Step, Logical Fallacy, Factual Error, Incomplete Reasoning, Misreading the Problem"
@@ -360,6 +385,19 @@ class FailureRecord:
     predicted_answer: str
     reasoning: str
     solution: Optional[str] = None
+
+
+@dataclass
+class REPairExample:
+    """A TACRED-style support/query pair for binary relation inference."""
+    problem_idx: int
+    relation: str
+    support_sentence: str
+    query_sentence: str
+    answer: str
+    relation_description: str
+    id_1shot: str = ""
+    id_query: str = ""
 
 
 @dataclass
@@ -717,7 +755,10 @@ def format_diff_with_ci(diff_stats: Dict[str, Any]) -> str:
 # Taxonomy Trace Formatting
 # =============================================================================
 
-def format_failure_for_analysis(failure: FailureRecord) -> str:
+def format_failure_for_analysis(
+    failure: FailureRecord,
+    reasoning_label: str = "Model's Reasoning"
+) -> str:
     """Format a failure record for taxonomy LLM analysis."""
     solution_section = ""
     if failure.solution:
@@ -735,7 +776,8 @@ def format_failure_for_analysis(failure: FailureRecord) -> str:
 ### Correct Answer
 {failure.correct_answer}
 {solution_section}
-### Model's Reasoning
+
+### {reasoning_label}
 {failure.reasoning}
 
 ### Model's Answer
@@ -752,14 +794,16 @@ def format_failure_for_analysis(failure: FailureRecord) -> str:
 def generate_first_batch_taxonomy_prompt(
     failures: List[FailureRecord],
     include_solution: bool = False,
-    domain_description: str = "math problems"
+    domain_description: str = "math problems",
+    reasoning_label: str = "Model's Reasoning",
+    reasoning_source_note: str = ""
 ) -> str:
     """Generate prompt for analyzing the first batch of failures."""
     
     failures_text = ""
     for i, failure in enumerate(failures, 1):
         failures_text += f"\n## Failure {i}"
-        failures_text += format_failure_for_analysis(failure)
+        failures_text += format_failure_for_analysis(failure, reasoning_label=reasoning_label)
     
     solution_instruction = ""
     if include_solution:
@@ -772,6 +816,7 @@ def generate_first_batch_taxonomy_prompt(
 ## Your Task
 
 Analyze each failure and identify the root cause of each error. Be as descriptive as possible.{solution_instruction}
+{reasoning_source_note}
 
 For each failure, find:
 1. The EARLIEST point in the reasoning where something went wrong
@@ -819,7 +864,9 @@ def generate_subsequent_batch_taxonomy_prompt(
     failures: List[FailureRecord],
     existing_categories: List[IssueCategory],
     include_solution: bool = False,
-    domain_description: str = "math problems"
+    domain_description: str = "math problems",
+    reasoning_label: str = "Model's Reasoning",
+    reasoning_source_note: str = ""
 ) -> str:
     """Generate prompt for analyzing subsequent batches."""
     
@@ -837,7 +884,7 @@ def generate_subsequent_batch_taxonomy_prompt(
     failures_text = ""
     for i, failure in enumerate(failures, 1):
         failures_text += f"\n## Failure {i}"
-        failures_text += format_failure_for_analysis(failure)
+        failures_text += format_failure_for_analysis(failure, reasoning_label=reasoning_label)
     
     solution_instruction = ""
     if include_solution:
@@ -857,6 +904,7 @@ For each failure:
 1. Determine if the error fits one of the EXISTING categories
 2. OR create a NEW category if the error is fundamentally different
 {solution_instruction}
+{reasoning_source_note}
 
 ## Output Format
 
@@ -1193,6 +1241,203 @@ def load_taxonomy_from_file(filepath: Path) -> Tuple[
     return issue_categories, trace_assignments, failure_records, metadata
 
 
+def extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
+    """Extract the first valid JSON object from model output."""
+    text = text.strip()
+    fence_match = re.search(r"```json\s*(\{.*?\})\s*```", text, flags=re.DOTALL)
+    if fence_match:
+        try:
+            return json.loads(fence_match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+    for idx in range(start, len(text)):
+        ch = text[idx]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = text[start:idx + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+def get_local_json_response(
+    prompt: str,
+    *,
+    model,
+    tokenizer,
+    system_message: str = "",
+    max_new_tokens: int = 4000,
+    do_sample: bool = False,
+) -> Dict[str, Any]:
+    """Generate and parse a JSON response from a local HF model."""
+    raw_text = run_prompt(
+        prompt,
+        model=model,
+        tokenizer=tokenizer,
+        system_message=system_message or None,
+        max_new_tokens=max_new_tokens,
+        do_sample=do_sample,
+    )
+    response = extract_json_from_text(raw_text)
+    if response is None:
+        raise ValueError(f"Could not parse JSON from local model output:\n{raw_text[:2000]}")
+    return response
+
+
+def run_re_multi_run_evaluation(
+    program: GraphNode,
+    dataset: List[REPairExample],
+    num_runs: int,
+    *,
+    model,
+    tokenizer,
+    batch_size: int,
+    yes_token_id: int,
+    no_token_id: int,
+    log_every: int,
+    n_chunks: int = 3,
+) -> Tuple[List[float], List[Tuple[int, int, bool]], List[Tuple[REPairExample, str, bool]]]:
+    """Run multi-run binary inference evaluation for relation extraction."""
+    if num_runs <= 0:
+        print(f"\n  Skipping evaluation: num_runs = {num_runs}")
+        return [], [], []
+
+    num_problems = len(dataset)
+    if num_problems == 0:
+        print(f"\n  Skipping evaluation: empty dataset")
+        return [], [], []
+
+    total_examples = num_problems * num_runs
+    print(f"\n  Expanding {num_problems} problems × {num_runs} runs = {total_examples} evaluations...")
+
+    expanded_dataset = [ex for ex in dataset for _ in range(num_runs)]
+    prompts = [
+        build_re_inference_prompt(
+            node=program,
+            relation=example.relation,
+            relation_description=example.relation_description,
+            support_sentence=example.support_sentence,
+            query_sentence=example.query_sentence,
+        )
+        for example in expanded_dataset
+    ]
+
+    predictions = run_binary_inference(
+        prompts,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        yes_token_id=yes_token_id,
+        no_token_id=no_token_id,
+        log_every=log_every,
+    )
+
+    detailed_results = []
+    trace_rows = []
+    per_run_labels: List[List[str]] = [[] for _ in range(num_runs)]
+    per_run_predictions: List[List[str]] = [[] for _ in range(num_runs)]
+
+    for idx, (example, prediction) in enumerate(zip(expanded_dataset, predictions)):
+        prob_idx = idx // num_runs
+        run_id = idx % num_runs
+        is_correct = prediction.strip().lower() == example.answer.strip().lower()
+        detailed_results.append((prob_idx, run_id, is_correct))
+        trace_rows.append((example, prediction, is_correct))
+        gold_relation = example.relation if example.answer.strip().lower() == "yes" else NO_RELATION
+        predicted_relation = example.relation if prediction.strip().lower() == "yes" else NO_RELATION
+        per_run_labels[run_id].append(gold_relation)
+        per_run_predictions[run_id].append(predicted_relation)
+
+    per_run_scores = []
+    for labels, preds in zip(per_run_labels, per_run_predictions):
+        metrics = compute_prf_stats(labels, preds, n_chunks=n_chunks)
+        per_run_scores.append(metrics["f1_mean"])
+
+    mean_f1 = sum(per_run_scores) / len(per_run_scores) if per_run_scores else 0.0
+    min_f1 = min(per_run_scores) if per_run_scores else 0.0
+    max_f1 = max(per_run_scores) if per_run_scores else 0.0
+    print(f"  Mean F1: {mean_f1 * 100:.2f}% (min: {min_f1 * 100:.2f}%, max: {max_f1 * 100:.2f}%)")
+
+    return per_run_scores, detailed_results, trace_rows
+
+
+def run_re_episode_set_evaluation(
+    program: GraphNode,
+    *,
+    split_name: str,
+    dataset_type: str,
+    episodes_data: Dict[str, Any],
+    num_runs: int,
+    model,
+    tokenizer,
+    batch_size: int,
+    yes_token_id: int,
+    no_token_id: int,
+    log_every: int,
+    n_chunks: int,
+    query_index: int,
+) -> Tuple[List[float], List[Tuple[int, int, bool]]]:
+    """Run episode-level RE evaluation using the same evaluator as core_trainer."""
+    if num_runs <= 0:
+        print(f"\n  Skipping evaluation: num_runs = {num_runs}")
+        return [], []
+
+    episodes = episodes_data.get("episodes", [])
+    if not episodes:
+        print(f"\n  Skipping evaluation: empty {split_name} episodes")
+        return [], []
+
+    per_run_scores = []
+    for run_id in range(num_runs):
+        metrics = evaluate_re_episode_fn(
+            program,
+            split_name,
+            dataset_type=dataset_type,
+            model=model,
+            tokenizer=tokenizer,
+            episodes=episodes,
+            shots=episodes_data,
+            query_index=query_index,
+            batch_size=batch_size,
+            n_chunks=n_chunks,
+            eval_id=f"{split_name}_{run_id}",
+            output_dir=None,
+            yes_token_id=yes_token_id,
+            no_token_id=no_token_id,
+            log_every=log_every,
+        )
+        per_run_scores.append(metrics["f1_mean"])
+
+    mean_f1 = sum(per_run_scores) / len(per_run_scores) if per_run_scores else 0.0
+    min_f1 = min(per_run_scores) if per_run_scores else 0.0
+    max_f1 = max(per_run_scores) if per_run_scores else 0.0
+    print(f"  Mean F1: {mean_f1 * 100:.2f}% (min: {min_f1 * 100:.2f}%, max: {max_f1 * 100:.2f}%)")
+    return per_run_scores, []
+
+
 # =============================================================================
 # Main Pipeline Class
 # =============================================================================
@@ -1208,6 +1453,7 @@ class UnifiedPromptOptimizer:
         self,
         # Dataset
         dataset: str = "aimo",
+        task_mode: str = "",
         valid_size: int = 90,
         # Methods
         methods: List[str] = None,
@@ -1249,10 +1495,26 @@ class UnifiedPromptOptimizer:
         # V2: Method ablations
         raw_sampling: bool = False,
         num_raw_samples: int = 10,
-        direct_categories: bool = False
+        direct_categories: bool = False,
+        # Relation extraction mode
+        data_dir: Optional[str] = None,
+        train_samples_file: str = "fs_tacred_train_samples.pkl",
+        re_inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+        re_feedback_prompt_key: str = "mistakes_v1",
+        inference_batch_size: int = 8,
+        feedback_batch_size: int = 4,
+        feedback_max_new_tokens: int = 512,
+        log_every: int = 20,
+        re_eval_n_chunks: int = 3,
+        dev_split: str = "dev",
+        test_split: str = "test",
+        query_index: int = 0,
+        eval_batch_size: int = 8
     ):
         # Store parameters
         self.dataset = dataset
+        self.task_mode = task_mode or ""
+        self.is_re_mode = self.task_mode == RE_TASK_MODE
         self.valid_size = valid_size
         self.methods = methods or ["baseline", "taxonomy"]
         self.main_model = main_model
@@ -1288,9 +1550,25 @@ class UnifiedPromptOptimizer:
         self.raw_sampling = raw_sampling
         self.num_raw_samples = num_raw_samples
         self.direct_categories = direct_categories
+        self.data_dir = data_dir
+        self.train_samples_file = train_samples_file
+        self.re_inference_mode = re_inference_mode
+        self.re_feedback_prompt_key = re_feedback_prompt_key
+        self.inference_batch_size = inference_batch_size
+        self.feedback_batch_size = feedback_batch_size
+        self.feedback_max_new_tokens = feedback_max_new_tokens
+        self.log_every = log_every
+        self.re_eval_n_chunks = re_eval_n_chunks
+        self.dev_split = dev_split
+        self.test_split = test_split
+        self.query_index = query_index
+        self.eval_batch_size = eval_batch_size
         
         # Domain description
-        self.domain_description = get_domain_description(dataset)
+        self.domain_description = (
+            "relation extraction tasks with binary yes/no inference"
+            if self.is_re_mode else get_domain_description(dataset)
+        )
         
         # Set seeds
         random.seed(seed)
@@ -1308,14 +1586,25 @@ class UnifiedPromptOptimizer:
         # State
         self.main_lm = None
         self.reflection_lm = None
+        self.local_model = None
+        self.local_tokenizer = None
+        self.taxonomy_local_model = None
+        self.taxonomy_local_tokenizer = None
+        self.yes_token_id = None
+        self.no_token_id = None
+        self.feedback_pool: Dict[str, List[dict]] = {}
+        self.train_shot_index: Dict[str, dict] = {}
+        self.re_dev_data: Dict[str, Any] = {}
+        self.re_test_data: Dict[str, Any] = {}
         self.train_set: List[dspy.Example] = []
         self.val_set: List[dspy.Example] = []
         self.test_set: List[dspy.Example] = []
         self.metric = None
         self.metric_with_feedback = None
+        self.taxonomy_examples: List[Any] = []
         
         # Programs
-        self.programs: Dict[str, dspy.Module] = {}
+        self.programs: Dict[str, Any] = {}
         
         # Results
         self.method_results: Dict[str, Dict[str, MethodResult]] = {}
@@ -1340,12 +1629,137 @@ class UnifiedPromptOptimizer:
         """Record and print token stats for a phase."""
         self.token_stats[phase_name] = stats
         print_phase_token_stats(phase_name, stats)
+
+    def _get_taxonomy_generation_backend(self) -> Tuple[Any, Any]:
+        """Return model/tokenizer pair for local JSON generation in RE mode."""
+        if not self.is_re_mode:
+            return None, None
+        if self.taxonomy_model == self.main_model:
+            return self.local_model, self.local_tokenizer
+        return self.taxonomy_local_model, self.taxonomy_local_tokenizer
+
+    def _get_json_response(self, prompt: str, system_message: str) -> Dict[str, Any]:
+        """Dispatch JSON generation to the configured backend."""
+        if self.is_re_mode:
+            model, tokenizer = self._get_taxonomy_generation_backend()
+            return get_local_json_response(
+                prompt,
+                model=model,
+                tokenizer=tokenizer,
+                system_message=system_message,
+                max_new_tokens=10000,
+                do_sample=False,
+            )
+        return get_json_response_from_gpt(
+            msg=prompt,
+            model=self.taxonomy_model,
+            system_message=system_message,
+            temperature=0.1
+        )
+
+    def _sample_re_examples(self, num_examples: int, rng_seed: int) -> List[REPairExample]:
+        """Sample TACRED-style binary inference examples from the train pool."""
+        rng = random.Random(rng_seed)
+        feedback_samples = sample_feedback_fn(self.feedback_pool, k=num_examples, rng=rng)
+        enrich_feedback_samples(feedback_samples, self.train_shot_index)
+
+        examples: List[REPairExample] = []
+        for idx, sample in enumerate(feedback_samples.all_samples):
+            relation = sample.relation
+            examples.append(REPairExample(
+                problem_idx=idx,
+                relation=relation,
+                support_sentence=sample.support_sentence,
+                query_sentence=sample.query_sentence,
+                answer=sample.label,
+                relation_description=get_relation_description(relation, dt=self.dataset),
+                id_1shot=str(sample.id_1shot),
+                id_query=str(sample.id_query)
+            ))
+        return examples
+
+    def _setup_relation_extraction_non_reasoning(self):
+        """Initialize the TACRED/local-LLM pipeline."""
+        print(f"\nConfiguring local main model: {self.main_model}")
+        self.local_model, self.local_tokenizer = load_model_and_tokenizer(self.main_model)
+        self.yes_token_id = _resolve_binary_token_id(self.local_tokenizer, "yes")
+        self.no_token_id = _resolve_binary_token_id(self.local_tokenizer, "no")
+
+        if self.taxonomy_model != self.main_model:
+            print(f"Configuring local taxonomy model: {self.taxonomy_model}")
+            self.taxonomy_local_model, self.taxonomy_local_tokenizer = load_model_and_tokenizer(self.taxonomy_model)
+        else:
+            self.taxonomy_local_model, self.taxonomy_local_tokenizer = self.local_model, self.local_tokenizer
+
+        data_dir = self.data_dir or str(CODES_DIR.parent / "data")
+        self.feedback_pool = load_train_samples(data_dir=data_dir, filename=self.train_samples_file)
+        self.re_dev_data = load_split_episodes(
+            split=self.dev_split,
+            data_dir=data_dir,
+            dataset_type=self.dataset,
+        )
+        self.re_test_data = load_split_episodes(
+            split=self.test_split,
+            data_dir=data_dir,
+            dataset_type=self.dataset,
+        )
+        self.train_shot_index = {}
+        for instances in self.feedback_pool.values():
+            for inst in instances:
+                self.train_shot_index[inst["id"]] = inst
+
+        self.taxonomy_examples = self._sample_re_examples(self.valid_size, self.seed)
+        self.val_set = self.re_dev_data.get("episodes", [])
+        self.test_set = self.re_test_data.get("episodes", [])
+        self.train_set = []
+        self.metric = None
+        self.metric_with_feedback = None
+
+        feedback_prompt = FEEDBACK_PROMPT_MAP[self.re_feedback_prompt_key]
+        self.programs["baseline"] = build_root_node(
+            feedback_prompt=feedback_prompt,
+            mutation_prompt="",
+            inference_mode=self.re_inference_mode,
+        )
+
+        print(f"  Taxonomy examples: {len(self.taxonomy_examples)}")
+        print(f"  Validation episodes: {len(self.val_set)}")
+        print(f"  Test episodes: {len(self.test_set)}")
+        print("\nSetup complete.")
+
+    def _clone_re_program_with_instruction(self, instruction_prompt: str) -> GraphNode:
+        """Clone the baseline RE program with a revised instruction prompt."""
+        base_program = self.programs["baseline"]
+        return GraphNode(
+            inference_prompt=base_program.inference_prompt,
+            inference_mode=base_program.inference_mode,
+            inference_instruction_prompt=instruction_prompt,
+            inference_answer_instruction_prompt=base_program.inference_answer_instruction_prompt,
+            inference_example_prompt=base_program.inference_example_prompt,
+            inference_input_prompt=base_program.inference_input_prompt,
+            feedback_prompt=base_program.feedback_prompt,
+            mutation_prompt=base_program.mutation_prompt,
+            example_generation_prompt=base_program.example_generation_prompt,
+        )
+
+    def _build_re_failure_problem_text(self, example: REPairExample) -> str:
+        """Format an RE failure case for taxonomy analysis."""
+        return (
+            f"Relation: {example.relation}\n"
+            f"Relation Description: {example.relation_description}\n"
+            f"Support Instance: {example.support_sentence}\n"
+            f"Query: {example.query_sentence}"
+        )
     
     def setup(self):
         """Initialize LMs, load data, create base program."""
         print(f"\n{'='*70}")
         print("SETUP")
         print(f"{'='*70}")
+
+        if self.is_re_mode:
+            self._setup_relation_extraction_non_reasoning()
+            return
         
         # Load API keys
         main_api_key = self._load_api_key_from_file(MAIN_API_KEY_FILE)
@@ -1431,6 +1845,84 @@ class UnifiedPromptOptimizer:
         print(f"\n{'='*70}")
         print("TAXONOMY: COLLECTING FAILURES FROM BASELINE")
         print(f"{'='*70}")
+
+        if self.is_re_mode:
+            if self.taxonomy_runs <= 0:
+                print(f"\n  Skipping baseline for taxonomy: taxonomy_runs = {self.taxonomy_runs}")
+                self.failure_records = []
+                self._record_phase_stats("baseline_for_taxonomy", {})
+                return []
+
+            per_run_f1_scores, _, trace_rows = run_re_multi_run_evaluation(
+                program=self.programs["baseline"],
+                dataset=self.taxonomy_examples,
+                num_runs=self.taxonomy_runs,
+                model=self.local_model,
+                tokenizer=self.local_tokenizer,
+                batch_size=self.inference_batch_size,
+                yes_token_id=self.yes_token_id,
+                no_token_id=self.no_token_id,
+                log_every=self.log_every,
+                n_chunks=self.re_eval_n_chunks,
+            )
+
+            failed_samples = FeedbackSamples()
+            failure_records = []
+            for idx, (example, prediction, is_correct) in enumerate(trace_rows):
+                if is_correct:
+                    continue
+                run_id = idx % self.taxonomy_runs
+                failed_sample = FeedbackSample(
+                    id_1shot=example.id_1shot,
+                    id_query=example.id_query,
+                    inference=prediction,
+                    label=example.answer,
+                )
+                failed_sample.relation = example.relation
+                failed_sample.support_sentence = example.support_sentence
+                failed_sample.query_sentence = example.query_sentence
+                failed_samples.add_to_all_samples(failed_sample)
+                failed_samples.add_to_selected_samples(failed_sample)
+
+            if failed_samples.selected_samples:
+                failed_samples = generate_re_feedback_fn(
+                    self.programs["baseline"],
+                    failed_samples,
+                    dataset_type=self.dataset,
+                    model=self.local_model,
+                    tokenizer=self.local_tokenizer,
+                    batch_size=self.feedback_batch_size,
+                    max_new_tokens=self.feedback_max_new_tokens,
+                    do_sample=False,
+                )
+
+            feedback_by_key = {}
+            for sample in failed_samples.selected_samples:
+                feedback_by_key[(str(sample.id_1shot), str(sample.id_query), sample.inference)] = sample.feedback_text
+
+            for idx, (example, prediction, is_correct) in enumerate(trace_rows):
+                if is_correct:
+                    continue
+                run_id = idx % self.taxonomy_runs
+                failure_records.append(FailureRecord(
+                    problem_idx=example.problem_idx,
+                    run_id=run_id,
+                    problem=self._build_re_failure_problem_text(example),
+                    correct_answer=example.answer,
+                    predicted_answer=prediction,
+                    reasoning=feedback_by_key.get(
+                        (example.id_1shot, example.id_query, prediction),
+                        "No feedback generated."
+                    ),
+                    solution=None
+                ))
+
+            overall_f1 = sum(per_run_f1_scores) / len(per_run_f1_scores) if per_run_f1_scores else 0.0
+            print(f"\n  Collected {len(failure_records)} mistakes from {len(set(f.problem_idx for f in failure_records))} problems")
+            print(f"  F1 from scorer: {overall_f1 * 100:.2f}%")
+            self.failure_records = failure_records
+            self._record_phase_stats("baseline_for_taxonomy", {})
+            return failure_records
         
         clear_lm_history(self.main_lm, "before baseline_for_taxonomy")
         
@@ -1536,25 +2028,39 @@ class UnifiedPromptOptimizer:
                 prompt = generate_first_batch_taxonomy_prompt(
                     batch,
                     include_solution=self.include_solution,
-                    domain_description=self.domain_description
+                    domain_description=self.domain_description,
+                    reasoning_label=(
+                        "Most Likely Reasoning Behind The Incorrect Binary Prediction"
+                        if self.is_re_mode else "Model's Reasoning"
+                    ),
+                    reasoning_source_note=(
+                        "Important: the reasoning field is post-hoc feedback describing the most likely cause of the incorrect binary prediction, not a verbatim chain-of-thought from the original model. Use it as probabilistic evidence together with the input, gold label, and wrong answer."
+                        if self.is_re_mode else ""
+                    )
                 )
             else:
                 prompt = generate_subsequent_batch_taxonomy_prompt(
                     batch,
                     existing_categories=self.issue_categories,
                     include_solution=self.include_solution,
-                    domain_description=self.domain_description
+                    domain_description=self.domain_description,
+                    reasoning_label=(
+                        "Most Likely Reasoning Behind The Incorrect Binary Prediction"
+                        if self.is_re_mode else "Model's Reasoning"
+                    ),
+                    reasoning_source_note=(
+                        "Important: the reasoning field is post-hoc feedback describing the most likely cause of the incorrect binary prediction, not a verbatim chain-of-thought from the original model. Use it as probabilistic evidence together with the input, gold label, and wrong answer."
+                        if self.is_re_mode else ""
+                    )
                 )
             
             if self.verbose:
                 print(f"\nTaxonomy Prompt:\n{prompt}")
             
             print("  Analyzing failures with LLM...")
-            response = get_json_response_from_gpt(
-                msg=prompt,
-                model=self.taxonomy_model,
-                system_message="You are an expert at analyzing language model failures. Return valid JSON.",
-                temperature=0.1
+            response = self._get_json_response(
+                prompt,
+                "You are an expert at analyzing language model failures. Return valid JSON."
             )
             
             if not response:
@@ -1722,6 +2228,90 @@ class UnifiedPromptOptimizer:
             delta = compute_phase_delta(snapshot_before, snapshot_after)
             self._record_phase_stats("guidance_generation", delta)
             return
+
+        if self.is_re_mode:
+            selected_stats = [
+                s for s in self.category_stats
+                if s.category_name in {c.category_name for c in self.selected_categories}
+            ]
+            categories_text = ""
+            for i, cat in enumerate(self.selected_categories, 1):
+                stats = next((s for s in selected_stats if s.category_name == cat.category_name), None)
+                failure_count = stats.failure_count if stats else cat.trace_count
+                problem_count = stats.problem_count if stats else 0
+                coverage_pct = (failure_count / len(self.trace_assignments) * 100) if self.trace_assignments else 0
+                categories_text += f"""
+## Category {i}: {cat.category_name}
+
+**Statistics:** {failure_count} failures ({coverage_pct:.1f}%), {problem_count} problems
+
+**Summary:** {cat.summary}
+
+**Description:** {cat.description}
+
+**Example:** {cat.example}
+
+**Error Type:** {cat.error_type}
+
+**Why it leads to wrong answer:** {cat.why_leads_to_wrong_answer}
+"""
+
+            base_instruction = self.programs["baseline"].inference_instruction_prompt
+            prompt = f"""You are an expert at improving language model performance on relation extraction with binary yes/no inference.
+
+I have identified the following recurring error categories from model failures. Use them to revise the current instruction prompt so the model can avoid these mistakes.
+
+## Current Instruction Prompt
+
+```text
+{base_instruction}
+```
+
+## Error Categories
+
+```text
+{categories_text}
+```
+
+## Your Task
+
+Generate a revised instruction prompt that:
+1. Addresses each failure category with specific, actionable advice
+2. Improves and generalizes binary relation extraction decisions
+
+## Critical Constraints
+
+- Do not revise the instruction in a way that requires step-by-step reasoning or explanatory output; the task should remain direct binary yes/no inference.
+- Preserve compatibility with the existing prompt structure where the answer instruction and input template are appended separately.
+- The goal is ACCURACY, not caution. Never generate guidance that encourages the model to refuse, abstain, or say "not specified" when an answer can be provided.
+
+## Output Format
+
+Return a JSON object with:
+{{
+  "revised_instruction_prompt": "the revised instruction prompt text"
+}}
+"""
+            print("Asking LLM to generate a revised instruction prompt...")
+            response = self._get_json_response(
+                prompt,
+                "You are an expert at improving relation extraction prompts. Return valid JSON."
+            )
+            self.generated_prompt = response.get("revised_instruction_prompt", "").strip()
+            if not self.generated_prompt:
+                raise ValueError("Missing 'revised_instruction_prompt' in RE guidance generation response")
+
+            prompt_file = self.output_dir / "generated_prompt.txt"
+            with open(prompt_file, 'w') as f:
+                f.write(self.generated_prompt)
+
+            print(f"\nGenerated prompt ({len(self.generated_prompt)} chars)")
+            print(f"Saved to: {prompt_file}")
+            print(f"\nPreview:\n{self.generated_prompt}")
+
+            self.programs["taxonomy"] = self._clone_re_program_with_instruction(self.generated_prompt)
+            self._record_phase_stats("guidance_generation", {})
+            return
         
         sample_traces = None
         if self.include_traces and self.failure_records:
@@ -1758,11 +2348,9 @@ class UnifiedPromptOptimizer:
         )
         
         print("Asking LLM to generate guidance...")
-        response = get_json_response_from_gpt(
-            msg=prompt,
-            model=self.taxonomy_model,
-            system_message="You are an expert at improving language model performance. Return valid JSON.",
-            temperature=0.1
+        response = self._get_json_response(
+            prompt,
+            "You are an expert at improving language model performance. Return valid JSON."
         )
         
         if not response:
@@ -1985,6 +2573,9 @@ Then add your preamble and guidance items.
     
     def run_gepa_optimization(self):
         """Run GEPA optimization."""
+        if self.is_re_mode:
+            print("\nSkipping GEPA in relation_extraction_non_reasoning mode")
+            return
         print(f"\n{'='*70}")
         print("GEPA OPTIMIZATION")
         print(f"{'='*70}")
@@ -2033,6 +2624,9 @@ Then add your preamble and guidance items.
     
     def run_mipro_optimization(self):
         """Run MIPROv2 optimization."""
+        if self.is_re_mode:
+            print("\nSkipping MIPROv2 in relation_extraction_non_reasoning mode")
+            return
         print(f"\n{'='*70}")
         print("MIPROv2 OPTIMIZATION")
         print(f"{'='*70}")
@@ -2075,6 +2669,8 @@ Then add your preamble and guidance items.
         print(f"\n{'='*70}")
         print("FINAL EVALUATION")
         print(f"{'='*70}")
+
+        skip_test_evaluation = True
         
         for method_name in self.methods:
             if method_name not in self.programs:
@@ -2085,21 +2681,39 @@ Then add your preamble and guidance items.
             print(f"\n{'='*60}")
             print(f"EVALUATING: {method_name.upper()}")
             print(f"{'='*60}")
-            
-            clear_lm_history(self.main_lm, f"before {method_name} eval")
+
+            if not self.is_re_mode:
+                clear_lm_history(self.main_lm, f"before {method_name} eval")
             
             # Validation evaluation
             val_accuracies = []
             val_detailed = []
             if not self.skip_validation:
-                print(f"\nValidation Set ({len(self.taxonomy_examples)} problems × {self.eval_runs} runs):")
-                val_accuracies, val_detailed = run_multi_run_evaluation(
-                    program=program,
-                    dataset=self.taxonomy_examples,
-                    metric=self.metric,
-                    num_runs=self.eval_runs,
-                    num_threads=self.num_threads
-                )
+                print(f"\nValidation Set ({len(self.val_set) if self.is_re_mode else len(self.taxonomy_examples)} {'episodes' if self.is_re_mode else 'problems'} × {self.eval_runs} runs):")
+                if self.is_re_mode:
+                    val_accuracies, val_detailed = run_re_episode_set_evaluation(
+                        program=program,
+                        split_name="validation",
+                        dataset_type=self.dataset,
+                        episodes_data=self.re_dev_data,
+                        num_runs=self.eval_runs,
+                        model=self.local_model,
+                        tokenizer=self.local_tokenizer,
+                        batch_size=self.eval_batch_size,
+                        yes_token_id=self.yes_token_id,
+                        no_token_id=self.no_token_id,
+                        log_every=self.log_every,
+                        n_chunks=self.re_eval_n_chunks,
+                        query_index=self.query_index,
+                    )
+                else:
+                    val_accuracies, val_detailed = run_multi_run_evaluation(
+                        program=program,
+                        dataset=self.taxonomy_examples,
+                        metric=self.metric,
+                        num_runs=self.eval_runs,
+                        num_threads=self.num_threads
+                    )
                 
                 if val_accuracies:
                     val_stats = compute_per_run_stats(val_accuracies)
@@ -2112,15 +2726,32 @@ Then add your preamble and guidance items.
             # Test evaluation (skip in ablation mode)
             test_accuracies = []
             test_detailed = []
-            if not self.ablation_mode:
-                print(f"\nTest Set ({len(self.test_set)} problems × {self.test_runs} runs):")
-                test_accuracies, test_detailed = run_multi_run_evaluation(
-                    program=program,
-                    dataset=self.test_set,
-                    metric=self.metric,
-                    num_runs=self.test_runs,
-                    num_threads=self.num_threads
-                )
+            if not skip_test_evaluation and not self.ablation_mode:
+                print(f"\nTest Set ({len(self.test_set)} {'episodes' if self.is_re_mode else 'problems'} × {self.test_runs} runs):")
+                if self.is_re_mode:
+                    test_accuracies, test_detailed = run_re_episode_set_evaluation(
+                        program=program,
+                        split_name="test",
+                        dataset_type=self.dataset,
+                        episodes_data=self.re_test_data,
+                        num_runs=self.test_runs,
+                        model=self.local_model,
+                        tokenizer=self.local_tokenizer,
+                        batch_size=self.eval_batch_size,
+                        yes_token_id=self.yes_token_id,
+                        no_token_id=self.no_token_id,
+                        log_every=self.log_every,
+                        n_chunks=self.re_eval_n_chunks,
+                        query_index=self.query_index,
+                    )
+                else:
+                    test_accuracies, test_detailed = run_multi_run_evaluation(
+                        program=program,
+                        dataset=self.test_set,
+                        metric=self.metric,
+                        num_runs=self.test_runs,
+                        num_threads=self.num_threads
+                    )
                 
                 if test_accuracies:
                     test_stats = compute_per_run_stats(test_accuracies)
@@ -2129,7 +2760,7 @@ Then add your preamble and guidance items.
                     test_stats = compute_per_run_stats([])
                     print(f"  Result: No test results (skipped or empty)")
             else:
-                print(f"\nSkipping test evaluation (ablation_mode)")
+                print(f"\nSkipping test evaluation")
                 test_stats = compute_per_run_stats([])
             
             # Store results
@@ -2166,7 +2797,7 @@ Then add your preamble and guidance items.
                     detailed_results=test_detailed
                 )
             
-            phase_stats = convert_dspy_history_to_phase_stats(self.main_lm, self.main_model)
+            phase_stats = {} if self.is_re_mode else convert_dspy_history_to_phase_stats(self.main_lm, self.main_model)
             self._record_phase_stats(f"{method_name}_evaluation", phase_stats)
         
         # V2: Category-level analysis
@@ -2312,6 +2943,7 @@ Then add your preamble and guidance items.
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "config": {
                 "dataset": self.dataset,
+                "task_mode": self.task_mode,
                 "valid_size": self.valid_size,
                 "methods": self.methods,
                 "main_model": self.main_model,
@@ -2355,6 +2987,8 @@ Then add your preamble and guidance items.
             print(f"Mode: RAW SAMPLING (skip taxonomy, sample {self.num_raw_samples} raw traces)")
         if self.direct_categories:
             print(f"Mode: DIRECT CATEGORIES (skip guidance generation)")
+        if self.is_re_mode:
+            print(f"Task mode: {self.task_mode}")
         if self.load_taxonomy_path:
             print(f"Loading taxonomy from: {self.load_taxonomy_path}")
         
@@ -2362,6 +2996,11 @@ Then add your preamble and guidance items.
         
         # Setup
         self.setup()
+
+        if self.is_re_mode and self.raw_sampling:
+            raise ValueError("raw_sampling is not supported in relation_extraction_non_reasoning mode")
+        if self.is_re_mode and self.direct_categories:
+            raise ValueError("direct_categories is not supported in relation_extraction_non_reasoning mode")
         
         # Run taxonomy method if selected
         if "taxonomy" in self.methods:
@@ -2465,6 +3104,8 @@ Examples:
     # Dataset
     parser.add_argument('--dataset', type=str, default='aimo',
                         help='Dataset name (default: aimo)')
+    parser.add_argument('--task_mode', type=str, default='',
+                        help=f'Optional task mode. Use {RE_TASK_MODE} for TACRED-style binary RE.')
     parser.add_argument('--valid_size', type=int, default=90,
                         help='Number of validation examples (default: 90)')
     
@@ -2530,6 +3171,34 @@ Examples:
                         help='Verbose output')
     parser.add_argument('--skip_validation', action='store_true',
                         help='Skip validation evaluation (only run test evaluation)')
+
+    # Relation extraction mode
+    parser.add_argument('--data_dir', type=str, default=None,
+                        help='Data directory for relation extraction mode')
+    parser.add_argument('--train_samples_file', type=str, default='fs_tacred_train_samples.pkl',
+                        help='Train-sample pickle for relation extraction mode')
+    parser.add_argument('--dev_split', type=str, default='dev',
+                        help='Validation split name for relation extraction mode')
+    parser.add_argument('--test_split', type=str, default='test',
+                        help='Test split name for relation extraction mode')
+    parser.add_argument('--query_index', type=int, default=0,
+                        help='Query index for relation extraction episode evaluation')
+    parser.add_argument('--re_inference_mode', type=str, default=INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+                        help='Inference prompt mode for relation extraction')
+    parser.add_argument('--re_feedback_prompt_key', type=str, default='mistakes_v1',
+                        help='Feedback prompt key for relation extraction')
+    parser.add_argument('--inference_batch_size', type=int, default=8,
+                        help='Binary inference batch size for relation extraction mode')
+    parser.add_argument('--eval_batch_size', type=int, default=8,
+                        help='Evaluation batch size for relation extraction mode')
+    parser.add_argument('--feedback_batch_size', type=int, default=4,
+                        help='Feedback generation batch size for relation extraction mode')
+    parser.add_argument('--feedback_max_new_tokens', type=int, default=10000,
+                        help='Feedback generation max new tokens for relation extraction mode')
+    parser.add_argument('--log_every', type=int, default=20,
+                        help='Logging frequency for local binary inference')
+    parser.add_argument('--re_eval_n_chunks', type=int, default=3,
+                        help='Number of chunks for RE F1 aggregation (default: 3)')
     
     # V2: Factored execution
     parser.add_argument('--load_taxonomy', type=str, default=None,
@@ -2556,6 +3225,7 @@ Examples:
     
     optimizer = UnifiedPromptOptimizer(
         dataset=args.dataset,
+        task_mode=args.task_mode,
         valid_size=args.valid_size,
         methods=methods,
         main_model=args.main_model,
@@ -2588,7 +3258,20 @@ Examples:
         track_category_level=not args.no_category_tracking,
         raw_sampling=args.raw_sampling,
         num_raw_samples=args.num_raw_samples,
-        direct_categories=args.direct_categories
+        direct_categories=args.direct_categories,
+        data_dir=args.data_dir,
+        train_samples_file=args.train_samples_file,
+        dev_split=args.dev_split,
+        test_split=args.test_split,
+        query_index=args.query_index,
+        re_inference_mode=args.re_inference_mode,
+        re_feedback_prompt_key=args.re_feedback_prompt_key,
+        inference_batch_size=args.inference_batch_size,
+        eval_batch_size=args.eval_batch_size,
+        feedback_batch_size=args.feedback_batch_size,
+        feedback_max_new_tokens=args.feedback_max_new_tokens,
+        log_every=args.log_every,
+        re_eval_n_chunks=args.re_eval_n_chunks
     )
     
     optimizer.run()
