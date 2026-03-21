@@ -1563,6 +1563,9 @@ class UnifiedPromptOptimizer:
         self.test_split = test_split
         self.query_index = query_index
         self.eval_batch_size = eval_batch_size
+
+        if self.is_re_mode:
+            self.taxonomy_runs = 1
         
         # Domain description
         self.domain_description = (
