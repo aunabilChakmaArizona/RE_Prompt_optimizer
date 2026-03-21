@@ -1496,6 +1496,7 @@ class UnifiedPromptOptimizer:
         raw_sampling: bool = False,
         num_raw_samples: int = 10,
         direct_categories: bool = False,
+        num_guidance_prompts: int = 1,
         # Relation extraction mode
         data_dir: Optional[str] = None,
         train_samples_file: str = "fs_tacred_train_samples.pkl",
@@ -1550,6 +1551,7 @@ class UnifiedPromptOptimizer:
         self.raw_sampling = raw_sampling
         self.num_raw_samples = num_raw_samples
         self.direct_categories = direct_categories
+        self.num_guidance_prompts = max(1, num_guidance_prompts)
         self.data_dir = data_dir
         self.train_samples_file = train_samples_file
         self.re_inference_mode = re_inference_mode
@@ -1618,6 +1620,7 @@ class UnifiedPromptOptimizer:
         self.selected_categories: List[IssueCategory] = []
         self.category_stats: List[CategoryStats] = []
         self.generated_prompt: str = ""
+        self.generated_prompt_candidates: List[str] = []
         self.failure_records: List[FailureRecord] = []
         
         # V2: Category-level results
@@ -1753,6 +1756,72 @@ class UnifiedPromptOptimizer:
             f"Support Instance: {example.support_sentence}\n"
             f"Query: {example.query_sentence}"
         )
+    
+    def _save_prompt_candidates(self, filename: str) -> None:
+        """Persist generated prompt candidates for inspection."""
+        if not self.generated_prompt_candidates:
+            return
+        path = self.output_dir / filename
+        with open(path, "w") as f:
+            json.dump({"candidate_prompts": self.generated_prompt_candidates}, f, indent=2)
+
+    def _get_method_program_names(self, method_name: str) -> List[str]:
+        """Expand a method name to its registered candidate program names."""
+        candidate_prefix = f"{method_name}_"
+        candidate_names = sorted(
+            key for key in self.programs.keys()
+            if key.startswith(candidate_prefix)
+        )
+        if candidate_names:
+            return candidate_names
+        return [method_name]
+
+    def _register_taxonomy_candidate_programs(self) -> None:
+        """Register one or more taxonomy prompt candidates as evaluable programs."""
+        if not self.generated_prompt_candidates:
+            return
+
+        # Clear previously registered taxonomy candidate variants.
+        keys_to_remove = [
+            key for key in self.programs
+            if key == "taxonomy" or key.startswith("taxonomy_")
+        ]
+        for key in keys_to_remove:
+            del self.programs[key]
+
+        if self.is_re_mode:
+            for idx, prompt_text in enumerate(self.generated_prompt_candidates, start=1):
+                self.programs[f"taxonomy_{idx}"] = self._clone_re_program_with_instruction(
+                    prompt_text
+                )
+            return
+
+        for idx, prompt_text in enumerate(self.generated_prompt_candidates, start=1):
+            CandidateSignature = create_signature_class(
+                prompt_text,
+                f"EnhancedReasoningTaskCandidate{idx}"
+            )
+            self.programs[f"taxonomy_{idx}"] = dspy.ChainOfThought(CandidateSignature)
+
+    def _response_to_full_prompt(
+        self,
+        response: Dict[str, Any],
+        *,
+        default_preamble: str = "Check your work against these common errors:"
+    ) -> str:
+        """Convert a single guidance-generation response to a prompt string."""
+        prompt_text = response.get("full_prompt", "")
+        if prompt_text:
+            return prompt_text.strip()
+
+        revised = response.get("revised_instruction_prompt", "")
+        if revised:
+            return revised.strip()
+
+        preamble = response.get("preamble", default_preamble)
+        items = response.get("guidance_items", [])
+        items_text = "\n\n".join([f"• {item.get('guidance_text', '')}" for item in items])
+        return f"{BASE_COT_INSTRUCTION}\n\n{preamble}\n\n{items_text}".strip()
     
     def setup(self):
         """Initialize LMs, load data, create base program."""
@@ -2296,23 +2365,30 @@ Return a JSON object with:
 }}
 """
             print("Asking LLM to generate a revised instruction prompt...")
-            response = self._get_json_response(
-                prompt,
-                "You are an expert at improving relation extraction prompts. Return valid JSON."
-            )
-            self.generated_prompt = response.get("revised_instruction_prompt", "").strip()
-            if not self.generated_prompt:
-                raise ValueError("Missing 'revised_instruction_prompt' in RE guidance generation response")
+            self.generated_prompt_candidates = []
+            for _ in range(self.num_guidance_prompts):
+                response = self._get_json_response(
+                    prompt,
+                    "You are an expert at improving relation extraction prompts. Return valid JSON."
+                )
+                candidate_prompt = response.get("revised_instruction_prompt", "").strip()
+                if not candidate_prompt:
+                    raise ValueError("Missing 'revised_instruction_prompt' in RE guidance generation response")
+                self.generated_prompt_candidates.append(candidate_prompt)
+            self.generated_prompt = self.generated_prompt_candidates[0]
 
             prompt_file = self.output_dir / "generated_prompt.txt"
             with open(prompt_file, 'w') as f:
                 f.write(self.generated_prompt)
+            self._save_prompt_candidates("generated_prompt_candidates.json")
 
             print(f"\nGenerated prompt ({len(self.generated_prompt)} chars)")
             print(f"Saved to: {prompt_file}")
+            if len(self.generated_prompt_candidates) > 1:
+                print(f"Saved {len(self.generated_prompt_candidates)} prompt candidates")
             print(f"\nPreview:\n{self.generated_prompt}")
 
-            self.programs["taxonomy"] = self._clone_re_program_with_instruction(self.generated_prompt)
+            self._register_taxonomy_candidate_programs()
             self._record_phase_stats("guidance_generation", {})
             return
         
@@ -2351,37 +2427,37 @@ Return a JSON object with:
         )
         
         print("Asking LLM to generate guidance...")
-        response = self._get_json_response(
-            prompt,
-            "You are an expert at improving language model performance. Return valid JSON."
-        )
-        
-        if not response:
+        self.generated_prompt_candidates = []
+        for _ in range(self.num_guidance_prompts):
+            response = self._get_json_response(
+                prompt,
+                "You are an expert at improving language model performance. Return valid JSON."
+            )
+            if not response:
+                continue
+            self.generated_prompt_candidates.append(self._response_to_full_prompt(response))
+
+        if not self.generated_prompt_candidates:
             print("Warning: Empty response")
             token_tracker.aggregate_thread_costs()
             snapshot_after = capture_token_snapshot()
             delta = compute_phase_delta(snapshot_before, snapshot_after)
             self._record_phase_stats("guidance_generation", delta)
             return
-        
-        self.generated_prompt = response.get("full_prompt", "")
-        
-        if not self.generated_prompt:
-            preamble = response.get("preamble", "Check your work against these common errors:")
-            items = response.get("guidance_items", [])
-            items_text = "\n\n".join([f"• {item.get('guidance_text', '')}" for item in items])
-            self.generated_prompt = f"{BASE_COT_INSTRUCTION}\n\n{preamble}\n\n{items_text}"
+        self.generated_prompt = self.generated_prompt_candidates[0]
         
         prompt_file = self.output_dir / "generated_prompt.txt"
         with open(prompt_file, 'w') as f:
             f.write(self.generated_prompt)
+        self._save_prompt_candidates("generated_prompt_candidates.json")
         
         print(f"\nGenerated prompt ({len(self.generated_prompt)} chars)")
         print(f"Saved to: {prompt_file}")
+        if len(self.generated_prompt_candidates) > 1:
+            print(f"Saved {len(self.generated_prompt_candidates)} prompt candidates")
         print(f"\nPreview:\n{self.generated_prompt}")
         
-        EnhancedSignature = create_signature_class(self.generated_prompt, "EnhancedReasoningTask")
-        self.programs["taxonomy"] = dspy.ChainOfThought(EnhancedSignature)
+        self._register_taxonomy_candidate_programs()
         
         token_tracker.aggregate_thread_costs()
         snapshot_after = capture_token_snapshot()
@@ -2484,39 +2560,37 @@ Then add your preamble and guidance items.
 """
         
         print("Asking LLM to generate guidance from raw traces...")
-        response = get_json_response_from_gpt(
-            msg=prompt,
-            model=self.taxonomy_model,
-            system_message="You are an expert at improving language model performance. Return valid JSON.",
-            temperature=0.1
-        )
-        
-        if not response:
+        self.generated_prompt_candidates = []
+        for _ in range(self.num_guidance_prompts):
+            response = self._get_json_response(
+                prompt,
+                "You are an expert at improving language model performance. Return valid JSON."
+            )
+            if not response:
+                continue
+            self.generated_prompt_candidates.append(self._response_to_full_prompt(response))
+
+        if not self.generated_prompt_candidates:
             print("Warning: Empty response")
             token_tracker.aggregate_thread_costs()
             snapshot_after = capture_token_snapshot()
             delta = compute_phase_delta(snapshot_before, snapshot_after)
             self._record_phase_stats("guidance_generation", delta)
             return
-        
-        self.generated_prompt = response.get("full_prompt", "")
-        
-        if not self.generated_prompt:
-            preamble = response.get("preamble", "Check your work against these common errors:")
-            items = response.get("guidance_items", [])
-            items_text = "\n\n".join([f"• {item.get('guidance_text', '')}" for item in items])
-            self.generated_prompt = f"{BASE_COT_INSTRUCTION}\n\n{preamble}\n\n{items_text}"
+        self.generated_prompt = self.generated_prompt_candidates[0]
         
         prompt_file = self.output_dir / "generated_prompt_raw_sampling.txt"
         with open(prompt_file, 'w') as f:
             f.write(self.generated_prompt)
+        self._save_prompt_candidates("generated_prompt_raw_sampling_candidates.json")
         
         print(f"\nGenerated prompt ({len(self.generated_prompt)} chars)")
         print(f"Saved to: {prompt_file}")
+        if len(self.generated_prompt_candidates) > 1:
+            print(f"Saved {len(self.generated_prompt_candidates)} prompt candidates")
         print(f"\nPreview:\n{self.generated_prompt}")
         
-        EnhancedSignature = create_signature_class(self.generated_prompt, "EnhancedReasoningTask")
-        self.programs["taxonomy"] = dspy.ChainOfThought(EnhancedSignature)
+        self._register_taxonomy_candidate_programs()
         
         token_tracker.aggregate_thread_costs()
         snapshot_after = capture_token_snapshot()
@@ -2674,8 +2748,16 @@ Then add your preamble and guidance items.
         print(f"{'='*70}")
 
         skip_test_evaluation = True
-        
+
+        methods_to_evaluate = []
+        seen_method_names = set()
         for method_name in self.methods:
+            for name in self._get_method_program_names(method_name):
+                if name not in seen_method_names:
+                    methods_to_evaluate.append(name)
+                    seen_method_names.add(name)
+
+        for method_name in methods_to_evaluate:
             if method_name not in self.programs:
                 print(f"\nSkipping {method_name} (no program available)")
                 continue
@@ -3146,6 +3228,8 @@ Examples:
                         help='Include sample traces in guidance generation')
     parser.add_argument('--num_sample_traces', type=int, default=2,
                         help='Sample traces per category (default: 2)')
+    parser.add_argument('--num_guidance_prompts', type=int, default=1,
+                        help='Number of separate guidance-generation calls/prompts to produce (default: 1)')
     
     # Evaluation settings
     parser.add_argument('--eval_runs', type=int, default=30,
@@ -3244,6 +3328,7 @@ Examples:
         prompt_style=args.prompt_style,
         include_traces=args.include_traces,
         num_sample_traces=args.num_sample_traces,
+        num_guidance_prompts=args.num_guidance_prompts,
         eval_runs=args.eval_runs,
         test_runs=args.test_runs,
         num_threads=args.num_threads,
