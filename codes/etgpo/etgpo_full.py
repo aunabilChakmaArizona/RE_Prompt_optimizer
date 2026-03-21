@@ -1515,7 +1515,8 @@ class UnifiedPromptOptimizer:
         dev_split: str = "dev",
         test_split: str = "test",
         query_index: int = 0,
-        eval_batch_size: int = 8
+        eval_batch_size: int = 8,
+        device_map: Optional[str] = None
     ):
         # Store parameters
         self.dataset = dataset
@@ -1570,6 +1571,7 @@ class UnifiedPromptOptimizer:
         self.test_split = test_split
         self.query_index = query_index
         self.eval_batch_size = eval_batch_size
+        self.device_map = device_map
 
         if self.is_re_mode:
             self.taxonomy_runs = 1
@@ -1692,13 +1694,19 @@ class UnifiedPromptOptimizer:
     def _setup_relation_extraction_non_reasoning(self):
         """Initialize the TACRED/local-LLM pipeline."""
         print(f"\nConfiguring local main model: {self.main_model}")
-        self.local_model, self.local_tokenizer = load_model_and_tokenizer(self.main_model)
+        self.local_model, self.local_tokenizer = load_model_and_tokenizer(
+            self.main_model,
+            device_map=self.device_map,
+        )
         self.yes_token_id = _resolve_binary_token_id(self.local_tokenizer, "yes")
         self.no_token_id = _resolve_binary_token_id(self.local_tokenizer, "no")
 
         if self.taxonomy_model != self.main_model:
             print(f"Configuring local taxonomy model: {self.taxonomy_model}")
-            self.taxonomy_local_model, self.taxonomy_local_tokenizer = load_model_and_tokenizer(self.taxonomy_model)
+            self.taxonomy_local_model, self.taxonomy_local_tokenizer = load_model_and_tokenizer(
+                self.taxonomy_model,
+                device_map=self.device_map,
+            )
         else:
             self.taxonomy_local_model, self.taxonomy_local_tokenizer = self.local_model, self.local_tokenizer
 
@@ -3210,6 +3218,8 @@ Examples:
     # Models
     parser.add_argument('--main_model', type=str, default=DEFAULT_MAIN_MODEL,
                         help=f'Main inference model (default: {DEFAULT_MAIN_MODEL})')
+    parser.add_argument('--device_map', type=str, default=None,
+                        help='Device map for local HF models in RE mode (e.g., cuda:0, cuda:1, cpu, auto)')
     parser.add_argument('--main_temperature', type=float, default=DEFAULT_MAIN_TEMPERATURE,
                         help=f'Main model temperature (default: {DEFAULT_MAIN_TEMPERATURE})')
     parser.add_argument('--reflection_model', type=str, default=DEFAULT_REFLECTION_MODEL,
@@ -3325,6 +3335,7 @@ Examples:
         valid_size=args.valid_size,
         methods=methods,
         main_model=args.main_model,
+        device_map=args.device_map,
         main_temperature=args.main_temperature,
         reflection_model=args.reflection_model,
         taxonomy_model=args.taxonomy_model,
