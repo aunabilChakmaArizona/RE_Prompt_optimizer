@@ -1387,6 +1387,7 @@ def run_re_multi_run_evaluation(
 def run_re_episode_set_evaluation(
     program: GraphNode,
     *,
+    method_name: str,
     split_name: str,
     dataset_type: str,
     episodes_data: Dict[str, Any],
@@ -1399,6 +1400,7 @@ def run_re_episode_set_evaluation(
     log_every: int,
     n_chunks: int,
     query_index: int,
+    output_dir: Optional[Path] = None,
 ) -> Tuple[List[float], List[Tuple[int, int, bool]]]:
     """Run episode-level RE evaluation using the same evaluator as core_trainer."""
     if num_runs <= 0:
@@ -1411,6 +1413,9 @@ def run_re_episode_set_evaluation(
         return [], []
 
     per_run_scores = []
+    eval_output_dir = None
+    if output_dir is not None:
+        eval_output_dir = str(output_dir / "eval_outputs")
     for run_id in range(num_runs):
         metrics = evaluate_re_episode_fn(
             program,
@@ -1423,8 +1428,8 @@ def run_re_episode_set_evaluation(
             query_index=query_index,
             batch_size=batch_size,
             n_chunks=n_chunks,
-            eval_id=f"{split_name}_{run_id}",
-            output_dir=None,
+            eval_id=f"{method_name}_{split_name}_{run_id}",
+            output_dir=eval_output_dir,
             yes_token_id=yes_token_id,
             no_token_id=no_token_id,
             log_every=log_every,
@@ -2778,6 +2783,7 @@ Then add your preamble and guidance items.
                 if self.is_re_mode:
                     val_accuracies, val_detailed = run_re_episode_set_evaluation(
                         program=program,
+                        method_name=method_name,
                         split_name="validation",
                         dataset_type=self.dataset,
                         episodes_data=self.re_dev_data,
@@ -2790,6 +2796,7 @@ Then add your preamble and guidance items.
                         log_every=self.log_every,
                         n_chunks=self.re_eval_n_chunks,
                         query_index=self.query_index,
+                        output_dir=self.output_dir,
                     )
                 else:
                     val_accuracies, val_detailed = run_multi_run_evaluation(
@@ -2816,6 +2823,7 @@ Then add your preamble and guidance items.
                 if self.is_re_mode:
                     test_accuracies, test_detailed = run_re_episode_set_evaluation(
                         program=program,
+                        method_name=method_name,
                         split_name="test",
                         dataset_type=self.dataset,
                         episodes_data=self.re_test_data,
@@ -2828,6 +2836,7 @@ Then add your preamble and guidance items.
                         log_every=self.log_every,
                         n_chunks=self.re_eval_n_chunks,
                         query_index=self.query_index,
+                        output_dir=self.output_dir,
                     )
                 else:
                     test_accuracies, test_detailed = run_multi_run_evaluation(
