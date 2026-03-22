@@ -1223,6 +1223,7 @@ def save_re_baseline_feedbacks_to_file(
             {
                 "id_1shot": sample.id_1shot,
                 "id_query": sample.id_query,
+                "run_id": getattr(sample, "run_id", 0),
                 "relation": sample.relation,
                 "support_sentence": sample.support_sentence,
                 "query_sentence": sample.query_sentence,
@@ -1240,6 +1241,37 @@ def save_re_baseline_feedbacks_to_file(
         json.dump(data, f, indent=2, cls=NumpyEncoder)
 
     print(f"Saved RE baseline feedbacks to: {filepath}")
+
+
+def load_re_baseline_feedbacks_from_file(
+    filepath: Path,
+) -> Tuple[FeedbackSamples, Dict[str, Any]]:
+    """Load saved RE baseline feedback generations."""
+    with open(filepath, "r") as f:
+        data = json.load(f)
+
+    feedback_samples = FeedbackSamples()
+    for sample_data in data.get("feedback_samples", []):
+        sample = FeedbackSample(
+            id_1shot=sample_data["id_1shot"],
+            id_query=sample_data["id_query"],
+            inference=sample_data["inference"],
+            label=sample_data["label"],
+        )
+        sample.run_id = sample_data.get("run_id", 0)
+        sample.relation = sample_data.get("relation", "")
+        sample.support_sentence = sample_data.get("support_sentence", "")
+        sample.query_sentence = sample_data.get("query_sentence", "")
+        sample.feedback_prompt = sample_data.get("feedback_prompt", "")
+        sample.raw_feedback_text = sample_data.get("raw_feedback_text", "")
+        sample.feedback_text = sample_data.get("feedback_text", "")
+        feedback_samples.add_to_all_samples(sample)
+        feedback_samples.add_to_selected_samples(sample)
+
+    metadata = data.get("metadata", {})
+    print(f"Loaded RE baseline feedbacks from: {filepath}")
+    print(f"  Feedback samples: {len(feedback_samples.selected_samples)}")
+    return feedback_samples, metadata
 
 
 def load_taxonomy_from_file(filepath: Path) -> Tuple[
@@ -1529,6 +1561,7 @@ class UnifiedPromptOptimizer:
         skip_validation: bool = False,
         # V2: Factored execution
         load_taxonomy: Optional[str] = None,
+        load_re_feedbacks: Optional[str] = None,
         save_taxonomy: Optional[str] = None,
         ablation_mode: bool = False,
         # V2: Category-level tracking
@@ -1588,6 +1621,7 @@ class UnifiedPromptOptimizer:
         
         # V2: Factored execution
         self.load_taxonomy_path = Path(load_taxonomy) if load_taxonomy else None
+        self.load_re_feedbacks_path = Path(load_re_feedbacks) if load_re_feedbacks else None
         self.save_taxonomy_path = Path(save_taxonomy) if save_taxonomy else None
         self.ablation_mode = ablation_mode
         self.track_category_level = track_category_level
@@ -2097,6 +2131,51 @@ Return a JSON object with:
         print(f"{'='*70}")
 
         if self.is_re_mode:
+            if self.load_re_feedbacks_path and self.load_re_feedbacks_path.exists():
+                loaded_feedbacks, loaded_metadata = load_re_baseline_feedbacks_from_file(
+                    self.load_re_feedbacks_path
+                )
+                print(f"  Loaded feedback metadata: {loaded_metadata}")
+
+                example_by_ids = {
+                    (str(example.id_1shot), str(example.id_query)): example
+                    for example in self.taxonomy_examples
+                }
+                failure_records = []
+                missing_examples = []
+                for sample in loaded_feedbacks.selected_samples:
+                    key = (str(sample.id_1shot), str(sample.id_query))
+                    example = example_by_ids.get(key)
+                    if example is None:
+                        missing_examples.append(key)
+                        continue
+                    failure_records.append(
+                        FailureRecord(
+                            problem_idx=example.problem_idx,
+                            run_id=getattr(sample, "run_id", 0),
+                            problem=self._build_re_failure_problem_text(example),
+                            correct_answer=sample.label,
+                            predicted_answer=sample.inference,
+                            reasoning=sample.feedback_text or "No feedback loaded.",
+                            solution=None,
+                        )
+                    )
+
+                if missing_examples:
+                    raise ValueError(
+                        "Could not map some loaded RE feedbacks back to sampled taxonomy "
+                        f"examples. Missing {len(missing_examples)} pairs, first few: "
+                        f"{missing_examples[:5]}"
+                    )
+
+                print(
+                    f"\n  Reused {len(failure_records)} saved mistakes from "
+                    f"{len(set(f.problem_idx for f in failure_records))} problems"
+                )
+                self.failure_records = failure_records
+                self._record_phase_stats("baseline_for_taxonomy", {})
+                return failure_records
+
             if self.taxonomy_runs <= 0:
                 print(f"\n  Skipping baseline for taxonomy: taxonomy_runs = {self.taxonomy_runs}")
                 self.failure_records = []
@@ -2128,6 +2207,7 @@ Return a JSON object with:
                     inference=prediction,
                     label=example.answer,
                 )
+                failed_sample.run_id = run_id
                 failed_sample.relation = example.relation
                 failed_sample.support_sentence = example.support_sentence
                 failed_sample.query_sentence = example.query_sentence
@@ -3280,7 +3360,8 @@ Then add your preamble and guidance items.
                 "seed": self.seed,
                 "skip_validation": self.skip_validation,
                 "ablation_mode": self.ablation_mode,
-                "load_taxonomy": str(self.load_taxonomy_path) if self.load_taxonomy_path else None
+                "load_taxonomy": str(self.load_taxonomy_path) if self.load_taxonomy_path else None,
+                "load_re_feedbacks": str(self.load_re_feedbacks_path) if self.load_re_feedbacks_path else None,
             },
             "results": results_data,
             "comparisons": comparisons,
@@ -3322,6 +3403,8 @@ Then add your preamble and guidance items.
             print(f"Task mode: {self.task_mode}")
         if self.load_taxonomy_path:
             print(f"Loading taxonomy from: {self.load_taxonomy_path}")
+        if self.load_re_feedbacks_path:
+            print(f"Loading RE feedbacks from: {self.load_re_feedbacks_path}")
         
         start_time = time.time()
         
@@ -3337,6 +3420,8 @@ Then add your preamble and guidance items.
                 "taxonomy_cluster_mode is currently only supported in "
                 "relation_extraction_non_reasoning mode"
             )
+        if self.load_re_feedbacks_path and not self.is_re_mode:
+            raise ValueError("load_re_feedbacks is only supported in relation_extraction_non_reasoning mode")
         
         # Run taxonomy method if selected
         if "taxonomy" in self.methods or "taxonomy_cluster" in self.methods:
@@ -3437,6 +3522,10 @@ Examples:
   # Factored execution: Load existing taxonomy and vary T/G
   python -u -m etgpo_full --dataset aimo --methods baseline,taxonomy \\
       --load_taxonomy path/to/taxonomy.json --coverage_threshold 0.5 --max_guidances 5 --ablation_mode
+
+  # RE mode: reuse saved baseline mistake feedbacks and skip feedback generation
+  python -u -m etgpo_full --task_mode relation_extraction_non_reasoning --dataset fs_tacred \\
+      --methods taxonomy --load_re_feedbacks path/to/re_baseline_taxonomy_feedbacks.json
         """
     )
     
@@ -3552,6 +3641,8 @@ Examples:
     # V2: Factored execution
     parser.add_argument('--load_taxonomy', type=str, default=None,
                         help='Load taxonomy from file (skip failure collection and taxonomy building)')
+    parser.add_argument('--load_re_feedbacks', type=str, default=None,
+                        help='In RE mode, load saved baseline mistake feedbacks and skip baseline inference/feedback generation')
     parser.add_argument('--save_taxonomy', type=str, default=None,
                         help='Save taxonomy to file for later reuse')
     parser.add_argument('--ablation_mode', action='store_true',
@@ -3607,6 +3698,7 @@ Examples:
         verbose=args.verbose,
         skip_validation=args.skip_validation,
         load_taxonomy=args.load_taxonomy,
+        load_re_feedbacks=args.load_re_feedbacks,
         save_taxonomy=args.save_taxonomy,
         ablation_mode=args.ablation_mode,
         track_category_level=not args.no_category_tracking,
