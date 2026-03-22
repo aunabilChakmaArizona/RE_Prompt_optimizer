@@ -1606,7 +1606,7 @@ class UnifiedPromptOptimizer:
         direct_categories: bool = False,
         num_guidance_prompts: int = 1,
         taxonomy_num_clusters: int = 5,
-        taxonomy_cluster_coverage_ratio: float = 0.5,
+        taxonomy_cluster_coverage_ratio: float = 0.75,
         # Relation extraction mode
         data_dir: Optional[str] = None,
         train_samples_file: str = "fs_tacred_train_samples.pkl",
@@ -2209,6 +2209,23 @@ Return a JSON object with:
                         f"{missing_examples[:5]}"
                     )
 
+                feedbacks_file = self.output_dir / "re_baseline_taxonomy_feedbacks.json"
+                save_re_baseline_feedbacks_to_file(
+                    feedbacks_file,
+                    loaded_feedbacks,
+                    metadata={
+                        **loaded_metadata,
+                        "loaded_from_path": str(self.load_re_feedbacks_path),
+                        "dataset": self.dataset,
+                        "task_mode": self.task_mode,
+                        "valid_size": self.valid_size,
+                        "taxonomy_runs": self.taxonomy_runs,
+                        "num_feedback_samples": len(loaded_feedbacks.selected_samples),
+                        "num_failure_records": len(failure_records),
+                        "seed": self.seed,
+                    },
+                )
+
                 print(
                     f"\n  Reused {len(failure_records)} saved mistakes from "
                     f"{len(set(f.problem_idx for f in failure_records))} problems"
@@ -2581,26 +2598,6 @@ Return a JSON object with:
         
         eligible = [s for s in self.category_stats if s.problem_count >= self.min_problems]
 
-        if self.taxonomy_cluster_mode:
-            print(f"\nCluster-mode selection criteria:")
-            print(f"  Min problems: {self.min_problems}")
-            print("  Max guidances: ignored")
-            print("  Coverage threshold: ignored")
-
-            selected_names = {stats.category_name for stats in eligible}
-            self.selected_categories = []
-            seen_selected = set()
-            for cat in self.issue_categories:
-                if cat.category_name in selected_names and cat.category_name not in seen_selected:
-                    seen_selected.add(cat.category_name)
-                    self.selected_categories.append(cat)
-
-            print(
-                f"\nSelected all {len(self.selected_categories)} eligible categories "
-                "for clustered guidance"
-            )
-            return
-        
         selected_stats = []
         cumulative_coverage = 0.0
         
@@ -3628,7 +3625,7 @@ Examples:
                         help='Number of separate guidance-generation calls/prompts to produce (default: 1)')
     parser.add_argument('--taxonomy_num_clusters', type=int, default=5,
                         help='Number of overlapping taxonomy clusters to build in clustered guidance mode (default: 5)')
-    parser.add_argument('--taxonomy_cluster_coverage_ratio', type=float, default=0.5,
+    parser.add_argument('--taxonomy_cluster_coverage_ratio', type=float, default=0.75,
                         help='Fraction of eligible categories included in each clustered-guidance cluster (default: 0.5)')
     
     # Evaluation settings

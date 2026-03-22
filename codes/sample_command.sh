@@ -80,10 +80,25 @@ nohup python -u core_trainer_cluster.py --model "Qwen/Qwen3-4B" --device-map "cu
 nohup python -u core_trainer_taxonomy.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" > nohup_outs/nohup_taxonomy_qwen4.out 2>&1 &
 
 ### etgpo taxonomy RE
+## base taxonomy 3 runs
 nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy \
 --main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 --taxonomy_runs 1 \
 --eval_runs 1 --num_guidance_prompts 5 --output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
 --load_re_feedbacks "../unified_optimization_results/unified_opt_fs_tacred_20260321_204011/re_baseline_taxonomy_feedbacks.json" > nohup_outs/nohup_etgpo_re_taxonomy2.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:2" --valid_size 1000 --taxonomy_runs 1 \
+--eval_runs 1 --num_guidance_prompts 5 --output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 > nohup_outs/nohup_etgpo_re_taxonomy_run3.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:3" --valid_size 1000 --taxonomy_runs 1 \
+--eval_runs 1 --num_guidance_prompts 5 --output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 > nohup_outs/nohup_etgpo_re_taxonomy_run4.out 2>&1 &
+
+## base taxonomy cluster 3 runs
+nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 --taxonomy_runs 1 \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_run.out 2>&1 &
 
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
