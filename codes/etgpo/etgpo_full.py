@@ -68,6 +68,7 @@ from agents.agent_feedback_samples import FeedbackSample, FeedbackSamples
 from agents.agent_generate_feedback import generate_feedback_fn as generate_re_feedback_fn
 from agents.agent_graph_node import GraphNode
 from agents.agent_llm_prompting import run_prompt
+from agents.agent_memory import clear_iteration_memory
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import (
@@ -810,6 +811,28 @@ def generate_first_batch_taxonomy_prompt(
     solution_instruction = ""
     if include_solution:
         solution_instruction = "\nCompare the model's reasoning to the correct solution to identify where it diverged."
+
+    category_instruction = (
+        "Create issue categories that capture each type of error. Categories should be general enough to potentially apply to other traces, but specific enough to be meaningful."
+    )
+    category_description_instruction = (
+        "Detailed description of what goes wrong in this category. Be very specific."
+    )
+    if reasoning_source_note:
+        category_instruction = (
+            "Create issue categories that capture each type of error. Categories should be general enough to potentially apply to other traces, but specific enough to be meaningful, without becoming tied to relation- or example-specific details."
+        )
+        category_description_instruction = (
+            "Describe the general failure mechanism in this category."
+        )
+
+    task_instruction = (
+        "Analyze each failure and identify the root cause of each error. Be as descriptive as possible."
+    )
+    if reasoning_source_note:
+        task_instruction = (
+            "Analyze each failure and identify the root cause of each error. Focus on the underlying failure mechanism."
+        )
     
     return f"""You are an expert at analyzing why language models fail on {domain_description}.
 
@@ -817,7 +840,7 @@ def generate_first_batch_taxonomy_prompt(
 
 ## Your Task
 
-Analyze each failure and identify the root cause of each error. Be as descriptive as possible.{solution_instruction}
+{task_instruction}{solution_instruction}
 {reasoning_source_note}
 
 For each failure, find:
@@ -825,7 +848,7 @@ For each failure, find:
 2. What specifically went wrong (calculation error, wrong approach, misunderstanding, etc.)
 3. Why this error led to the wrong final answer
 
-Create issue categories that capture each type of error. Categories should be general enough to potentially apply to other traces, but specific enough to be meaningful.
+{category_instruction}
 
 IMPORTANT: Each category must be SELF-CONTAINED and understandable by someone who has NOT seen the original problems.
 
@@ -839,7 +862,7 @@ Return a JSON object with:
         {{
             "category_name": "Short descriptive name for this type of error",
             "summary": "One sentence describing the core error pattern.",
-            "description": "Detailed description of what goes wrong in this category. Be very specific.",
+            "description": "{category_description_instruction}",
             "example": "A concrete, self-contained example. Format: 'Problem: [simple problem]. Error: [what the model does wrong]. Correct: [what should happen].'",
             "error_type": "Type of error (e.g., {GENERIC_ERROR_TYPES})",
             "why_leads_to_wrong_answer": "Explanation of how this error causes wrong answers"
@@ -891,6 +914,16 @@ def generate_subsequent_batch_taxonomy_prompt(
     solution_instruction = ""
     if include_solution:
         solution_instruction = "\nCompare the model's reasoning to the correct solution to identify where it diverged."
+
+    new_category_instruction = ""
+    new_category_description_instruction = "Detailed description of what goes wrong."
+    if reasoning_source_note:
+        new_category_instruction = (
+            "\nNew categories should stay general and reusable, rather than becoming tied to relation- or example-specific details."
+        )
+        new_category_description_instruction = (
+            "Describe the general failure mechanism in this category."
+        )
     
     return f"""You are an expert at analyzing why language models fail on {domain_description}.
 
@@ -907,6 +940,7 @@ For each failure:
 2. OR create a NEW category if the error is fundamentally different
 {solution_instruction}
 {reasoning_source_note}
+{new_category_instruction}
 
 ## Output Format
 
@@ -918,7 +952,7 @@ Return a JSON object with:
         {{
             "category_name": "Short descriptive name for NEW error type",
             "summary": "One sentence describing the core error pattern.",
-            "description": "Detailed description of what goes wrong.",
+            "description": "{new_category_description_instruction}",
             "example": "A concrete example.",
             "error_type": "Type of error (e.g., {GENERIC_ERROR_TYPES})",
             "why_leads_to_wrong_answer": "Explanation of how this error causes wrong answers"
@@ -1724,6 +1758,13 @@ class UnifiedPromptOptimizer:
         self.token_stats[phase_name] = stats
         print_phase_token_stats(phase_name, stats)
 
+    def _clear_gpu_cache(self, stage_name: str) -> None:
+        """Release cached CUDA memory between ETGPO stages in RE mode."""
+        if not self.is_re_mode:
+            return
+        print(f"[etgpo] clearing CUDA cache after {stage_name}")
+        clear_iteration_memory(0, None, None)
+
     def _get_taxonomy_generation_backend(self) -> Tuple[Any, Any]:
         """Return model/tokenizer pair for local JSON generation in RE mode."""
         if not self.is_re_mode:
@@ -2174,6 +2215,7 @@ Return a JSON object with:
                 )
                 self.failure_records = failure_records
                 self._record_phase_stats("baseline_for_taxonomy", {})
+                self._clear_gpu_cache("baseline_for_taxonomy_reload")
                 return failure_records
 
             if self.taxonomy_runs <= 0:
@@ -2266,6 +2308,7 @@ Return a JSON object with:
                 },
             )
             self._record_phase_stats("baseline_for_taxonomy", {})
+            self._clear_gpu_cache("baseline_for_taxonomy")
             return failure_records
         
         clear_lm_history(self.main_lm, "before baseline_for_taxonomy")
@@ -2500,6 +2543,7 @@ Return a JSON object with:
         snapshot_after = capture_token_snapshot()
         delta = compute_phase_delta(snapshot_before, snapshot_after)
         self._record_phase_stats("taxonomy_building", delta)
+        self._clear_gpu_cache("taxonomy_building")
     
     def select_categories(self):
         """Select top categories based on coverage threshold."""
@@ -2697,6 +2741,7 @@ Return a JSON object with:
 
             self._register_taxonomy_candidate_programs()
             self._record_phase_stats("guidance_generation", {})
+            self._clear_gpu_cache("guidance_generation")
             return
         
         sample_traces = None
@@ -2772,6 +2817,7 @@ Return a JSON object with:
         snapshot_after = capture_token_snapshot()
         delta = compute_phase_delta(snapshot_before, snapshot_after)
         self._record_phase_stats("guidance_generation", delta)
+        self._clear_gpu_cache("guidance_generation")
     
     def generate_guidance_from_raw_samples(self, failures: List[FailureRecord]):
         """
@@ -2905,6 +2951,7 @@ Then add your preamble and guidance items.
         snapshot_after = capture_token_snapshot()
         delta = compute_phase_delta(snapshot_before, snapshot_after)
         self._record_phase_stats("guidance_generation", delta)
+        self._clear_gpu_cache("guidance_generation_from_raw_samples")
     
     def generate_direct_category_prompt(self):
         """
@@ -2956,6 +3003,7 @@ Then add your preamble and guidance items.
         snapshot_after = capture_token_snapshot()
         delta = compute_phase_delta(snapshot_before, snapshot_after)
         self._record_phase_stats("guidance_generation", delta)
+        self._clear_gpu_cache("direct_category_prompt")
     
     def run_gepa_optimization(self):
         """Run GEPA optimization."""
@@ -3197,6 +3245,7 @@ Then add your preamble and guidance items.
             
             phase_stats = {} if self.is_re_mode else convert_dspy_history_to_phase_stats(self.main_lm, self.main_model)
             self._record_phase_stats(f"{method_name}_evaluation", phase_stats)
+            self._clear_gpu_cache(f"{method_name}_evaluation")
         
         # V2: Category-level analysis
         taxonomy_method_name = self._taxonomy_method_name()
