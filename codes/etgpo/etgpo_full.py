@@ -1209,6 +1209,37 @@ def save_taxonomy_to_file(
     print(f"Saved taxonomy to: {filepath}")
 
 
+def save_re_baseline_feedbacks_to_file(
+    filepath: Path,
+    feedback_samples: FeedbackSamples,
+    metadata: Dict[str, Any],
+) -> None:
+    """Save RE baseline feedback generations collected for taxonomy."""
+    data = {
+        "metadata": metadata,
+        "feedback_samples": [
+            {
+                "id_1shot": sample.id_1shot,
+                "id_query": sample.id_query,
+                "relation": sample.relation,
+                "support_sentence": sample.support_sentence,
+                "query_sentence": sample.query_sentence,
+                "label": sample.label,
+                "inference": sample.inference,
+                "feedback_prompt": sample.feedback_prompt,
+                "raw_feedback_text": sample.raw_feedback_text,
+                "feedback_text": sample.feedback_text,
+            }
+            for sample in feedback_samples.selected_samples
+        ],
+    }
+
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=2, cls=NumpyEncoder)
+
+    print(f"Saved RE baseline feedbacks to: {filepath}")
+
+
 def load_taxonomy_from_file(filepath: Path) -> Tuple[
     List[IssueCategory],
     List[TraceAssignment],
@@ -2014,6 +2045,20 @@ class UnifiedPromptOptimizer:
             print(f"\n  Collected {len(failure_records)} mistakes from {len(set(f.problem_idx for f in failure_records))} problems")
             print(f"  F1 from scorer: {overall_f1 * 100:.2f}%")
             self.failure_records = failure_records
+            feedbacks_file = self.output_dir / "re_baseline_taxonomy_feedbacks.json"
+            save_re_baseline_feedbacks_to_file(
+                feedbacks_file,
+                failed_samples,
+                metadata={
+                    "dataset": self.dataset,
+                    "task_mode": self.task_mode,
+                    "valid_size": self.valid_size,
+                    "taxonomy_runs": self.taxonomy_runs,
+                    "num_feedback_samples": len(failed_samples.selected_samples),
+                    "num_failure_records": len(failure_records),
+                    "seed": self.seed,
+                },
+            )
             self._record_phase_stats("baseline_for_taxonomy", {})
             return failure_records
         
