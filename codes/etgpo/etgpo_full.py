@@ -1517,7 +1517,7 @@ class UnifiedPromptOptimizer:
         query_index: int = 0,
         eval_batch_size: int = 8,
         device_map: Optional[str] = None,
-        json_max_new_tokens: Optional[int] = None
+        max_new_tokens: Optional[int] = None
     ):
         # Store parameters
         self.dataset = dataset
@@ -1573,12 +1573,12 @@ class UnifiedPromptOptimizer:
         self.query_index = query_index
         self.eval_batch_size = eval_batch_size
         self.device_map = device_map
-        self.json_max_new_tokens = json_max_new_tokens
+        self.max_new_tokens = max_new_tokens
 
         if self.is_re_mode:
             self.taxonomy_runs = 1
-        if self.json_max_new_tokens is None:
-            self.json_max_new_tokens = 10000 if self.is_re_mode else 32768
+        if self.max_new_tokens is None:
+            self.max_new_tokens = 10000 if self.is_re_mode else 32768
         
         # Domain description
         self.domain_description = (
@@ -1664,7 +1664,7 @@ class UnifiedPromptOptimizer:
                 model=model,
                 tokenizer=tokenizer,
                 system_message=system_message,
-                max_new_tokens=self.json_max_new_tokens,
+                max_new_tokens=self.max_new_tokens,
                 do_sample=True,
             )
         return get_json_response_from_gpt(
@@ -3240,7 +3240,7 @@ Examples:
                         help=f'Reflection model for GEPA (default: {DEFAULT_REFLECTION_MODEL})')
     parser.add_argument('--taxonomy_model', type=str, default=DEFAULT_TAXONOMY_MODEL,
                         help=f'Model for taxonomy analysis (default: {DEFAULT_TAXONOMY_MODEL})')
-    parser.add_argument('--json_max_new_tokens', type=int, default=None,
+    parser.add_argument('--max_new_tokens', type=int, default=None,
                         help='Max new tokens for taxonomy/guidance JSON generation. Defaults to 10000 in RE mode and 32768 otherwise.')
     
     # Taxonomy settings
@@ -3352,7 +3352,7 @@ Examples:
         methods=methods,
         main_model=args.main_model,
         device_map=args.device_map,
-        json_max_new_tokens=args.json_max_new_tokens,
+        max_new_tokens=args.max_new_tokens,
         main_temperature=args.main_temperature,
         reflection_model=args.reflection_model,
         taxonomy_model=args.taxonomy_model,

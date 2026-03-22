@@ -80,7 +80,7 @@ nohup python -u core_trainer_cluster.py --model "Qwen/Qwen3-4B" --device-map "cu
 nohup python -u core_trainer_taxonomy.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" > nohup_outs/nohup_taxonomy_qwen4.out 2>&1 &
 
 ### etgpo taxonomy RE
-nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy --main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-4B" --device_map "cuda:3" --valid_size 1000 --taxonomy_runs 1 --eval_runs 1 --num_guidance_prompts 5 > nohup_outs/nohup_etgpo_re_taxonomy.out 2>&1 &
+nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy --main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-4B" --device_map "cuda:3" --valid_size 1000 --taxonomy_runs 1 --eval_runs 1 --num_guidance_prompts 5 --output_dir "../unified_optimization_results/" > nohup_outs/nohup_etgpo_re_taxonomy.out 2>&1 &
 
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
