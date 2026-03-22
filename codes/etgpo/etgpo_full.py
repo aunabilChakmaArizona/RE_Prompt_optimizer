@@ -1290,7 +1290,7 @@ def get_local_json_response(
     tokenizer,
     system_message: str = "",
     max_new_tokens: int = 10000,
-    do_sample: bool = False,
+    do_sample: bool = True,
 ) -> Dict[str, Any]:
     """Generate and parse a JSON response from a local HF model."""
     raw_text = run_prompt(
@@ -1665,7 +1665,7 @@ class UnifiedPromptOptimizer:
                 tokenizer=tokenizer,
                 system_message=system_message,
                 max_new_tokens=self.json_max_new_tokens,
-                do_sample=False,
+                do_sample=True,
             )
         return get_json_response_from_gpt(
             msg=prompt,
@@ -1982,7 +1982,7 @@ class UnifiedPromptOptimizer:
                     tokenizer=self.local_tokenizer,
                     batch_size=self.feedback_batch_size,
                     max_new_tokens=self.feedback_max_new_tokens,
-                    do_sample=False,
+                    do_sample=True,
                 )
 
             feedback_by_key = {}
