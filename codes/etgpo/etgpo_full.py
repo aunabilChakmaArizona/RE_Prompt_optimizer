@@ -38,6 +38,7 @@ import json
 import time
 import random
 import argparse
+import math
 import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set, Tuple
@@ -77,6 +78,7 @@ from agents.agent_relation_utils import get_relation_description
 from agents.agent_run_inference import _build_inference_prompt as build_re_inference_prompt
 from agents.agent_scorer import NO_RELATION
 from agents.agent_sample_feedback import sample_feedback_fn
+from agents.agent_cluster_search import _build_cluster_assignments
 from agents.agent_train_pipeline import build_root_node, enrich_feedback_samples
 import re
 
@@ -1536,6 +1538,8 @@ class UnifiedPromptOptimizer:
         num_raw_samples: int = 10,
         direct_categories: bool = False,
         num_guidance_prompts: int = 1,
+        taxonomy_num_clusters: int = 5,
+        taxonomy_cluster_coverage_ratio: float = 0.5,
         # Relation extraction mode
         data_dir: Optional[str] = None,
         train_samples_file: str = "fs_tacred_train_samples.pkl",
@@ -1593,6 +1597,9 @@ class UnifiedPromptOptimizer:
         self.num_raw_samples = num_raw_samples
         self.direct_categories = direct_categories
         self.num_guidance_prompts = max(1, num_guidance_prompts)
+        self.taxonomy_cluster_mode = "taxonomy_cluster" in self.methods
+        self.taxonomy_num_clusters = max(1, taxonomy_num_clusters)
+        self.taxonomy_cluster_coverage_ratio = taxonomy_cluster_coverage_ratio
         self.data_dir = data_dir
         self.train_samples_file = train_samples_file
         self.re_inference_mode = re_inference_mode
@@ -1666,6 +1673,8 @@ class UnifiedPromptOptimizer:
         self.category_stats: List[CategoryStats] = []
         self.generated_prompt: str = ""
         self.generated_prompt_candidates: List[str] = []
+        self.generated_prompt_candidate_metadata: List[Dict[str, Any]] = []
+        self.guidance_clusters: List[Dict[str, Any]] = []
         self.failure_records: List[FailureRecord] = []
         
         # V2: Category-level results
@@ -1815,7 +1824,14 @@ class UnifiedPromptOptimizer:
             return
         path = self.output_dir / filename
         with open(path, "w") as f:
-            json.dump({"candidate_prompts": self.generated_prompt_candidates}, f, indent=2)
+            payload: Dict[str, Any] = {
+                "candidate_prompts": self.generated_prompt_candidates,
+            }
+            if self.generated_prompt_candidate_metadata:
+                payload["candidate_metadata"] = self.generated_prompt_candidate_metadata
+            if self.guidance_clusters:
+                payload["clusters"] = self.guidance_clusters
+            json.dump(payload, f, indent=2, cls=NumpyEncoder)
 
     def _get_method_program_names(self, method_name: str) -> List[str]:
         """Expand a method name to its registered candidate program names."""
@@ -1828,6 +1844,10 @@ class UnifiedPromptOptimizer:
             return candidate_names
         return [method_name]
 
+    def _taxonomy_method_name(self) -> str:
+        """Return the active taxonomy-style method name."""
+        return "taxonomy_cluster" if self.taxonomy_cluster_mode else "taxonomy"
+
     def _register_taxonomy_candidate_programs(self) -> None:
         """Register one or more taxonomy prompt candidates as evaluable programs."""
         if not self.generated_prompt_candidates:
@@ -1836,16 +1856,27 @@ class UnifiedPromptOptimizer:
         # Clear previously registered taxonomy candidate variants.
         keys_to_remove = [
             key for key in self.programs
-            if key == "taxonomy" or key.startswith("taxonomy_")
+            if key in {"taxonomy", "taxonomy_cluster"}
+            or key.startswith("taxonomy_")
+            or key.startswith("taxonomy_cluster_")
         ]
         for key in keys_to_remove:
             del self.programs[key]
 
+        method_name = self._taxonomy_method_name()
+
         if self.is_re_mode:
             for idx, prompt_text in enumerate(self.generated_prompt_candidates, start=1):
-                self.programs[f"taxonomy_{idx}"] = self._clone_re_program_with_instruction(
-                    prompt_text
-                )
+                program_name = f"{method_name}_{idx}"
+                if self.taxonomy_cluster_mode and idx <= len(self.generated_prompt_candidate_metadata):
+                    metadata = self.generated_prompt_candidate_metadata[idx - 1]
+                    cluster_id = metadata.get("cluster_id")
+                    cluster_prompt_index = metadata.get("cluster_prompt_index")
+                    if cluster_id is not None and cluster_prompt_index is not None:
+                        program_name = (
+                            f"{method_name}_c{cluster_id}_p{cluster_prompt_index}"
+                        )
+                self.programs[program_name] = self._clone_re_program_with_instruction(prompt_text)
             return
 
         for idx, prompt_text in enumerate(self.generated_prompt_candidates, start=1):
@@ -1853,7 +1884,7 @@ class UnifiedPromptOptimizer:
                 prompt_text,
                 f"EnhancedReasoningTaskCandidate{idx}"
             )
-            self.programs[f"taxonomy_{idx}"] = dspy.ChainOfThought(CandidateSignature)
+            self.programs[f"{method_name}_{idx}"] = dspy.ChainOfThought(CandidateSignature)
 
     def _response_to_full_prompt(
         self,
@@ -1874,6 +1905,101 @@ class UnifiedPromptOptimizer:
         items = response.get("guidance_items", [])
         items_text = "\n\n".join([f"• {item.get('guidance_text', '')}" for item in items])
         return f"{BASE_COT_INSTRUCTION}\n\n{preamble}\n\n{items_text}".strip()
+
+    def _get_selected_category_payloads(self) -> List[Dict[str, Any]]:
+        """Build serializable payloads for the currently selected categories."""
+        stats_by_name = {stats.category_name: stats for stats in self.category_stats}
+        payloads: List[Dict[str, Any]] = []
+        for idx, cat in enumerate(self.selected_categories, start=1):
+            stats = stats_by_name.get(cat.category_name)
+            failure_count = stats.failure_count if stats else cat.trace_count
+            problem_count = stats.problem_count if stats else 0
+            coverage_pct = (
+                failure_count / len(self.trace_assignments) * 100
+                if self.trace_assignments else 0.0
+            )
+            payloads.append(
+                {
+                    "selected_index": idx,
+                    "category_name": cat.category_name,
+                    "summary": cat.summary,
+                    "description": cat.description,
+                    "example": cat.example,
+                    "error_type": cat.error_type,
+                    "why_leads_to_wrong_answer": cat.why_leads_to_wrong_answer,
+                    "trace_count": cat.trace_count,
+                    "failure_count": failure_count,
+                    "problem_count": problem_count,
+                    "coverage_pct": coverage_pct,
+                }
+            )
+        return payloads
+
+    def _format_re_category_block(self, category_payloads: List[Dict[str, Any]]) -> str:
+        """Format selected category payloads for the RE guidance prompt."""
+        blocks = []
+        for payload in category_payloads:
+            blocks.append(
+                f"""
+## Category {payload['selected_index']}: {payload['category_name']}
+
+**Statistics:** {payload['failure_count']} failures ({payload['coverage_pct']:.1f}%), {payload['problem_count']} problems
+
+**Summary:** {payload['summary']}
+
+**Description:** {payload['description']}
+
+**Example:** {payload['example']}
+
+**Error Type:** {payload['error_type']}
+
+**Why it leads to wrong answer:** {payload['why_leads_to_wrong_answer']}
+""".strip()
+            )
+        return "\n\n".join(blocks)
+
+    def _build_re_guidance_prompt_from_categories(
+        self,
+        category_payloads: List[Dict[str, Any]],
+    ) -> str:
+        """Create the RE instruction-revision prompt for a given category subset."""
+        categories_text = self._format_re_category_block(category_payloads)
+        base_instruction = self.programs["baseline"].inference_instruction_prompt
+        return f"""You are an expert at improving language model performance on relation extraction with binary yes/no inference.
+
+I have identified the following recurring error categories from model failures. Use them to revise the current instruction prompt so the model can avoid these mistakes.
+
+## Current Instruction Prompt
+
+```text
+{base_instruction}
+```
+
+## Error Categories
+
+```text
+{categories_text}
+```
+
+## Your Task
+
+Generate a revised instruction prompt that:
+1. Addresses each failure category with specific, actionable advice
+2. Improves and generalizes binary relation extraction decisions
+
+## Critical Constraints
+
+- Do not revise the instruction in a way that requires step-by-step reasoning or explanatory output; the task should remain direct binary yes/no inference.
+- Preserve compatibility with the existing prompt structure where the answer instruction and input template are appended separately.
+- The goal is ACCURACY, not caution. Never generate guidance that encourages the model to refuse, abstain, or say "not specified" when an answer can be provided.
+
+## Output Format
+
+Return a JSON object with:
+{{
+  "revised_instruction_prompt": "the revised instruction prompt text"
+}}
+"""
     
     def setup(self):
         """Initialize LMs, load data, create base program."""
@@ -2330,6 +2456,26 @@ class UnifiedPromptOptimizer:
         self.category_stats.sort(key=lambda s: -s.failure_count)
         
         eligible = [s for s in self.category_stats if s.problem_count >= self.min_problems]
+
+        if self.taxonomy_cluster_mode:
+            print(f"\nCluster-mode selection criteria:")
+            print(f"  Min problems: {self.min_problems}")
+            print("  Max guidances: ignored")
+            print("  Coverage threshold: ignored")
+
+            selected_names = {stats.category_name for stats in eligible}
+            self.selected_categories = []
+            seen_selected = set()
+            for cat in self.issue_categories:
+                if cat.category_name in selected_names and cat.category_name not in seen_selected:
+                    seen_selected.add(cat.category_name)
+                    self.selected_categories.append(cat)
+
+            print(
+                f"\nSelected all {len(self.selected_categories)} eligible categories "
+                "for clustered guidance"
+            )
+            return
         
         selected_stats = []
         cumulative_coverage = 0.0
@@ -2378,79 +2524,82 @@ class UnifiedPromptOptimizer:
             return
 
         if self.is_re_mode:
-            selected_stats = [
-                s for s in self.category_stats
-                if s.category_name in {c.category_name for c in self.selected_categories}
-            ]
-            categories_text = ""
-            for i, cat in enumerate(self.selected_categories, 1):
-                stats = next((s for s in selected_stats if s.category_name == cat.category_name), None)
-                failure_count = stats.failure_count if stats else cat.trace_count
-                problem_count = stats.problem_count if stats else 0
-                coverage_pct = (failure_count / len(self.trace_assignments) * 100) if self.trace_assignments else 0
-                categories_text += f"""
-## Category {i}: {cat.category_name}
-
-**Statistics:** {failure_count} failures ({coverage_pct:.1f}%), {problem_count} problems
-
-**Summary:** {cat.summary}
-
-**Description:** {cat.description}
-
-**Example:** {cat.example}
-
-**Error Type:** {cat.error_type}
-
-**Why it leads to wrong answer:** {cat.why_leads_to_wrong_answer}
-"""
-
-            base_instruction = self.programs["baseline"].inference_instruction_prompt
-            prompt = f"""You are an expert at improving language model performance on relation extraction with binary yes/no inference.
-
-I have identified the following recurring error categories from model failures. Use them to revise the current instruction prompt so the model can avoid these mistakes.
-
-## Current Instruction Prompt
-
-```text
-{base_instruction}
-```
-
-## Error Categories
-
-```text
-{categories_text}
-```
-
-## Your Task
-
-Generate a revised instruction prompt that:
-1. Addresses each failure category with specific, actionable advice
-2. Improves and generalizes binary relation extraction decisions
-
-## Critical Constraints
-
-- Do not revise the instruction in a way that requires step-by-step reasoning or explanatory output; the task should remain direct binary yes/no inference.
-- Preserve compatibility with the existing prompt structure where the answer instruction and input template are appended separately.
-- The goal is ACCURACY, not caution. Never generate guidance that encourages the model to refuse, abstain, or say "not specified" when an answer can be provided.
-
-## Output Format
-
-Return a JSON object with:
-{{
-  "revised_instruction_prompt": "the revised instruction prompt text"
-}}
-"""
-            print("Asking LLM to generate a revised instruction prompt...")
             self.generated_prompt_candidates = []
-            for _ in range(self.num_guidance_prompts):
-                response = self._get_json_response(
-                    prompt,
-                    "You are an expert at improving relation extraction prompts. Return valid JSON."
+            self.generated_prompt_candidate_metadata = []
+            self.guidance_clusters = []
+
+            selected_payloads = self._get_selected_category_payloads()
+            prompt_specs: List[Dict[str, Any]] = []
+
+            if self.taxonomy_cluster_mode:
+                category_pool = []
+                for category_id, payload in enumerate(selected_payloads, start=1):
+                    category_pool.append(
+                        {
+                            "category_id": category_id,
+                            "name": payload["category_name"],
+                            "description": payload["description"],
+                            "payload": payload,
+                        }
+                    )
+                clusters = _build_cluster_assignments(
+                    category_pool,
+                    num_clusters=self.taxonomy_num_clusters,
+                    coverage_ratio=self.taxonomy_cluster_coverage_ratio,
+                    rng=random.Random(self.seed),
                 )
-                candidate_prompt = response.get("revised_instruction_prompt", "").strip()
-                if not candidate_prompt:
-                    raise ValueError("Missing 'revised_instruction_prompt' in RE guidance generation response")
-                self.generated_prompt_candidates.append(candidate_prompt)
+                self.guidance_clusters = [
+                    {
+                        "cluster_id": cluster["cluster_id"],
+                        "category_ids": list(cluster["category_ids"]),
+                        "category_names": [category["name"] for category in cluster["categories"]],
+                    }
+                    for cluster in clusters
+                ]
+                print(
+                    f"Asking LLM to generate {self.num_guidance_prompts} revised instruction prompts "
+                    f"for each of {len(clusters)} clusters..."
+                )
+                for cluster in clusters:
+                    cluster_payloads = [category["payload"] for category in cluster["categories"]]
+                    prompt_specs.append(
+                        {
+                            "cluster_id": cluster["cluster_id"],
+                            "category_ids": list(cluster["category_ids"]),
+                            "category_names": [category["name"] for category in cluster["categories"]],
+                            "prompt": self._build_re_guidance_prompt_from_categories(cluster_payloads),
+                        }
+                    )
+            else:
+                print("Asking LLM to generate a revised instruction prompt...")
+                prompt_specs.append(
+                    {
+                        "cluster_id": None,
+                        "category_ids": [payload["selected_index"] for payload in selected_payloads],
+                        "category_names": [payload["category_name"] for payload in selected_payloads],
+                        "prompt": self._build_re_guidance_prompt_from_categories(selected_payloads),
+                    }
+                )
+
+            for spec in prompt_specs:
+                for prompt_index in range(self.num_guidance_prompts):
+                    response = self._get_json_response(
+                        spec["prompt"],
+                        "You are an expert at improving relation extraction prompts. Return valid JSON."
+                    )
+                    candidate_prompt = response.get("revised_instruction_prompt", "").strip()
+                    if not candidate_prompt:
+                        raise ValueError("Missing 'revised_instruction_prompt' in RE guidance generation response")
+                    self.generated_prompt_candidates.append(candidate_prompt)
+                    self.generated_prompt_candidate_metadata.append(
+                        {
+                            "candidate_index": len(self.generated_prompt_candidates),
+                            "cluster_id": spec["cluster_id"],
+                            "cluster_prompt_index": prompt_index,
+                            "category_ids": list(spec["category_ids"]),
+                            "category_names": list(spec["category_names"]),
+                        }
+                    )
             self.generated_prompt = self.generated_prompt_candidates[0]
 
             prompt_file = self.output_dir / "generated_prompt.txt"
@@ -2462,6 +2611,8 @@ Return a JSON object with:
             print(f"Saved to: {prompt_file}")
             if len(self.generated_prompt_candidates) > 1:
                 print(f"Saved {len(self.generated_prompt_candidates)} prompt candidates")
+            if self.guidance_clusters:
+                print(f"Generated candidates across {len(self.guidance_clusters)} clusters")
             print(f"\nPreview:\n{self.generated_prompt}")
 
             self._register_taxonomy_candidate_programs()
@@ -2504,6 +2655,8 @@ Return a JSON object with:
         
         print("Asking LLM to generate guidance...")
         self.generated_prompt_candidates = []
+        self.generated_prompt_candidate_metadata = []
+        self.guidance_clusters = []
         for _ in range(self.num_guidance_prompts):
             response = self._get_json_response(
                 prompt,
@@ -2966,13 +3119,14 @@ Then add your preamble and guidance items.
             self._record_phase_stats(f"{method_name}_evaluation", phase_stats)
         
         # V2: Category-level analysis
+        taxonomy_method_name = self._taxonomy_method_name()
         if (self.track_category_level and 
             self.trace_assignments and 
             "baseline" in self.method_results and 
-            "taxonomy" in self.method_results):
+            taxonomy_method_name in self.method_results):
             
             baseline_val = self.method_results["baseline"].get("validation")
-            taxonomy_val = self.method_results["taxonomy"].get("validation")
+            taxonomy_val = self.method_results[taxonomy_method_name].get("validation")
             
             if baseline_val and taxonomy_val:
                 selected_names = {c.category_name for c in self.selected_categories}
@@ -3116,6 +3270,9 @@ Then add your preamble and guidance items.
                 "coverage_threshold": self.coverage_threshold,
                 "max_guidances": self.max_guidances,
                 "min_problems": self.min_problems,
+                "taxonomy_cluster_mode": self.taxonomy_cluster_mode,
+                "taxonomy_num_clusters": self.taxonomy_num_clusters,
+                "taxonomy_cluster_coverage_ratio": self.taxonomy_cluster_coverage_ratio,
                 "prompt_style": self.prompt_style,
                 "eval_runs": self.eval_runs,
                 "test_runs": self.test_runs,
@@ -3128,6 +3285,8 @@ Then add your preamble and guidance items.
             "results": results_data,
             "comparisons": comparisons,
             "category_level_analysis": category_level_data,
+            "guidance_clusters": self.guidance_clusters,
+            "generated_prompt_candidate_metadata": self.generated_prompt_candidate_metadata,
             "token_stats": self.token_stats
         }
         
@@ -3152,6 +3311,13 @@ Then add your preamble and guidance items.
             print(f"Mode: RAW SAMPLING (skip taxonomy, sample {self.num_raw_samples} raw traces)")
         if self.direct_categories:
             print(f"Mode: DIRECT CATEGORIES (skip guidance generation)")
+        if self.taxonomy_cluster_mode:
+            print(
+                "Mode: CLUSTERED TAXONOMY GUIDANCE "
+                f"({self.taxonomy_num_clusters} clusters, "
+                f"{self.num_guidance_prompts} prompts/cluster, "
+                f"coverage_ratio={self.taxonomy_cluster_coverage_ratio})"
+            )
         if self.is_re_mode:
             print(f"Task mode: {self.task_mode}")
         if self.load_taxonomy_path:
@@ -3166,9 +3332,14 @@ Then add your preamble and guidance items.
             raise ValueError("raw_sampling is not supported in relation_extraction_non_reasoning mode")
         if self.is_re_mode and self.direct_categories:
             raise ValueError("direct_categories is not supported in relation_extraction_non_reasoning mode")
+        if self.taxonomy_cluster_mode and not self.is_re_mode:
+            raise ValueError(
+                "taxonomy_cluster_mode is currently only supported in "
+                "relation_extraction_non_reasoning mode"
+            )
         
         # Run taxonomy method if selected
-        if "taxonomy" in self.methods:
+        if "taxonomy" in self.methods or "taxonomy_cluster" in self.methods:
             if self.raw_sampling:
                 # Ablation 1: Raw failure sampling (skip taxonomy)
                 failures = self.run_baseline_for_taxonomy()
@@ -3256,6 +3427,9 @@ Examples:
   # Run only taxonomy vs baseline
   python -u -m etgpo_full --dataset aimo --methods baseline,taxonomy
 
+  # Run clustered taxonomy vs baseline
+  python -u -m etgpo_full --dataset aimo --methods baseline,taxonomy_cluster
+
   # Ablation mode: taxonomy only, skip test eval
   python -u -m etgpo_full --dataset aimo --methods baseline,taxonomy \\
       --ablation_mode --taxonomy_runs 5
@@ -3276,7 +3450,7 @@ Examples:
     
     # Methods
     parser.add_argument('--methods', type=str, default='baseline,taxonomy',
-                        help='Comma-separated list of methods: baseline,taxonomy,gepa,mipro')
+                        help='Comma-separated list of methods: baseline,taxonomy,taxonomy_cluster,gepa,mipro')
     
     # Models
     parser.add_argument('--main_model', type=str, default=DEFAULT_MAIN_MODEL,
@@ -3314,6 +3488,10 @@ Examples:
                         help='Sample traces per category (default: 2)')
     parser.add_argument('--num_guidance_prompts', type=int, default=1,
                         help='Number of separate guidance-generation calls/prompts to produce (default: 1)')
+    parser.add_argument('--taxonomy_num_clusters', type=int, default=5,
+                        help='Number of overlapping taxonomy clusters to build in clustered guidance mode (default: 5)')
+    parser.add_argument('--taxonomy_cluster_coverage_ratio', type=float, default=0.5,
+                        help='Fraction of eligible categories included in each clustered-guidance cluster (default: 0.5)')
     
     # Evaluation settings
     parser.add_argument('--eval_runs', type=int, default=30,
@@ -3415,6 +3593,8 @@ Examples:
         include_traces=args.include_traces,
         num_sample_traces=args.num_sample_traces,
         num_guidance_prompts=args.num_guidance_prompts,
+        taxonomy_num_clusters=args.taxonomy_num_clusters,
+        taxonomy_cluster_coverage_ratio=args.taxonomy_cluster_coverage_ratio,
         eval_runs=args.eval_runs,
         test_runs=args.test_runs,
         num_threads=args.num_threads,
