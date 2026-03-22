@@ -5,6 +5,16 @@ from typing import Iterable, List, Sequence, Tuple
 
 import torch
 
+_SAMPLE_LOGGED_LABELS: set[str] = set()
+
+
+def _log_first_sample(label: str, prompt: str, output: str) -> None:
+    if label in _SAMPLE_LOGGED_LABELS:
+        return
+    _SAMPLE_LOGGED_LABELS.add(label)
+    print(f"\n[{label}] sample first prompt:\n{prompt}", flush=True)
+    print(f"\n[{label}] sample first output:\n{output}", flush=True)
+
 
 def _batched(items: Sequence[str], batch_size: int) -> Iterable[Sequence[str]]:
     for i in range(0, len(items), batch_size):
@@ -46,6 +56,7 @@ def run_binary_inference(
     no_token_id: int | None = None,
     evolution_iteration: int | None = None,
     evolution_max_iterations: int | None = None,
+    log_label: str | None = None,
 ) -> List[str]:
     if not prompts:
         return []
@@ -110,9 +121,12 @@ def run_binary_inference(
 
             yes_logits = logits[:, 0]
             no_logits = logits[:, 1]
-            predictions.extend(
-                [yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)]
-            )
+            batch_predictions = [
+                yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)
+            ]
+            predictions.extend(batch_predictions)
+            if log_label and batch and batch_predictions:
+                _log_first_sample(log_label, batch[0], batch_predictions[0])
 
             if log_every and (batch_index % log_every == 0 or batch_index == num_batches):
                 batch_elapsed = time.perf_counter() - start_time

@@ -78,7 +78,7 @@ from agents.agent_run_inference import _build_inference_prompt as build_re_infer
 from agents.agent_scorer import NO_RELATION
 from agents.agent_sample_feedback import sample_feedback_fn
 from agents.agent_train_pipeline import build_root_node, enrich_feedback_samples
-
+import re
 
 # =============================================================================
 # Constants
@@ -1291,6 +1291,7 @@ def get_local_json_response(
     system_message: str = "",
     max_new_tokens: int = 10000,
     do_sample: bool = True,
+    log_label: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Generate and parse a JSON response from a local HF model."""
     raw_text = run_prompt(
@@ -1300,6 +1301,7 @@ def get_local_json_response(
         system_message=system_message or None,
         max_new_tokens=max_new_tokens,
         do_sample=do_sample,
+        log_label=log_label,
     )
     response = extract_json_from_text(raw_text)
     if response is None:
@@ -1353,6 +1355,7 @@ def run_re_multi_run_evaluation(
         yes_token_id=yes_token_id,
         no_token_id=no_token_id,
         log_every=log_every,
+        log_label="re_binary_inference",
     )
 
     detailed_results = []
@@ -1666,6 +1669,7 @@ class UnifiedPromptOptimizer:
                 system_message=system_message,
                 max_new_tokens=self.max_new_tokens,
                 do_sample=True,
+                log_label="taxonomy_or_guidance_json_generation",
             )
         return get_json_response_from_gpt(
             msg=prompt,

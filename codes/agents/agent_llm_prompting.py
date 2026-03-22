@@ -6,6 +6,17 @@ from typing import Iterable, List, Sequence
 
 import torch
 
+_SAMPLE_LOGGED_LABELS: set[str] = set()
+
+
+def _log_first_sample(label: str, prompt: str, output: str) -> None:
+    if label in _SAMPLE_LOGGED_LABELS:
+        return
+    _SAMPLE_LOGGED_LABELS.add(label)
+    print(f"\n[{label}] sample first prompt:\n{prompt}", flush=True)
+    print(f"\n[{label}] sample first output:\n{output}", flush=True)
+
+
 def _batched(items: Sequence[str], batch_size: int) -> Iterable[Sequence[str]]:
     for i in range(0, len(items), batch_size):
         yield items[i : i + batch_size]
@@ -23,6 +34,7 @@ def run_prompts(
     add_generation_prompt: bool = True,
     enable_thinking: bool = True,
     do_log: bool = False,
+    log_label: str | None = None,
     **gen_kwargs,
 ) -> List[str]:
     if not prompts:
@@ -75,7 +87,10 @@ def run_prompts(
             output_ids[len(input_ids) :]
             for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
         ]
-        outputs.extend(tokenizer.batch_decode(trimmed, skip_special_tokens=True))
+        batch_outputs = tokenizer.batch_decode(trimmed, skip_special_tokens=True)
+        outputs.extend(batch_outputs)
+        if log_label and batch and batch_outputs:
+            _log_first_sample(log_label, batch[0], batch_outputs[0])
 
     return outputs
 
@@ -90,6 +105,7 @@ def run_prompt(
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
     enable_thinking: bool = True,
+    log_label: str | None = None,
     **gen_kwargs,
 ) -> str:
     return run_prompts(
@@ -102,5 +118,6 @@ def run_prompt(
         use_chat_template=use_chat_template,
         add_generation_prompt=add_generation_prompt,
         enable_thinking=enable_thinking,
+        log_label=log_label,
         **gen_kwargs,
     )[0]

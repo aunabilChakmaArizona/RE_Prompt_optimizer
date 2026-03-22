@@ -86,6 +86,7 @@ def generate_feedback_fn(
             max_new_tokens=max_new_tokens,
             batch_size=batch_size,
             do_log=True,
+            log_label="re_feedback_generation",
             do_sample=do_sample,
         )
         feedback_texts = [
