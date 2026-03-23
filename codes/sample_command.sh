@@ -149,6 +149,13 @@ nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasonin
 --output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 > nohup_outs/nohup_etgpo_re_taxonomy_cluster_mg10_ct_0.9_run3.out 2>&1 &
 
 
+#### ensemble results
+python3 codes/agents/agents_etgpo_results_ensemble.py \
+  --root_dir unified_optimization_results \
+  --method taxonomy \
+  --q 3
+
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
