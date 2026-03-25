@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -103,6 +104,14 @@ def _load_existing_prompt_bundle(
         list(bundle.get("candidate_metadata", [])),
         list(bundle.get("clusters", [])),
     )
+
+
+def _load_original_prompt_count(source_run_dir: Path, current_prompt_count: int) -> int:
+    backup_path = source_run_dir / "generated_prompt_candidates.before_extension.json"
+    if not backup_path.exists():
+        return current_prompt_count
+    backup = _load_json(backup_path)
+    return len(backup.get("candidate_prompts", []))
 
 
 def _load_taxonomy_state(
@@ -249,13 +258,12 @@ def _write_generated_prompt_text(source_run_dir: Path, prompt_text: str) -> None
 
 def _new_candidate_names(
     method_name: str,
-    existing_prompts: Sequence[str],
-    new_prompts: Sequence[str],
     merged_metadata: Sequence[Dict[str, Any]],
+    start_idx: int,
+    end_idx: int,
 ) -> List[str]:
-    start_idx = len(existing_prompts)
     names: List[str] = []
-    for idx in range(start_idx, start_idx + len(new_prompts)):
+    for idx in range(start_idx, end_idx):
         if method_name == "taxonomy":
             names.append(f"taxonomy_{idx + 1}")
             continue
@@ -272,13 +280,67 @@ def _new_candidate_names(
     return names
 
 
+def _load_existing_validation_result(
+    source_run_dir: Path,
+    candidate_name: str,
+    eval_runs: int,
+) -> Optional[Dict[str, Any]]:
+    if eval_runs <= 0:
+        return None
+
+    per_run_scores: List[float] = []
+    for run_id in range(eval_runs):
+        path = (
+            source_run_dir
+            / "eval_outputs"
+            / f"EVALID_{candidate_name}_validation_{run_id}_labels_predictions.json"
+        )
+        if not path.exists():
+            return None
+        payload = _load_json(path)
+        metrics = payload.get("metrics", {})
+        per_run_scores.append(float(metrics.get("f1_mean", 0.0)))
+
+    stats = compute_per_run_stats(per_run_scores)
+    return {
+        "validation": {
+            "mean_accuracy": stats["mean"],
+            "ci_lower": stats["ci_lower"],
+            "ci_upper": stats["ci_upper"],
+            "std": stats["std"],
+            "min": stats["min"],
+            "max": stats["max"],
+            "num_runs": stats["num_runs"],
+            "per_run_accuracies": per_run_scores,
+        }
+    }
+
+
 def _evaluate_new_candidates(
     optimizer: UnifiedPromptOptimizer,
     *,
     candidate_names: Sequence[str],
+    source_run_dir: Path,
+    existing_final_results: Dict[str, Any],
 ) -> Dict[str, Any]:
     evaluation_results: Dict[str, Any] = {}
     for candidate_name in candidate_names:
+        results_block = existing_final_results.get("results", {})
+        if candidate_name in results_block and results_block[candidate_name].get("validation"):
+            print(f"\nSkipping already-recorded candidate: {candidate_name}")
+            evaluation_results[candidate_name] = results_block[candidate_name]
+            continue
+
+        existing_validation = _load_existing_validation_result(
+            source_run_dir,
+            candidate_name,
+            optimizer.eval_runs,
+        )
+        if existing_validation is not None:
+            print(f"\nReusing existing validation outputs for: {candidate_name}")
+            evaluation_results[candidate_name] = existing_validation
+            continue
+
         if candidate_name not in optimizer.programs:
             raise ValueError(f"Program not registered for candidate {candidate_name}")
 
@@ -348,14 +410,25 @@ def main() -> None:
         raise FileNotFoundError(f"Source run directory not found: {args.source_run_dir}")
 
     config = _load_run_config(args.source_run_dir)
+    existing_final_results = _load_json(args.source_run_dir / "final_results.json")
     method_name = _resolve_method(config)
     issue_categories, trace_assignments, failure_records = _load_taxonomy_state(args.source_run_dir)
     existing_prompts, existing_metadata, existing_clusters = _load_existing_prompt_bundle(args.source_run_dir)
+    original_prompt_count = _load_original_prompt_count(
+        args.source_run_dir,
+        len(existing_prompts),
+    )
+    target_total_prompts = original_prompt_count + args.num_additional_prompts
+    if len(existing_prompts) > target_total_prompts:
+        raise ValueError(
+            f"Current prompt count ({len(existing_prompts)}) already exceeds the requested "
+            f"target total ({target_total_prompts})."
+        )
 
     optimizer = _build_optimizer(
         args.source_run_dir,
         config,
-        num_additional_prompts=args.num_additional_prompts,
+        num_additional_prompts=max(1, target_total_prompts - len(existing_prompts)),
         device_map_override=args.device_map,
         main_model_override=args.main_model,
         taxonomy_model_override=args.taxonomy_model,
@@ -364,8 +437,10 @@ def main() -> None:
     print("Prompt extension configuration")
     print(f"  source_run_dir: {args.source_run_dir}")
     print(f"  method: {method_name}")
+    print(f"  original_prompt_count: {original_prompt_count}")
     print(f"  existing_prompt_count: {len(existing_prompts)}")
     print(f"  requested_new_prompt_count: {args.num_additional_prompts}")
+    print(f"  target_total_prompt_count: {target_total_prompts}")
     print(f"  resolved_main_model: {optimizer.main_model}")
     print(f"  resolved_taxonomy_model: {optimizer.taxonomy_model}")
     print(f"  resolved_device_map: {optimizer.device_map}")
@@ -377,56 +452,77 @@ def main() -> None:
     optimizer.failure_records = failure_records
     optimizer.select_categories()
 
-    _backup_existing_prompt_bundle(args.source_run_dir)
-    optimizer.generate_guidance()
+    if len(existing_prompts) < target_total_prompts:
+        remaining_to_generate = target_total_prompts - len(existing_prompts)
+        print(f"  prompts_to_generate_now: {remaining_to_generate}")
+        optimizer.num_guidance_prompts = remaining_to_generate
+        _backup_existing_prompt_bundle(args.source_run_dir)
+        optimizer.generate_guidance()
 
-    new_prompts = list(optimizer.generated_prompt_candidates)
-    new_metadata = list(optimizer.generated_prompt_candidate_metadata)
-    guidance_clusters = list(optimizer.guidance_clusters) or existing_clusters
+        new_prompts = list(optimizer.generated_prompt_candidates)
+        new_metadata = list(optimizer.generated_prompt_candidate_metadata)
+        guidance_clusters = list(optimizer.guidance_clusters) or existing_clusters
 
-    merged_prompts = list(existing_prompts) + new_prompts
-    merged_metadata = _merge_candidate_metadata(existing_prompts, existing_metadata, new_metadata)
+        merged_prompts = list(existing_prompts) + new_prompts
+        merged_metadata = _merge_candidate_metadata(existing_prompts, existing_metadata, new_metadata)
 
-    optimizer.generated_prompt_candidates = merged_prompts
-    optimizer.generated_prompt_candidate_metadata = merged_metadata
-    optimizer.guidance_clusters = guidance_clusters
-    optimizer.generated_prompt = merged_prompts[0] if merged_prompts else ""
-    optimizer._save_prompt_candidates("generated_prompt_candidates.json")
-    if optimizer.generated_prompt:
-        _write_generated_prompt_text(args.source_run_dir, optimizer.generated_prompt)
+        optimizer.generated_prompt_candidates = merged_prompts
+        optimizer.generated_prompt_candidate_metadata = merged_metadata
+        optimizer.guidance_clusters = guidance_clusters
+        optimizer.generated_prompt = merged_prompts[0] if merged_prompts else ""
+        optimizer._save_prompt_candidates("generated_prompt_candidates.json")
+        if optimizer.generated_prompt:
+            _write_generated_prompt_text(args.source_run_dir, optimizer.generated_prompt)
 
-    added_bundle_path = args.source_run_dir / "generated_prompt_candidates_added.json"
-    added_payload: Dict[str, Any] = {
-        "source_run_dir": str(args.source_run_dir),
-        "method": method_name,
-        "num_existing_prompts": len(existing_prompts),
-        "num_added_prompts": len(new_prompts),
-        "candidate_prompts": new_prompts,
-    }
-    if new_metadata:
-        added_payload["candidate_metadata"] = new_metadata
-    if guidance_clusters:
-        added_payload["clusters"] = guidance_clusters
-    _write_json(added_bundle_path, added_payload)
+        added_bundle_path = args.source_run_dir / "generated_prompt_candidates_added.json"
+        added_payload: Dict[str, Any] = {
+            "source_run_dir": str(args.source_run_dir),
+            "method": method_name,
+            "num_existing_prompts": len(existing_prompts),
+            "num_added_prompts": len(new_prompts),
+            "candidate_prompts": new_prompts,
+        }
+        if new_metadata:
+            added_payload["candidate_metadata"] = new_metadata
+        if guidance_clusters:
+            added_payload["clusters"] = guidance_clusters
+        _write_json(added_bundle_path, added_payload)
+    else:
+        print("  prompts_to_generate_now: 0")
+        print("  prompt_generation_resume: using already-generated extended prompts")
+        merged_prompts = list(existing_prompts)
+        merged_metadata = list(existing_metadata)
+        guidance_clusters = list(existing_clusters)
+        added_bundle_path = args.source_run_dir / "generated_prompt_candidates_added.json"
+        new_prompts = merged_prompts[original_prompt_count:target_total_prompts]
+        new_metadata = merged_metadata[original_prompt_count:target_total_prompts]
+
+        optimizer.generated_prompt_candidates = merged_prompts
+        optimizer.generated_prompt_candidate_metadata = merged_metadata
+        optimizer.guidance_clusters = guidance_clusters
+        optimizer.generated_prompt = merged_prompts[0] if merged_prompts else ""
 
     optimizer._register_taxonomy_candidate_programs()
     new_candidate_names = _new_candidate_names(
         method_name,
-        existing_prompts,
-        new_prompts,
         merged_metadata,
+        original_prompt_count,
+        target_total_prompts,
     )
     new_evaluation_results = _evaluate_new_candidates(
         optimizer,
         candidate_names=new_candidate_names,
+        source_run_dir=args.source_run_dir,
+        existing_final_results=existing_final_results,
     )
 
     summary_path = args.source_run_dir / "prompt_extension_summary.json"
     summary_payload = {
         "source_run_dir": str(args.source_run_dir),
         "method": method_name,
-        "num_existing_prompts": len(existing_prompts),
-        "num_added_prompts": len(new_prompts),
+        "num_existing_prompts": original_prompt_count,
+        "num_added_prompts": target_total_prompts - original_prompt_count,
+        "num_added_prompts_generated_in_this_run": len(new_prompts) if len(existing_prompts) < target_total_prompts else 0,
         "num_total_prompts": len(merged_prompts),
         "device_map": optimizer.device_map,
         "main_model": optimizer.main_model,

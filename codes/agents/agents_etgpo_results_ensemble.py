@@ -75,6 +75,15 @@ def _parse_args() -> argparse.Namespace:
         help="Number of prompts to keep for the ensemble",
     )
     parser.add_argument(
+        "--w",
+        type=int,
+        default=None,
+        help=(
+            "For taxonomy_cluster only: select the best prompt from the first W prompts "
+            "within each cluster before taking the top Q cluster winners"
+        ),
+    )
+    parser.add_argument(
         "--split",
         type=str,
         default="validation",
@@ -85,6 +94,15 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional output JSON path. Defaults to <root_dir>/ensemble_<method>_q<Q>.json",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["full", "top_q_scores_only"],
+        default="full",
+        help=(
+            "Output mode. 'full' keeps the current verbose report. "
+            "'top_q_scores_only' prints only the selected top-Q prompt scores and their average."
+        ),
     )
     return parser.parse_args()
 
@@ -265,6 +283,7 @@ def _select_candidates(
     candidates: Sequence[CandidatePrediction],
     method_name: str,
     q: int,
+    w: Optional[int] = None,
 ) -> List[CandidatePrediction]:
     ranked = _sort_candidates(candidates)
     if method_name == "taxonomy":
@@ -274,6 +293,11 @@ def _select_candidates(
     for candidate in ranked:
         if candidate.cluster_id is None:
             continue
+        if w is not None:
+            if candidate.cluster_prompt_index is None:
+                continue
+            if candidate.cluster_prompt_index >= w:
+                continue
         if candidate.cluster_id not in best_by_cluster:
             best_by_cluster[candidate.cluster_id] = candidate
 
@@ -331,6 +355,7 @@ def _majority_vote_predictions(
 def _build_output_payload(
     method_name: str,
     q: int,
+    w: Optional[int],
     split: str,
     selected_candidates: Sequence[CandidatePrediction],
     ensemble_labels: Sequence[str],
@@ -341,11 +366,16 @@ def _build_output_payload(
     return {
         "method": method_name,
         "requested_q": q,
+        "requested_w": w,
         "selected_q": len(selected_candidates),
         "split": split,
         "selection_strategy": (
             "top_q_by_f1" if method_name == "taxonomy"
-            else "best_per_cluster_then_top_q_cluster_winners"
+            else (
+                "best_per_cluster_from_first_w_then_top_q_cluster_winners"
+                if w is not None else
+                "best_per_cluster_then_top_q_cluster_winners"
+            )
         ),
         "ensemble_metrics": ensemble_metrics,
         "selected_candidates": [
@@ -374,17 +404,43 @@ def _build_output_payload(
 def _default_output_paths(
     method_name: str,
     selected_candidates: Sequence[CandidatePrediction],
+    w: Optional[int] = None,
 ) -> Path:
     if not selected_candidates:
         raise ValueError("No selected candidates available to determine output path.")
-    filename = f"ensemble_{method_name}_q{len(selected_candidates)}.json"
+    w_suffix = f"_w{w}" if w is not None and method_name == "taxonomy_cluster" else ""
+    filename = f"ensemble_{method_name}_q{len(selected_candidates)}{w_suffix}.json"
     return selected_candidates[0].run_dir / filename
+
+
+def _mean(values: Sequence[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _print_top_q_scores_only(run_results: Sequence[RunEnsembleResult]) -> None:
+    for run_idx, run_result in enumerate(run_results):
+        for candidate in run_result.selected_candidates:
+            # print()
+            print(f"{candidate.candidate_name} "
+                f"{candidate.precision*100:.2f}\t{candidate.recall*100:.2f}\t{candidate.f1*100:.2f}"
+            )
+
+        avg_precision = _mean([candidate.precision for candidate in run_result.selected_candidates])
+        avg_recall = _mean([candidate.recall for candidate in run_result.selected_candidates])
+        avg_f1 = _mean([candidate.f1 for candidate in run_result.selected_candidates])
+        print("AVG "
+            f"{avg_precision*100:.2f}\t{avg_recall*100:.2f}\t{avg_f1*100:.2f}")
+
+        if run_idx < len(run_results) - 1:
+            print()
 
 
 def main() -> None:
     args = _parse_args()
     if args.q <= 0:
         raise ValueError("--q must be >= 1")
+    if args.w is not None and args.w <= 0:
+        raise ValueError("--w must be >= 1 when provided")
     if not args.root_dir.exists():
         raise FileNotFoundError(f"Root directory not found: {args.root_dir}")
 
@@ -398,7 +454,7 @@ def main() -> None:
 
     for run_dir in sorted(grouped_candidates.keys(), key=lambda path: str(path)):
         run_candidates = grouped_candidates[run_dir]
-        selected_candidates = _select_candidates(run_candidates, args.method, args.q)
+        selected_candidates = _select_candidates(run_candidates, args.method, args.q, args.w)
         if not selected_candidates:
             continue
 
@@ -407,6 +463,7 @@ def main() -> None:
         output_payload = _build_output_payload(
             method_name=args.method,
             q=args.q,
+            w=args.w,
             split=args.split,
             selected_candidates=selected_candidates,
             ensemble_labels=ensemble_labels,
@@ -419,6 +476,7 @@ def main() -> None:
         output_path = args.output if args.output else _default_output_paths(
             args.method,
             selected_candidates,
+            args.w,
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with output_path.open("w", encoding="utf-8") as handle:
@@ -439,11 +497,16 @@ def main() -> None:
             f"No per-run ensemble results were produced for method={args.method!r} under {args.root_dir}"
         )
 
+    if args.mode == "top_q_scores_only":
+        _print_top_q_scores_only(run_results)
+        return
+
     print("Ensemble run configuration")
     print(f"  root_dir: {args.root_dir}")
     print(f"  method: {args.method}")
     print(f"  split: {args.split}")
     print(f"  requested_q: {args.q}")
+    print(f"  requested_w: {args.w}")
     print(f"  matched_run_count: {len(run_results)}")
 
     for run_result in run_results:

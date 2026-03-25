@@ -153,14 +153,21 @@ nohup python -u etgpo/etgpo_full.py --task_mode relation_extraction_non_reasonin
 python3 codes/agents/agents_etgpo_results_ensemble.py \
   --root_dir unified_optimization_results \
   --method taxonomy \
-  --q 3
+  --q 3 \
+  --w 3
+
+python3 codes/agents/agents_etgpo_results_ensemble.py \
+  --root_dir unified_optimization_results \
+  --method taxonomy \
+  --q 3 \
+  --mode top_q_scores_only
 
 #### extended runs
 
 nohup python -u agents/agents_etgpo_extend_prompts.py \
   --source_run_dir ../unified_optimization_results/unified_opt_fs_tacred_20260322_015026 \
   --num_additional_prompts 10 \
-  --device_map cuda:3 \
+  --device_map cuda:0 \
   > nohup_outs/nohup_extend_taxonomy_run1.out 2>&1 &
 
 nohup python -u agents/agents_etgpo_extend_prompts.py \
@@ -184,16 +191,15 @@ nohup python -u agents/agents_etgpo_extend_prompts.py \
 nohup python -u agents/agents_etgpo_extend_prompts.py \
   --source_run_dir ../unified_optimization_results/unified_opt_fs_tacred_20260322_182029 \
   --num_additional_prompts 10 \
-  --device_map cuda:3 \
+  --device_map cuda:0 \
   > nohup_outs/nohup_extend_taxonomy_run5.out 2>&1 &
 
 nohup python -u agents/agents_etgpo_extend_prompts.py \
   --source_run_dir ../unified_optimization_results/unified_opt_fs_tacred_20260322_182053 \
   --num_additional_prompts 10 \
-  --device_map cuda:3 \
+  --device_map cuda:0 \
   > nohup_outs/nohup_extend_taxonomy_run6.out 2>&1 &
 
-unified_optimization_results/unified_opt_fs_tacred_20260322_181740
 
 
 ##################################################
