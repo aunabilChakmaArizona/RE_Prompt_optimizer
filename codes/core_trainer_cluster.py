@@ -73,6 +73,7 @@ def main() -> None:
             num_clusters=args.cluster_num_clusters,
             candidates_per_cluster=args.cluster_candidates_per_cluster,
             cluster_coverage_ratio=args.cluster_coverage_ratio,
+            cluster_selection_mode=args.cluster_selection_mode,
             feedback_examples_per_category=args.category_feedback_examples_per_category,
             prompt_open_tag=args.prompt_open_tag,
             prompt_close_tag=args.prompt_close_tag,

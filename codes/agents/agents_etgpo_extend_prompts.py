@@ -194,6 +194,7 @@ def _build_optimizer(
         num_guidance_prompts=num_additional_prompts,
         taxonomy_num_clusters=int(config.get("taxonomy_num_clusters", 5)),
         taxonomy_cluster_coverage_ratio=float(config.get("taxonomy_cluster_coverage_ratio", 0.75)),
+        taxonomy_cluster_selection_mode=config.get("taxonomy_cluster_selection_mode", "usage_decay"),
         output_dir=str(source_run_dir.parent),
         experiment_name=source_run_dir.name,
         data_dir=config.get("data_dir"),

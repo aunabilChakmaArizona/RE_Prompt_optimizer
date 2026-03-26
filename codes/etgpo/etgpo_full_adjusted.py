@@ -79,7 +79,11 @@ from agents.agent_relation_utils import get_relation_description
 from agents.agent_run_inference import _build_inference_prompt as build_re_inference_prompt
 from agents.agent_scorer import NO_RELATION
 from agents.agent_sample_feedback import sample_feedback_fn
-from agents.agent_cluster_search import _build_cluster_assignments
+from agents.agent_cluster_search import (
+    CLUSTER_SELECTION_MODE_CHOICES,
+    CLUSTER_SELECTION_MODE_USAGE_DECAY,
+    _build_cluster_assignments,
+)
 from agents.agent_train_pipeline import build_root_node, enrich_feedback_samples
 import re
 
@@ -1314,29 +1318,47 @@ def load_taxonomy_from_file(filepath: Path) -> Tuple[
     List[FailureRecord],
     Dict[str, Any]
 ]:
-    """Load taxonomy from JSON file."""
-    with open(filepath, 'r') as f:
+    """Load taxonomy from a reusable file or a prior run directory."""
+    resolved_path = filepath
+    if resolved_path.is_dir():
+        resolved_path = resolved_path / "taxonomy.json"
+
+    with open(resolved_path, 'r') as f:
         data = json.load(f)
-    
+
     issue_categories = [
         IssueCategory(**c) for c in data.get("categories", [])
     ]
-    
-    trace_assignments = [
-        TraceAssignment(**a) for a in data.get("trace_assignments", [])
-    ]
-    
-    failure_records = [
-        FailureRecord(**f) for f in data.get("failure_records", [])
-    ]
-    
-    metadata = data.get("metadata", {})
-    
-    print(f"Loaded taxonomy from: {filepath}")
+
+    if "trace_assignments" in data or "failure_records" in data or "metadata" in data:
+        trace_assignments = [
+            TraceAssignment(**a) for a in data.get("trace_assignments", [])
+        ]
+        failure_records = [
+            FailureRecord(**f) for f in data.get("failure_records", [])
+        ]
+        metadata = data.get("metadata", {})
+    elif "assignments" in data:
+        # Backward compatibility for run-local taxonomy.json written after taxonomy build.
+        trace_assignments = [
+            TraceAssignment(**a) for a in data.get("assignments", [])
+        ]
+        failure_records = []
+        metadata = {
+            "source_format": "legacy_taxonomy_json",
+            "total_failures": data.get("total_failures"),
+        }
+    else:
+        raise ValueError(
+            f"Unsupported taxonomy file format at {resolved_path}. "
+            "Expected either save_taxonomy output or a run directory containing taxonomy.json."
+        )
+
+    print(f"Loaded taxonomy from: {resolved_path}")
     print(f"  Categories: {len(issue_categories)}")
     print(f"  Assignments: {len(trace_assignments)}")
     print(f"  Failure records: {len(failure_records)}")
-    
+
     return issue_categories, trace_assignments, failure_records, metadata
 
 
@@ -1607,6 +1629,7 @@ class UnifiedPromptOptimizer:
         num_guidance_prompts: int = 1,
         taxonomy_num_clusters: int = 5,
         taxonomy_cluster_coverage_ratio: float = 0.75,
+        taxonomy_cluster_selection_mode: str = CLUSTER_SELECTION_MODE_USAGE_DECAY,
         # Relation extraction mode
         data_dir: Optional[str] = None,
         train_samples_file: str = "fs_tacred_train_samples.pkl",
@@ -1668,6 +1691,12 @@ class UnifiedPromptOptimizer:
         self.taxonomy_cluster_mode = "taxonomy_cluster" in self.methods
         self.taxonomy_num_clusters = max(1, taxonomy_num_clusters)
         self.taxonomy_cluster_coverage_ratio = taxonomy_cluster_coverage_ratio
+        if taxonomy_cluster_selection_mode not in CLUSTER_SELECTION_MODE_CHOICES:
+            raise ValueError(
+                f"Unsupported taxonomy_cluster_selection_mode={taxonomy_cluster_selection_mode!r}. "
+                f"Expected one of {CLUSTER_SELECTION_MODE_CHOICES}."
+            )
+        self.taxonomy_cluster_selection_mode = taxonomy_cluster_selection_mode
         self.data_dir = data_dir
         self.train_samples_file = train_samples_file
         self.re_inference_mode = re_inference_mode
@@ -1764,6 +1793,20 @@ class UnifiedPromptOptimizer:
             return
         print(f"[etgpo] clearing CUDA cache after {stage_name}")
         clear_iteration_memory(0, None, None)
+
+    def _unload_taxonomy_generation_backend(self) -> None:
+        """Release the separate taxonomy model after guidance generation in RE mode."""
+        if not self.is_re_mode:
+            return
+        if self.taxonomy_model == self.main_model:
+            return
+        if self.taxonomy_local_model is None:
+            return
+
+        print(f"[etgpo] unloading taxonomy model after guidance generation: {self.taxonomy_model}")
+        self.taxonomy_local_model = None
+        self.taxonomy_local_tokenizer = None
+        self._clear_gpu_cache("taxonomy_model_unload")
 
     def _get_taxonomy_generation_backend(self) -> Tuple[Any, Any]:
         """Return model/tokenizer pair for local JSON generation in RE mode."""
@@ -2668,6 +2711,7 @@ Return a JSON object with:
                     num_clusters=self.taxonomy_num_clusters,
                     coverage_ratio=self.taxonomy_cluster_coverage_ratio,
                     rng=random.Random(self.seed),
+                    selection_mode=self.taxonomy_cluster_selection_mode,
                 )
                 self.guidance_clusters = [
                     {
@@ -2737,6 +2781,7 @@ Return a JSON object with:
             print(f"\nPreview:\n{self.generated_prompt}")
 
             self._register_taxonomy_candidate_programs()
+            self._unload_taxonomy_generation_backend()
             self._record_phase_stats("guidance_generation", {})
             self._clear_gpu_cache("guidance_generation")
             return
@@ -2809,6 +2854,7 @@ Return a JSON object with:
         print(f"\nPreview:\n{self.generated_prompt}")
         
         self._register_taxonomy_candidate_programs()
+        self._unload_taxonomy_generation_backend()
         
         token_tracker.aggregate_thread_costs()
         snapshot_after = capture_token_snapshot()
@@ -3402,6 +3448,7 @@ Then add your preamble and guidance items.
                 "taxonomy_cluster_mode": self.taxonomy_cluster_mode,
                 "taxonomy_num_clusters": self.taxonomy_num_clusters,
                 "taxonomy_cluster_coverage_ratio": self.taxonomy_cluster_coverage_ratio,
+                "taxonomy_cluster_selection_mode": self.taxonomy_cluster_selection_mode,
                 "prompt_style": self.prompt_style,
                 "eval_runs": self.eval_runs,
                 "test_runs": self.test_runs,
@@ -3446,7 +3493,8 @@ Then add your preamble and guidance items.
                 "Mode: CLUSTERED TAXONOMY GUIDANCE "
                 f"({self.taxonomy_num_clusters} clusters, "
                 f"{self.num_guidance_prompts} prompts/cluster, "
-                f"coverage_ratio={self.taxonomy_cluster_coverage_ratio})"
+                f"coverage_ratio={self.taxonomy_cluster_coverage_ratio}, "
+                f"selection_mode={self.taxonomy_cluster_selection_mode})"
             )
         if self.is_re_mode:
             print(f"Task mode: {self.task_mode}")
@@ -3630,6 +3678,12 @@ Examples:
                         help='Number of overlapping taxonomy clusters to build in clustered guidance mode (default: 5)')
     parser.add_argument('--taxonomy_cluster_coverage_ratio', type=float, default=0.75,
                         help='Fraction of eligible categories included in each clustered-guidance cluster (default: 0.5)')
+    parser.add_argument('--taxonomy_cluster_selection_mode', type=str,
+                        default=CLUSTER_SELECTION_MODE_USAGE_DECAY,
+                        choices=list(CLUSTER_SELECTION_MODE_CHOICES),
+                        help=("Cluster category sampling mode for taxonomy_cluster. "
+                              "'usage_decay' reduces reuse probability after selection; "
+                              "'error_count_weighted' favors categories with higher error counts."))
     
     # Evaluation settings
     parser.add_argument('--eval_runs', type=int, default=30,
@@ -3689,7 +3743,7 @@ Examples:
     
     # V2: Factored execution
     parser.add_argument('--load_taxonomy', type=str, default=None,
-                        help='Load taxonomy from file (skip failure collection and taxonomy building)')
+                        help='Load taxonomy from a saved taxonomy file or a prior run directory (skip failure collection and taxonomy building)')
     parser.add_argument('--load_re_feedbacks', type=str, default=None,
                         help='In RE mode, load saved baseline mistake feedbacks and skip baseline inference/feedback generation')
     parser.add_argument('--save_taxonomy', type=str, default=None,
@@ -3735,6 +3789,7 @@ Examples:
         num_guidance_prompts=args.num_guidance_prompts,
         taxonomy_num_clusters=args.taxonomy_num_clusters,
         taxonomy_cluster_coverage_ratio=args.taxonomy_cluster_coverage_ratio,
+        taxonomy_cluster_selection_mode=args.taxonomy_cluster_selection_mode,
         eval_runs=args.eval_runs,
         test_runs=args.test_runs,
         num_threads=args.num_threads,

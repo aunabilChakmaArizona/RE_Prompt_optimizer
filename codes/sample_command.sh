@@ -200,7 +200,49 @@ nohup python -u agents/agents_etgpo_extend_prompts.py \
   --device_map cuda:0 \
   > nohup_outs/nohup_extend_taxonomy_run6.out 2>&1 &
 
+### taxonomy cluster with new count based selection
 
+nohup python -u etgpo/etgpo_full_adjusted.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 \
+--load_taxonomy "../unified_optimization_results/unified_opt_fs_tacred_20260322_015026" \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --taxonomy_cluster_selection_mode error_count_weighted \
+--output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_err_cnt_selection_run1.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full_adjusted.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 \
+--load_taxonomy "../unified_optimization_results/unified_opt_fs_tacred_20260322_023319" \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --taxonomy_cluster_selection_mode error_count_weighted \
+--output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_err_cnt_selection_run2.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full_adjusted.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 \
+--load_taxonomy "../unified_optimization_results/unified_opt_fs_tacred_20260322_023452" \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --taxonomy_cluster_selection_mode error_count_weighted \
+--output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_err_cnt_selection_run3.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full_adjusted.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:1" --valid_size 1000 \
+--load_taxonomy "../unified_optimization_results/unified_opt_fs_tacred_20260322_181740" \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --taxonomy_cluster_selection_mode error_count_weighted \
+--output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_err_cnt_selection_run4.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full_adjusted.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 \
+--load_taxonomy "../unified_optimization_results/unified_opt_fs_tacred_20260322_182029" \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --taxonomy_cluster_selection_mode error_count_weighted \
+--output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_err_cnt_selection_run5.out 2>&1 &
+
+nohup python -u etgpo/etgpo_full_adjusted.py --task_mode relation_extraction_non_reasoning --dataset fs_tacred --methods taxonomy_cluster \
+--main_model "Qwen/Qwen3-4B" --taxonomy_model "Qwen/Qwen3-14B" --device_map "cuda:0" --valid_size 1000 \
+--load_taxonomy "../unified_optimization_results/unified_opt_fs_tacred_20260322_182053" \
+--eval_runs 1 --num_guidance_prompts 3 --taxonomy_num_clusters 5 --taxonomy_cluster_selection_mode error_count_weighted \
+--output_dir "../unified_optimization_results/" --taxonomy_batch_size 6 \
+> nohup_outs/nohup_etgpo_re_taxonomy_cluster_err_cnt_selection_run6.out 2>&1 &
 
 ##################################################
 # tags custom

@@ -26,6 +26,13 @@ GenerateFeedbackFn = Callable[..., FeedbackSamples]
 EvaluateFn = Callable[..., float]
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
 
+CLUSTER_SELECTION_MODE_USAGE_DECAY = "usage_decay"
+CLUSTER_SELECTION_MODE_ERROR_COUNT_WEIGHTED = "error_count_weighted"
+CLUSTER_SELECTION_MODE_CHOICES = (
+    CLUSTER_SELECTION_MODE_USAGE_DECAY,
+    CLUSTER_SELECTION_MODE_ERROR_COUNT_WEIGHTED,
+)
+
 
 def _filter_mistakes(feedback_samples: FeedbackSamples) -> FeedbackSamples:
     mistakes = FeedbackSamples()
@@ -131,6 +138,7 @@ def _build_cluster_assignments(
     num_clusters: int,
     coverage_ratio: float,
     rng: random.Random,
+    selection_mode: str = CLUSTER_SELECTION_MODE_USAGE_DECAY,
 ) -> List[Dict[str, object]]:
     if not categories or num_clusters <= 0:
         return []
@@ -138,7 +146,16 @@ def _build_cluster_assignments(
     categories_per_cluster = max(1, math.ceil(len(categories) * coverage_ratio))
     categories_per_cluster = min(categories_per_cluster, len(categories))
     category_pool = list(categories)
+    selection_mode = selection_mode or CLUSTER_SELECTION_MODE_USAGE_DECAY
+
+    if selection_mode not in CLUSTER_SELECTION_MODE_CHOICES:
+        raise ValueError(
+            f"Unsupported cluster selection_mode={selection_mode!r}. "
+            f"Expected one of {CLUSTER_SELECTION_MODE_CHOICES}."
+        )
+
     category_weights = [1.0 for _ in category_pool]
+    category_count_weights = [max(0.0, float(category.get("count", 0))) for category in category_pool]
 
     clusters: List[Dict[str, object]] = []
     for cluster_index in range(num_clusters):
@@ -152,7 +169,12 @@ def _build_cluster_assignments(
             if not available_indices:
                 break
 
-            available_weights = [category_weights[idx] for idx in available_indices]
+            if selection_mode == CLUSTER_SELECTION_MODE_ERROR_COUNT_WEIGHTED:
+                available_weights = [
+                    category_count_weights[idx] for idx in available_indices
+                ]
+            else:
+                available_weights = [category_weights[idx] for idx in available_indices]
             if sum(available_weights) <= 0:
                 available_weights = [1.0 for _ in available_indices]
 
@@ -164,8 +186,9 @@ def _build_cluster_assignments(
             selected_indices.add(chosen_index)
             selected.append(category_pool[chosen_index])
 
-        for chosen_index in selected_indices:
-            category_weights[chosen_index] *= 0.5
+        if selection_mode == CLUSTER_SELECTION_MODE_USAGE_DECAY:
+            for chosen_index in selected_indices:
+                category_weights[chosen_index] *= 0.5
 
         clusters.append(
             {
@@ -226,6 +249,7 @@ class ClusterSearch:
         num_clusters: int = 5,
         candidates_per_cluster: int = 5,
         cluster_coverage_ratio: float = 0.5,
+        cluster_selection_mode: str = CLUSTER_SELECTION_MODE_USAGE_DECAY,
         feedback_examples_per_category: int = 3,
         prompt_open_tag: str = "<p>",
         prompt_close_tag: str = "</p>",
@@ -244,6 +268,12 @@ class ClusterSearch:
         self.num_clusters = num_clusters
         self.candidates_per_cluster = candidates_per_cluster
         self.cluster_coverage_ratio = cluster_coverage_ratio
+        if cluster_selection_mode not in CLUSTER_SELECTION_MODE_CHOICES:
+            raise ValueError(
+                f"Unsupported cluster_selection_mode={cluster_selection_mode!r}. "
+                f"Expected one of {CLUSTER_SELECTION_MODE_CHOICES}."
+            )
+        self.cluster_selection_mode = cluster_selection_mode
         self.feedback_examples_per_category = feedback_examples_per_category
         self.prompt_open_tag = prompt_open_tag
         self.prompt_close_tag = prompt_close_tag
@@ -410,6 +440,7 @@ class ClusterSearch:
             num_clusters=self.num_clusters,
             coverage_ratio=self.cluster_coverage_ratio,
             rng=self.rng,
+            selection_mode=self.cluster_selection_mode,
         )
 
         all_candidates: List[GraphNode] = []

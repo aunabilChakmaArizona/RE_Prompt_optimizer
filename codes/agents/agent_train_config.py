@@ -9,6 +9,7 @@ from agents.agent_prompts import (
     INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     MUTATION_PROMPT_GROUP_MAP,
 )
+from agents.agent_cluster_search import CLUSTER_SELECTION_MODE_CHOICES
 
 
 def default_data_dir() -> str:
@@ -186,6 +187,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.5,
         help="Fraction of kept categories covered by each cluster.",
+    )
+    parser.add_argument(
+        "--cluster-selection-mode",
+        type=str,
+        default="usage_decay",
+        choices=list(CLUSTER_SELECTION_MODE_CHOICES),
+        help=(
+            "Cluster category sampling mode: "
+            "'usage_decay' spreads coverage by lowering reuse probability after selection; "
+            "'error_count_weighted' samples categories with probability proportional to error count."
+        ),
     )
     parser.add_argument(
         "--category-feedback-examples-per-category",
