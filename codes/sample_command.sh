@@ -160,6 +160,7 @@ python3 codes/agents/agents_etgpo_results_ensemble.py \
   --root_dir unified_optimization_results \
   --method taxonomy \
   --q 3 \
+  --w 3 \
   --mode top_q_scores_only
 
 #### extended runs

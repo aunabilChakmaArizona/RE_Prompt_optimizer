@@ -79,8 +79,9 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "For taxonomy_cluster only: select the best prompt from the first W prompts "
-            "within each cluster before taking the top Q cluster winners"
+            "Optional prefilter. For taxonomy: consider only the first W prompts before "
+            "taking the top Q by score. For taxonomy_cluster: select the best prompt from "
+            "the first W prompts within each cluster before taking the top Q cluster winners"
         ),
     )
     parser.add_argument(
@@ -287,6 +288,12 @@ def _select_candidates(
 ) -> List[CandidatePrediction]:
     ranked = _sort_candidates(candidates)
     if method_name == "taxonomy":
+        if w is not None:
+            ranked = [
+                candidate
+                for candidate in ranked
+                if candidate.candidate_index is not None and candidate.candidate_index <= w
+            ]
         return ranked[: min(q, len(ranked))]
 
     best_by_cluster: Dict[int, CandidatePrediction] = {}
@@ -370,7 +377,9 @@ def _build_output_payload(
         "selected_q": len(selected_candidates),
         "split": split,
         "selection_strategy": (
-            "top_q_by_f1" if method_name == "taxonomy"
+            (
+                "top_q_by_f1_from_first_w" if w is not None else "top_q_by_f1"
+            ) if method_name == "taxonomy"
             else (
                 "best_per_cluster_from_first_w_then_top_q_cluster_winners"
                 if w is not None else
@@ -408,7 +417,7 @@ def _default_output_paths(
 ) -> Path:
     if not selected_candidates:
         raise ValueError("No selected candidates available to determine output path.")
-    w_suffix = f"_w{w}" if w is not None and method_name == "taxonomy_cluster" else ""
+    w_suffix = f"_w{w}" if w is not None else ""
     filename = f"ensemble_{method_name}_q{len(selected_candidates)}{w_suffix}.json"
     return selected_candidates[0].run_dir / filename
 
@@ -417,13 +426,15 @@ def _mean(values: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _print_candidate_score_and_prompt(candidate: CandidatePrediction) -> None:
+    print(f"{candidate.precision*100:.2f}\t{candidate.recall*100:.2f}\t{candidate.f1*100:.2f}")
+    print(candidate.prompt_text if candidate.prompt_text is not None else "[prompt unavailable]")
+
+
 def _print_top_q_scores_only(run_results: Sequence[RunEnsembleResult]) -> None:
     for run_idx, run_result in enumerate(run_results):
         for candidate in run_result.selected_candidates:
-            # print()
-            print(f"{candidate.candidate_name} "
-                f"{candidate.precision*100:.2f}\t{candidate.recall*100:.2f}\t{candidate.f1*100:.2f}"
-            )
+            _print_candidate_score_and_prompt(candidate)
 
         avg_precision = _mean([candidate.precision for candidate in run_result.selected_candidates])
         avg_recall = _mean([candidate.recall for candidate in run_result.selected_candidates])
@@ -518,19 +529,8 @@ def main() -> None:
             f"Selected {len(run_result.selected_candidates)} candidates for method={args.method}"
         )
         print("Selected candidate scores:")
-        for idx, candidate in enumerate(run_result.selected_candidates, start=1):
-            cluster_suffix = (
-                f", cluster={candidate.cluster_id}"
-                if candidate.cluster_id is not None
-                else ""
-            )
-            print(
-                f"  {idx}. {candidate.candidate_name} | "
-                f"precision={candidate.precision:.4f} | "
-                f"recall={candidate.recall:.4f} | "
-                f"f1={candidate.f1:.4f}"
-                f"{cluster_suffix} | run={candidate.run_dir.name}"
-            )
+        for candidate in run_result.selected_candidates:
+            _print_candidate_score_and_prompt(candidate)
         print("Ensemble scores:")
         print(f"  precision={metrics['precision_mean']:.4f}")
         print(f"  recall={metrics['recall_mean']:.4f}")
