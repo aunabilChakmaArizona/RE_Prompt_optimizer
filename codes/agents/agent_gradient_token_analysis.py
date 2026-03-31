@@ -71,7 +71,7 @@ class TokenRegion:
 @dataclass
 class BatchPromptGradientAnalysis:
     prompt_template: str
-    num_episodes: int
+    num_instances: int
     formatted_prompts: List[str]
     predicted_labels: List[str]
     target_labels: List[str]
@@ -156,26 +156,18 @@ def _find_subsequence(
     raise ValueError("Unable to align prompt tokens within the rendered input.")
 
 
-def build_episode_prompt(
+def build_binary_pair_payload(
     *,
     instruction_prompt: str,
-    episode: Dict[str, Any],
-    shots: Dict[str, Dict[str, Any]],
-    queries: Dict[str, Dict[str, Any]],
-    episode_index: int,
+    support: Dict[str, Any],
+    query: Dict[str, Any],
+    pair_index: int,
     tokenizer,
     dataset_type: str = "fs_tacred",
-    query_index: int = 0,
     inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     answer_instruction_prompt: str = INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1,
     input_prompt: str = INFERENCE_INPUT_PROMPT_V1,
 ) -> Dict[str, Any]:
-    support_id = episode["meta_train"][0][0]
-    query_id = episode["meta_test"][query_index]
-
-    support = shots[support_id]
-    query = queries[query_id]
-
     relation = support["relation"]
     label = "yes" if query["relation"] == relation else "no"
     support_sentence = get_sentence_with_tags(support).strip()
@@ -198,9 +190,9 @@ def build_episode_prompt(
         tokenizer=tokenizer,
     )
     return {
-        "episode_index": episode_index,
-        "support_id": support_id,
-        "query_id": query_id,
+        "pair_index": pair_index,
+        "support_id": support.get("id"),
+        "query_id": query.get("id"),
         "relation": relation,
         "label": label,
         "prompt": prompt,
@@ -209,6 +201,41 @@ def build_episode_prompt(
         "prompt_tokens": prompt_token_map["prompt_tokens"],
         "rendered_prompt_ids": prompt_token_map["rendered_prompt_ids"],
     }
+
+
+def build_binary_pair_payload_from_episode(
+    *,
+    instruction_prompt: str,
+    episode: Dict[str, Any],
+    shots: Dict[str, Dict[str, Any]],
+    queries: Dict[str, Dict[str, Any]],
+    pair_index: int,
+    tokenizer,
+    dataset_type: str = "fs_tacred",
+    way_index: int = 0,
+    query_index: int = 0,
+    inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+    answer_instruction_prompt: str = INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1,
+    input_prompt: str = INFERENCE_INPUT_PROMPT_V1,
+) -> Dict[str, Any]:
+    support_id = episode["meta_train"][way_index][0]
+    query_id = episode["meta_test"][query_index]
+    support = shots[support_id]
+    query = queries[query_id]
+    payload = build_binary_pair_payload(
+        instruction_prompt=instruction_prompt,
+        support=support,
+        query=query,
+        pair_index=pair_index,
+        tokenizer=tokenizer,
+        dataset_type=dataset_type,
+        inference_mode=inference_mode,
+        answer_instruction_prompt=answer_instruction_prompt,
+        input_prompt=input_prompt,
+    )
+    payload["support_id"] = support_id
+    payload["query_id"] = query_id
+    return payload
 
 
 def _prepare_model_inputs(
@@ -345,16 +372,13 @@ def _select_top_regions(
     return regions
 
 
-def analyze_relation_extraction_dataset(
+def analyze_relation_extraction_binary_pairs(
     *,
     instruction_prompt: str,
-    episodes: Sequence[Dict[str, Any]],
-    shots: Dict[str, Dict[str, Any]],
-    queries: Dict[str, Dict[str, Any]],
+    binary_pairs: Sequence[Dict[str, Any]],
     model,
     tokenizer,
     dataset_type: str = "fs_tacred",
-    query_index: int = 0,
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
@@ -369,16 +393,14 @@ def analyze_relation_extraction_dataset(
     _ensure_supported_inference_mode(inference_mode)
 
     batch_payloads: List[Dict[str, Any]] = []
-    for episode_index, episode in enumerate(episodes):
+    for pair_index, pair in enumerate(binary_pairs):
         batch_payloads.append(
-            build_episode_prompt(
+            build_binary_pair_payload(
                 instruction_prompt=instruction_prompt,
-                episode=episode,
-                shots=shots,
-                queries=queries,
-                episode_index=episode_index,
+                support=pair["support"],
+                query=pair["query"],
+                pair_index=pair_index,
                 dataset_type=dataset_type,
-                query_index=query_index,
                 inference_mode=inference_mode,
                 answer_instruction_prompt=answer_instruction_prompt,
                 input_prompt=input_prompt,
@@ -390,7 +412,7 @@ def analyze_relation_extraction_dataset(
         return asdict(
             BatchPromptGradientAnalysis(
                 prompt_template=instruction_prompt,
-                num_episodes=0,
+                num_instances=0,
                 formatted_prompts=[],
                 predicted_labels=[],
                 target_labels=[],
@@ -530,7 +552,7 @@ def analyze_relation_extraction_dataset(
     return asdict(
         BatchPromptGradientAnalysis(
             prompt_template=instruction_prompt,
-            num_episodes=len(batch_payloads),
+            num_instances=len(batch_payloads),
             formatted_prompts=formatted_prompts,
             predicted_labels=predicted_labels,
             target_labels=[payload["label"] for payload in batch_payloads],
@@ -539,6 +561,53 @@ def analyze_relation_extraction_dataset(
             token_gradients=token_gradients,
             top_regions=top_regions,
         )
+    )
+
+
+def analyze_relation_extraction_dataset(
+    *,
+    instruction_prompt: str,
+    episodes: Sequence[Dict[str, Any]],
+    shots: Dict[str, Dict[str, Any]],
+    queries: Dict[str, Dict[str, Any]],
+    model,
+    tokenizer,
+    dataset_type: str = "fs_tacred",
+    query_index: int = 0,
+    num_candidates: int = 5,
+    max_regions: int = 1,
+    max_total_region_tokens: int = 10,
+    embedding_step_size: float = 1.0,
+    inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+    use_chat_template: bool = True,
+    add_generation_prompt: bool = True,
+    enable_thinking: bool = False,
+    answer_instruction_prompt: str = INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1,
+    input_prompt: str = INFERENCE_INPUT_PROMPT_V1,
+) -> Dict[str, Any]:
+    binary_pairs = [
+        {
+            "support": shots[episode["meta_train"][0][0]],
+            "query": queries[episode["meta_test"][query_index]],
+        }
+        for episode in episodes
+    ]
+    return analyze_relation_extraction_binary_pairs(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=binary_pairs,
+        model=model,
+        tokenizer=tokenizer,
+        dataset_type=dataset_type,
+        num_candidates=num_candidates,
+        max_regions=max_regions,
+        max_total_region_tokens=max_total_region_tokens,
+        embedding_step_size=embedding_step_size,
+        inference_mode=inference_mode,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=add_generation_prompt,
+        enable_thinking=enable_thinking,
+        answer_instruction_prompt=answer_instruction_prompt,
+        input_prompt=input_prompt,
     )
 
 
@@ -600,7 +669,7 @@ def main() -> None:
         "model_id": args.model_id,
         "split": args.split,
         "dataset_type": args.dataset_type,
-        "num_episodes": results["num_episodes"],
+        "num_instances": results["num_instances"],
         "results": results,
     }
     if args.output_file:
