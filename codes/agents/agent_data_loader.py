@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 
 DEFAULT_DATA_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), os.pardir, "data")
+    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "data")
 )
 
 

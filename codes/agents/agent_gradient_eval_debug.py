@@ -35,6 +35,14 @@ def _namespace_to_json_dict(args: argparse.Namespace) -> Dict[str, Any]:
     return payload
 
 
+def _resolve_dataset_split(saved_split: str | None) -> str:
+    if not saved_split:
+        return "dev"
+    if saved_split == "validation":
+        return "dev"
+    return saved_split
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -225,7 +233,7 @@ def _binary_pair_debug_record(
 ) -> Dict[str, Any]:
     support_id = episode["meta_train"][way_index][0]
     query_id = episode["meta_test"][query_index]
-    support = shots["shots"][support_id]
+    support = shots[support_id]
     query = queries[query_id]
     return {
         "pair_index": pair_index,
@@ -279,7 +287,7 @@ def build_sampled_batch(
                 "pair_index": pair_index,
                 "episode_index": episode_index,
                 "way_index": way_index,
-                "support": shots["shots"][support_id],
+                "support": shots[support_id],
                 "query": queries[query_id],
             }
         )
@@ -310,26 +318,47 @@ def build_sampled_batch(
 
 def main() -> None:
     args = _parse_args()
+    print("[agent_gradient_eval_debug] starting")
 
     instruction_prompt, prompt_info = resolve_instruction_prompt(
         args.prompt_source_path,
         prompt_index=args.prompt_index,
         prompt_node_id=args.prompt_node_id,
     )
+    print(
+        "[agent_gradient_eval_debug] prompt resolved:",
+        prompt_info.get("prompt_source_type"),
+    )
 
     eval_payload = _load_json(args.eval_output_path)
-    split = args.split or eval_payload.get("split") or "validation"
+    saved_split = args.split or eval_payload.get("split") or "validation"
+    split = _resolve_dataset_split(saved_split)
+    print(
+        "[agent_gradient_eval_debug] eval output loaded:",
+        args.eval_output_path,
+        f"(saved_split={saved_split}, dataset_split={split})",
+    )
     sampled_indices = sample_eval_pair_indices(
         eval_payload,
         num_correct=args.num_correct,
         num_mistakes=args.num_mistakes,
         seed=args.seed,
     )
+    print(
+        "[agent_gradient_eval_debug] sampled binary pairs:",
+        f"mistakes={len(sampled_indices['mistake_indices'])}",
+        f"correct={len(sampled_indices['correct_indices'])}",
+    )
 
     dataset = load_split_episodes(
         split=split,
         data_dir=args.data_dir,
         dataset_type=args.dataset_type,
+    )
+    print(
+        "[agent_gradient_eval_debug] dataset loaded:",
+        f"episodes={len(dataset['episodes'])}",
+        f"dataset_type={args.dataset_type}",
     )
     pair_labels = eval_payload.get("pair_labels", [])
     num_ways = _resolve_num_ways(dataset["episodes"])
@@ -345,11 +374,17 @@ def main() -> None:
         query_index=args.query_index,
         sampled_indices=sampled_indices,
     )
+    print(
+        "[agent_gradient_eval_debug] batch built:",
+        f"pairs={len(sampled_pairs)}",
+    )
 
     model, tokenizer = load_model_and_tokenizer(
         model_id=args.model,
         device_map=args.device_map,
     )
+    print("[agent_gradient_eval_debug] model and tokenizer loaded")
+    print("[agent_gradient_eval_debug] running gradient analysis")
     gradient_results = analyze_relation_extraction_binary_pairs(
         instruction_prompt=instruction_prompt,
         binary_pairs=sampled_pairs,
@@ -362,13 +397,20 @@ def main() -> None:
         embedding_step_size=args.embedding_step_size,
         use_chat_template=not args.disable_chat_template,
     )
+    print(
+        "[agent_gradient_eval_debug] gradient analysis done:",
+        f"instances={gradient_results['num_instances']}",
+        f"token_gradients={len(gradient_results['token_gradients'])}",
+        f"top_regions={len(gradient_results['top_regions'])}",
+    )
 
     payload = {
         "args": _namespace_to_json_dict(args),
         "model": args.model,
         "device_map": args.device_map,
         "dataset_type": args.dataset_type,
-        "split": split,
+        "split": saved_split,
+        "dataset_split": split,
         "eval_output_path": str(args.eval_output_path),
         "prompt_source_path": str(args.prompt_source_path),
         "prompt_info": prompt_info,
@@ -384,6 +426,7 @@ def main() -> None:
     }
 
     if args.output_file:
+        args.output_file.parent.mkdir(parents=True, exist_ok=True)
         with args.output_file.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
         print(f"saved output to {args.output_file}")
@@ -397,17 +440,17 @@ if __name__ == "__main__":
 
 
 # python3 codes/agents/agent_gradient_eval_debug.py \
-#   --model "google/gemma-3-4b-it" \
+#   --model "Qwen/Qwen3-4B" \
 #   --device-map "cuda:0" \
-#   --eval-output-path "trainings/20260128_151114_Qwen-Qwen3-4B/eval_outputs/EVALID_0_labels_predictions.json" \
-#   --prompt-source-path "trainings/20260303_114043_google-gemma-3-4b-it/population.json" \
-#   --prompt-node-id 9
-# --output-file "gradients_experiments/gradient_debug_node9.json"
+#   --eval-output-path "trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
+#   --prompt-source-path "trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+#   --prompt-node-id 12 \
+#   --output-file "gradients_experiments/gradient_debug_node12_f1-37.json"
 
 # python3 codes/agents/agent_gradient_eval_debug.py \
 #   --model "google/gemma-3-4b-it" \
 #   --device-map "cuda:0" \
 #   --eval-output-path "trainings/20260128_151114_Qwen-Qwen3-4B/eval_outputs/EVALID_0_labels_predictions.json" \
 #   --prompt-source-path "unified_optimization_results/unified_opt_fs_tacred_20260325_215139/generated_prompt_candidates.json" \
-#   --prompt-index 0
+#   --prompt-index 0 \
 # --output-file "gradients_experiments/gradient_debug_node9.json"
