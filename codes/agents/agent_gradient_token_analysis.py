@@ -141,46 +141,6 @@ def _build_instruction_token_map(
 
     def _log_alignment_failure() -> None:
         print("[agent_gradient_token_analysis] instruction alignment failed")
-        print(
-            "[agent_gradient_token_analysis] instruction_ids_len=",
-            len(instruction_ids),
-        )
-        print(
-            "[agent_gradient_token_analysis] rendered_ids_len=",
-            len(rendered_ids),
-        )
-        print(
-            "[agent_gradient_token_analysis] instruction_ids=",
-            instruction_ids,
-        )
-        print(
-            "[agent_gradient_token_analysis] rendered_ids=",
-            rendered_ids,
-        )
-        print(
-            "[agent_gradient_token_analysis] instruction_tokens=",
-            tokenizer.convert_ids_to_tokens(instruction_ids),
-        )
-        print(
-            "[agent_gradient_token_analysis] instruction_decoded=",
-            tokenizer.decode(instruction_ids, skip_special_tokens=False),
-        )
-        print(
-            "[agent_gradient_token_analysis] rendered_tokens=",
-            tokenizer.convert_ids_to_tokens(rendered_ids),
-        )
-        print(
-            "[agent_gradient_token_analysis] rendered_decoded=",
-            tokenizer.decode(rendered_ids, skip_special_tokens=False),
-        )
-        print(
-            "[agent_gradient_token_analysis] instruction_prompt=",
-            repr(instruction_prompt),
-        )
-        print(
-            "[agent_gradient_token_analysis] rendered_prompt=",
-            repr(rendered_prompt),
-        )
     start_char = rendered_prompt.find(instruction_prompt)
     if start_char < 0:
         _log_alignment_failure()
@@ -369,25 +329,31 @@ def _candidate_tokens_for_position(
     num_candidates: int,
     candidate_mode: str,
 ) -> List[CandidateToken]:
+    embedding_weight_work = embedding_weight.float()
+    current_embedding_work = current_embedding.float().to(embedding_weight.device)
+    gradient_work = gradient.float().to(embedding_weight.device)
+    updated_embedding_work = updated_embedding.float().to(embedding_weight.device)
+
     if candidate_mode == TOKEN_CANDIDATE_MODE_NEAREST_UPDATED:
-        normalized_weight = F.normalize(embedding_weight.float(), dim=-1)
-        normalized_query = F.normalize(updated_embedding.float().unsqueeze(0), dim=-1)
+        normalized_weight = F.normalize(embedding_weight_work, dim=-1)
+        normalized_query = F.normalize(updated_embedding_work.unsqueeze(0), dim=-1)
         scores = torch.matmul(normalized_query, normalized_weight.T).squeeze(0)
     elif candidate_mode == TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX:
-        scores = -(
-            torch.matmul(embedding_weight.float(), gradient.float())
-            - torch.dot(current_embedding.float(), gradient.float())
-        )
+        displacement = embedding_weight.float() - current_embedding.float().unsqueeze(0)
+        scores = -torch.matmul(displacement, gradient.float())
     else:
         raise ValueError(f"Unsupported candidate_mode: {candidate_mode}")
 
     scores[token_id] = float("-inf")
-    if tokenizer.all_special_ids:
-        special_ids = torch.tensor(tokenizer.all_special_ids, device=scores.device)
-        scores[special_ids] = float("-inf")
+    for special_id in tokenizer.all_special_ids:
+        if 0 <= special_id < scores.numel():
+            scores[special_id] = float("-inf")
 
     k = min(num_candidates, scores.numel())
     top_scores, top_ids = torch.topk(scores, k=k)
+    top_scores = top_scores.detach().cpu()
+    top_ids = top_ids.detach().cpu()
+
     return [
         CandidateToken(
             token_id=int(candidate_id.item()),
