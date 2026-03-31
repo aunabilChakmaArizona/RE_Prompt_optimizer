@@ -330,17 +330,17 @@ def _candidate_tokens_for_position(
     candidate_mode: str,
 ) -> List[CandidateToken]:
     embedding_weight_work = embedding_weight.float()
-    current_embedding_work = current_embedding.float().to(embedding_weight.device)
-    gradient_work = gradient.float().to(embedding_weight.device)
-    updated_embedding_work = updated_embedding.float().to(embedding_weight.device)
 
     if candidate_mode == TOKEN_CANDIDATE_MODE_NEAREST_UPDATED:
         normalized_weight = F.normalize(embedding_weight_work, dim=-1)
-        normalized_query = F.normalize(updated_embedding_work.unsqueeze(0), dim=-1)
+        normalized_query = F.normalize(updated_embedding.float().unsqueeze(0), dim=-1)
         scores = torch.matmul(normalized_query, normalized_weight.T).squeeze(0)
     elif candidate_mode == TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX:
-        displacement = embedding_weight.float() - current_embedding.float().unsqueeze(0)
-        scores = -torch.matmul(displacement, gradient.float())
+        scores = -torch.sum(
+            (embedding_weight_work - current_embedding.float().unsqueeze(0))
+            * gradient.float().unsqueeze(0),
+            dim=-1,
+        )
     else:
         raise ValueError(f"Unsupported candidate_mode: {candidate_mode}")
 
