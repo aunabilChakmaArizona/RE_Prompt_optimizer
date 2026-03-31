@@ -128,7 +128,55 @@ def _build_instruction_token_map(
         return_tensors="pt",
         add_special_tokens=False,
     )["input_ids"][0].tolist()
-    instruction_start = _find_subsequence(rendered_ids, instruction_ids, start_index=0)
+    try:
+        instruction_start = _find_subsequence(
+            rendered_ids,
+            instruction_ids,
+            start_index=0,
+        )
+    except ValueError:
+        print("[agent_gradient_token_analysis] instruction alignment failed")
+        print(
+            "[agent_gradient_token_analysis] instruction_ids_len=",
+            len(instruction_ids),
+        )
+        print(
+            "[agent_gradient_token_analysis] rendered_ids_len=",
+            len(rendered_ids),
+        )
+        print(
+            "[agent_gradient_token_analysis] instruction_ids=",
+            instruction_ids,
+        )
+        print(
+            "[agent_gradient_token_analysis] rendered_ids=",
+            rendered_ids,
+        )
+        print(
+            "[agent_gradient_token_analysis] instruction_tokens=",
+            tokenizer.convert_ids_to_tokens(instruction_ids),
+        )
+        print(
+            "[agent_gradient_token_analysis] instruction_decoded=",
+            tokenizer.decode(instruction_ids, skip_special_tokens=False),
+        )
+        print(
+            "[agent_gradient_token_analysis] rendered_tokens=",
+            tokenizer.convert_ids_to_tokens(rendered_ids),
+        )
+        print(
+            "[agent_gradient_token_analysis] rendered_decoded=",
+            tokenizer.decode(rendered_ids, skip_special_tokens=False),
+        )
+        print(
+            "[agent_gradient_token_analysis] instruction_prompt=",
+            repr(instruction_prompt),
+        )
+        print(
+            "[agent_gradient_token_analysis] rendered_prompt=",
+            repr(rendered_prompt),
+        )
+        raise
     instruction_end = instruction_start + len(instruction_ids)
     instruction_positions = list(range(instruction_start, instruction_end))
 
