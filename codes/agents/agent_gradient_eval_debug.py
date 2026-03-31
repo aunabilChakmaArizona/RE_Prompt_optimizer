@@ -15,7 +15,11 @@ if str(CODES_DIR) not in sys.path:
     sys.path.append(str(CODES_DIR))
 
 from agents.agent_data_loader import DEFAULT_DATA_DIR, load_split_episodes
-from agents.agent_gradient_token_analysis import analyze_relation_extraction_binary_pairs
+from agents.agent_gradient_token_analysis import (
+    TOKEN_CANDIDATE_MODE_CHOICES,
+    TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
+    analyze_relation_extraction_binary_pairs,
+)
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_utils import get_sentence_with_tags
 
@@ -92,6 +96,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-mistakes", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-candidates", type=int, default=5)
+    parser.add_argument(
+        "--candidate-mode",
+        choices=TOKEN_CANDIDATE_MODE_CHOICES,
+        default=TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
+    )
     parser.add_argument("--max-regions", type=int, default=3)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
@@ -392,6 +401,7 @@ def main() -> None:
         tokenizer=tokenizer,
         dataset_type=args.dataset_type,
         num_candidates=args.num_candidates,
+        candidate_mode=args.candidate_mode,
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,
         embedding_step_size=args.embedding_step_size,
@@ -400,6 +410,7 @@ def main() -> None:
     print(
         "[agent_gradient_eval_debug] gradient analysis done:",
         f"instances={gradient_results['num_instances']}",
+        f"candidate_mode={args.candidate_mode}",
         f"token_gradients={len(gradient_results['token_gradients'])}",
         f"top_regions={len(gradient_results['top_regions'])}",
     )
@@ -409,6 +420,7 @@ def main() -> None:
         "model": args.model,
         "device_map": args.device_map,
         "dataset_type": args.dataset_type,
+        "candidate_mode": args.candidate_mode,
         "split": saved_split,
         "dataset_split": split,
         "eval_output_path": str(args.eval_output_path),

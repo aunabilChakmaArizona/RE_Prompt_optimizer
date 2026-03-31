@@ -28,6 +28,13 @@ from agents.agent_prompts import (
 from agents.agent_relation_utils import get_relation_description
 from agents.agent_utils import build_support_block, get_sentence_with_tags
 
+TOKEN_CANDIDATE_MODE_NEAREST_UPDATED = "nearest_updated"
+TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX = "first_order_loss_approx"
+TOKEN_CANDIDATE_MODE_CHOICES = [
+    TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
+    TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX,
+]
+
 
 def _resolve_binary_token_id(tokenizer, base_token: str) -> int:
     token_ids = tokenizer.encode(base_token, add_special_tokens=False)
@@ -123,18 +130,16 @@ def _build_instruction_token_map(
     tokenizer,
 ) -> Dict[str, Any]:
     instruction_ids = tokenizer.encode(instruction_prompt, add_special_tokens=False)
-    rendered_ids = tokenizer(
+    encoded_rendered = tokenizer(
         rendered_prompt,
         return_tensors="pt",
+        return_offsets_mapping=True,
         add_special_tokens=False,
-    )["input_ids"][0].tolist()
-    try:
-        instruction_start = _find_subsequence(
-            rendered_ids,
-            instruction_ids,
-            start_index=0,
-        )
-    except ValueError:
+    )
+    rendered_ids = encoded_rendered["input_ids"][0].tolist()
+    offset_mapping = encoded_rendered["offset_mapping"][0].tolist()
+
+    def _log_alignment_failure() -> None:
         print("[agent_gradient_token_analysis] instruction alignment failed")
         print(
             "[agent_gradient_token_analysis] instruction_ids_len=",
@@ -176,14 +181,55 @@ def _build_instruction_token_map(
             "[agent_gradient_token_analysis] rendered_prompt=",
             repr(rendered_prompt),
         )
-        raise
-    instruction_end = instruction_start + len(instruction_ids)
-    instruction_positions = list(range(instruction_start, instruction_end))
+    start_char = rendered_prompt.find(instruction_prompt)
+    if start_char < 0:
+        _log_alignment_failure()
+        raise ValueError("Instruction prompt text not found within rendered prompt.")
+    end_char = start_char + len(instruction_prompt)
+
+    try:
+        instruction_start = _find_subsequence(
+            rendered_ids,
+            instruction_ids,
+            start_index=0,
+        )
+        instruction_end = instruction_start + len(instruction_ids)
+        instruction_positions = list(range(instruction_start, instruction_end))
+    except ValueError:
+        if len(instruction_ids) < 2:
+            _log_alignment_failure()
+            raise
+
+        prefix_ids = instruction_ids[:-1]
+        try:
+            instruction_start = _find_subsequence(
+                rendered_ids,
+                prefix_ids,
+                start_index=0,
+            )
+        except ValueError:
+            _log_alignment_failure()
+            raise
+
+        instruction_positions = list(
+            range(instruction_start, instruction_start + len(prefix_ids))
+        )
+        candidate_index = instruction_start + len(prefix_ids)
+        if candidate_index < len(offset_mapping):
+            token_start, token_end = offset_mapping[candidate_index]
+            if token_start < end_char and token_end > token_start:
+                instruction_positions.append(candidate_index)
+
+        if not instruction_positions:
+            _log_alignment_failure()
+            raise ValueError("Unable to recover instruction token positions.")
 
     return {
-        "prompt_token_ids": instruction_ids,
+        "prompt_token_ids": [rendered_ids[idx] for idx in instruction_positions],
         "prompt_token_positions": instruction_positions,
-        "prompt_tokens": tokenizer.convert_ids_to_tokens(instruction_ids),
+        "prompt_tokens": tokenizer.convert_ids_to_tokens(
+            [rendered_ids[idx] for idx in instruction_positions]
+        ),
         "rendered_prompt_ids": rendered_ids,
     }
 
@@ -315,21 +361,33 @@ def _prepare_model_inputs(
 def _candidate_tokens_for_position(
     *,
     token_id: int,
+    current_embedding: torch.Tensor,
+    gradient: torch.Tensor,
     updated_embedding: torch.Tensor,
     embedding_weight: torch.Tensor,
     tokenizer,
     num_candidates: int,
+    candidate_mode: str,
 ) -> List[CandidateToken]:
-    normalized_weight = F.normalize(embedding_weight.float(), dim=-1)
-    normalized_query = F.normalize(updated_embedding.float().unsqueeze(0), dim=-1)
-    scores = torch.matmul(normalized_query, normalized_weight.T).squeeze(0)
+    if candidate_mode == TOKEN_CANDIDATE_MODE_NEAREST_UPDATED:
+        normalized_weight = F.normalize(embedding_weight.float(), dim=-1)
+        normalized_query = F.normalize(updated_embedding.float().unsqueeze(0), dim=-1)
+        scores = torch.matmul(normalized_query, normalized_weight.T).squeeze(0)
+    elif candidate_mode == TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX:
+        scores = -(
+            torch.matmul(embedding_weight.float(), gradient.float())
+            - torch.dot(current_embedding.float(), gradient.float())
+        )
+    else:
+        raise ValueError(f"Unsupported candidate_mode: {candidate_mode}")
 
     scores[token_id] = float("-inf")
-    for special_id in tokenizer.all_special_ids:
-        if 0 <= special_id < scores.numel():
-            scores[special_id] = float("-inf")
+    if tokenizer.all_special_ids:
+        special_ids = torch.tensor(tokenizer.all_special_ids, device=scores.device)
+        scores[special_ids] = float("-inf")
 
-    top_scores, top_ids = torch.topk(scores, k=num_candidates)
+    k = min(num_candidates, scores.numel())
+    top_scores, top_ids = torch.topk(scores, k=k)
     return [
         CandidateToken(
             token_id=int(candidate_id.item()),
@@ -431,6 +489,7 @@ def analyze_relation_extraction_binary_pairs(
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
     embedding_step_size: float = 1.0,
+    candidate_mode: str = TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
@@ -570,15 +629,25 @@ def analyze_relation_extraction_binary_pairs(
 
     embedding_weight = embedding_layer.weight.detach()
     token_gradients: List[TokenGradientRecord] = []
-    for index, (token_id, token, gradient_norm, updated_embedding) in enumerate(
-        zip(prompt_token_ids, prompt_tokens, gradient_norms, updated_embeddings),
+    for index, (token_id, token, gradient_norm, current_embedding, gradient_vector, updated_embedding) in enumerate(
+        zip(
+            prompt_token_ids,
+            prompt_tokens,
+            gradient_norms,
+            prompt_embedding_means,
+            prompt_gradient_means,
+            updated_embeddings,
+        ),
     ):
         candidates = _candidate_tokens_for_position(
             token_id=token_id,
+            current_embedding=current_embedding,
+            gradient=gradient_vector,
             updated_embedding=updated_embedding,
             embedding_weight=embedding_weight,
             tokenizer=tokenizer,
             num_candidates=num_candidates,
+            candidate_mode=candidate_mode,
         )
         token_gradients.append(
             TokenGradientRecord(
@@ -626,6 +695,7 @@ def analyze_relation_extraction_dataset(
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
     embedding_step_size: float = 1.0,
+    candidate_mode: str = TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
@@ -650,6 +720,7 @@ def analyze_relation_extraction_dataset(
         max_regions=max_regions,
         max_total_region_tokens=max_total_region_tokens,
         embedding_step_size=embedding_step_size,
+        candidate_mode=candidate_mode,
         inference_mode=inference_mode,
         use_chat_template=use_chat_template,
         add_generation_prompt=add_generation_prompt,
@@ -675,6 +746,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-regions", type=int, default=1)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
+    parser.add_argument(
+        "--candidate-mode",
+        choices=TOKEN_CANDIDATE_MODE_CHOICES,
+        default=TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
+    )
     parser.add_argument("--device-map", default=None)
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--disable-chat-template", action="store_true")
@@ -710,6 +786,7 @@ def main() -> None:
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,
         embedding_step_size=args.embedding_step_size,
+        candidate_mode=args.candidate_mode,
         use_chat_template=not args.disable_chat_template,
     )
 
@@ -717,6 +794,7 @@ def main() -> None:
         "model_id": args.model_id,
         "split": args.split,
         "dataset_type": args.dataset_type,
+        "candidate_mode": args.candidate_mode,
         "num_instances": results["num_instances"],
         "results": results,
     }
