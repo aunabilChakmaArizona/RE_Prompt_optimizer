@@ -108,7 +108,7 @@ def _parse_args() -> argparse.Namespace:
         default=8,
         help="Optional batch size used while accumulating gradients over the sampled pairs.",
     )
-    parser.add_argument("--num-candidates", type=int, default=20)
+    parser.add_argument("--num-candidates", type=int, default=100)
     parser.add_argument(
         "--candidate-mode",
         choices=TOKEN_CANDIDATE_MODE_CHOICES,
@@ -210,6 +210,28 @@ def _sample_indices(
     return sorted(rng.sample(unique_indices, k))
 
 
+def _bucket_pair_indices(
+    labels: Sequence[str],
+    predictions: Sequence[str],
+) -> Dict[str, List[int]]:
+    buckets = {
+        "tp": [],
+        "tn": [],
+        "fp": [],
+        "fn": [],
+    }
+    for idx, (label, prediction) in enumerate(zip(labels, predictions)):
+        if label == "yes" and prediction == "yes":
+            buckets["tp"].append(idx)
+        elif label == "no" and prediction == "no":
+            buckets["tn"].append(idx)
+        elif label == "no" and prediction == "yes":
+            buckets["fp"].append(idx)
+        elif label == "yes" and prediction == "no":
+            buckets["fn"].append(idx)
+    return buckets
+
+
 def sample_eval_pair_indices(
     eval_payload: Dict[str, Any],
     *,
@@ -223,8 +245,9 @@ def sample_eval_pair_indices(
     if len(labels) != len(predictions):
         raise ValueError("eval output pair_labels/pair_predictions length mismatch")
 
-    correct_indices = [idx for idx, (label, pred) in enumerate(zip(labels, predictions)) if label == pred]
-    mistake_indices = [idx for idx, (label, pred) in enumerate(zip(labels, predictions)) if label != pred]
+    buckets = _bucket_pair_indices(labels, predictions)
+    correct_indices = buckets["tp"] + buckets["tn"]
+    mistake_indices = buckets["fp"] + buckets["fn"]
 
     if not 0.0 <= mistake_coverage <= 1.0:
         raise ValueError("--mistake-coverage must be in the [0, 1] range.")
@@ -239,32 +262,78 @@ def sample_eval_pair_indices(
             )
         resolved_num_mistakes = num_mistakes
 
-    resolved_num_correct = resolved_num_mistakes
-    if len(correct_indices) < resolved_num_correct:
+    rng = random.Random(seed)
+    selected_per_bucket = min(
+        len(buckets["tp"]),
+        len(buckets["tn"]),
+        len(buckets["fp"]),
+        len(buckets["fn"]),
+        resolved_num_mistakes // 2,
+    )
+    if resolved_num_mistakes > 0 and selected_per_bucket == 0:
         raise ValueError(
-            f"Need {resolved_num_correct} correct samples to match mistakes, "
-            f"but found only {len(correct_indices)}."
+            "Unable to sample balanced tp/tn/fp/fn buckets. "
+            f"available_tp={len(buckets['tp'])}, available_tn={len(buckets['tn'])}, "
+            f"available_fp={len(buckets['fp'])}, available_fn={len(buckets['fn'])}, "
+            f"requested_mistakes={resolved_num_mistakes}."
         )
 
-    rng = random.Random(seed)
+    selected_fp = _sample_indices(
+        buckets["fp"],
+        k=selected_per_bucket,
+        rng=rng,
+        label="false_positive",
+    ) if selected_per_bucket > 0 else []
+    selected_fn = _sample_indices(
+        buckets["fn"],
+        k=selected_per_bucket,
+        rng=rng,
+        label="false_negative",
+    ) if selected_per_bucket > 0 else []
+    selected_mistake_indices = sorted(selected_fp + selected_fn)
+
+    selected_tp = _sample_indices(
+        buckets["tp"],
+        k=selected_per_bucket,
+        rng=rng,
+        label="true_positive",
+    ) if selected_per_bucket > 0 else []
+    selected_tn = _sample_indices(
+        buckets["tn"],
+        k=selected_per_bucket,
+        rng=rng,
+        label="true_negative",
+    ) if selected_per_bucket > 0 else []
+
     result = {
-        "correct_indices": _sample_indices(
-            correct_indices,
-            k=resolved_num_correct,
-            rng=rng,
-            label="correct",
-        ),
-        "mistake_indices": _sample_indices(
-            mistake_indices,
-            k=resolved_num_mistakes,
-            rng=rng,
-            label="mistake",
-        ),
+        "correct_indices": sorted(selected_tp + selected_tn),
+        "mistake_indices": sorted(selected_mistake_indices),
+        "bucket_stats": {
+            "available": {
+                "tp": len(buckets["tp"]),
+                "tn": len(buckets["tn"]),
+                "fp": len(buckets["fp"]),
+                "fn": len(buckets["fn"]),
+            },
+            "selected": {
+                "tp": len(selected_tp),
+                "tn": len(selected_tn),
+                "fp": len(selected_fp),
+                "fn": len(selected_fn),
+            },
+        },
     }
     print(
         "[agent_gradient_eval_debug] pair pool:",
-        f"available_mistakes={len(mistake_indices)}",
-        f"available_corrects={len(correct_indices)}",
+        f"requested_mistakes={resolved_num_mistakes}",
+        f"available_tp={result['bucket_stats']['available']['tp']}",
+        f"available_tn={result['bucket_stats']['available']['tn']}",
+        f"available_fp={result['bucket_stats']['available']['fp']}",
+        f"available_fn={result['bucket_stats']['available']['fn']}",
+        f"selected_tp={result['bucket_stats']['selected']['tp']}",
+        f"selected_tn={result['bucket_stats']['selected']['tn']}",
+        f"selected_fp={result['bucket_stats']['selected']['fp']}",
+        f"selected_fn={result['bucket_stats']['selected']['fn']}",
         f"selected_mistakes={len(result['mistake_indices'])}",
         f"selected_corrects={len(result['correct_indices'])}",
     )
@@ -324,6 +393,7 @@ def build_sampled_batch(
     dataset: Dict[str, Any],
     query_index: int,
     sampled_indices: Dict[str, List[int]],
+    seed: int,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     episodes = dataset["episodes"]
     shots = dataset["shots"]
@@ -342,6 +412,8 @@ def build_sampled_batch(
         )
 
     ordered_indices = sampled_indices["mistake_indices"] + sampled_indices["correct_indices"]
+    rng = random.Random(seed)
+    rng.shuffle(ordered_indices)
     sampled_pairs = []
     for pair_index in ordered_indices:
         episode_index, way_index = _pair_index_to_episode_way(pair_index, num_ways)
@@ -440,6 +512,7 @@ def main() -> None:
         dataset=dataset,
         query_index=args.query_index,
         sampled_indices=sampled_indices,
+        seed=args.seed,
     )
     print(
         "[agent_gradient_eval_debug] batch built:",
@@ -489,8 +562,10 @@ def main() -> None:
             "seed": args.seed,
             "num_correct": args.num_correct,
             "num_mistakes": args.num_mistakes,
+            "mistake_coverage": args.mistake_coverage,
             "correct_pair_indices": sampled_indices["correct_indices"],
             "mistake_pair_indices": sampled_indices["mistake_indices"],
+            "bucket_stats": sampled_indices.get("bucket_stats", {}),
         },
         "sampled_examples": sampled_examples,
         "gradient_analysis": gradient_results,
