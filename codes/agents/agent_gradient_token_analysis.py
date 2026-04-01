@@ -30,9 +30,13 @@ from agents.agent_utils import build_support_block, get_sentence_with_tags
 
 TOKEN_CANDIDATE_MODE_NEAREST_UPDATED = "nearest_updated"
 TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX = "first_order_loss_approx"
+TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX_NORMALIZED = (
+    "first_order_loss_approx_normalized"
+)
 TOKEN_CANDIDATE_MODE_CHOICES = [
     TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX,
+    TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX_NORMALIZED,
 ]
 
 
@@ -341,6 +345,15 @@ def _candidate_tokens_for_position(
             * gradient.float().unsqueeze(0),
             dim=-1,
         )
+    elif candidate_mode == TOKEN_CANDIDATE_MODE_FIRST_ORDER_LOSS_APPROX_NORMALIZED:
+        normalized_displacement = F.normalize(
+            embedding_weight_work - current_embedding.float().unsqueeze(0),
+            dim=-1,
+        )
+        scores = -torch.sum(
+            normalized_displacement * gradient.float().unsqueeze(0),
+            dim=-1,
+        )
     else:
         raise ValueError(f"Unsupported candidate_mode: {candidate_mode}")
 
@@ -357,7 +370,10 @@ def _candidate_tokens_for_position(
     return [
         CandidateToken(
             token_id=int(candidate_id.item()),
-            token=tokenizer.convert_ids_to_tokens(int(candidate_id.item())),
+            token=tokenizer.decode(
+                [int(candidate_id.item())],
+                skip_special_tokens=False,
+            ),
             similarity_score=float(candidate_score.item()),
         )
         for candidate_id, candidate_score in zip(top_ids, top_scores)

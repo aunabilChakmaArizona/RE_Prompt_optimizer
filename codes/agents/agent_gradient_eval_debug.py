@@ -95,7 +95,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-correct", type=int, default=4)
     parser.add_argument("--num-mistakes", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num-candidates", type=int, default=5)
+    parser.add_argument("--num-candidates", type=int, default=20)
     parser.add_argument(
         "--candidate-mode",
         choices=TOKEN_CANDIDATE_MODE_CHOICES,
@@ -440,10 +440,10 @@ def main() -> None:
     if args.output_file:
         args.output_file.parent.mkdir(parents=True, exist_ok=True)
         with args.output_file.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
+            json.dump(payload, handle, indent=2, ensure_ascii=False)
         print(f"saved output to {args.output_file}")
 
-    print(json.dumps(payload, indent=2))
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
