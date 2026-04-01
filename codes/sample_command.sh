@@ -353,6 +353,35 @@ python agents/agent_gradient_eval_debug.py \
   --mistake-coverage 1.0 \
   --output-file "../gradients_experiments/gradient_debug_mc-1.0_4b_bln_FOLAN_node0_f1-25.json"
 
+## gradient experiment sample analysis --mistake-coverage with balance pick up 4 bucket train samples with k new prompts generation
+python agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:3" \
+  --eval-output-path "../trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --mistake-coverage 1.0 \
+  --region-index 0 \
+  --num-generated-prompts 5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 5 \
+  --validation-batch-size 8 \
+  --output-file "../gradients_experiments/gradient_debug_mc-1.0_4b_bln_node12_f1-37_region0_k5.json"
+
+python agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:3" \
+  --eval-output-path "../trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --mistake-coverage 1.0 \
+  --region-index 1 \
+  --num-generated-prompts 5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 5 \
+  --validation-batch-size 8 \
+  --output-file "../gradients_experiments/gradient_debug_mc-1.0_4b_bln_node12_f1-37_region1_k5.json"
+
 
 ##################################################
 # tags custom

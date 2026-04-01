@@ -6,9 +6,12 @@ import argparse
 import json
 import math
 import random
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
+
+import torch
 
 CURRENT_DIR = Path(__file__).resolve().parent
 CODES_DIR = CURRENT_DIR.parent
@@ -20,8 +23,15 @@ from agents.agent_gradient_token_analysis import (
     TOKEN_CANDIDATE_MODE_CHOICES,
     TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     analyze_relation_extraction_binary_pairs,
+    build_relation_prompt,
 )
+from agents.agent_llm_prompting import run_prompts
 from agents.agent_models import load_model_and_tokenizer
+from agents.agent_prompts import (
+    GRADIENT_REGION_MUTATION_PROMPT_V1,
+    INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+)
+from agents.agent_relation_utils import get_relation_description
 from agents.agent_utils import get_sentence_with_tags
 
 
@@ -108,7 +118,7 @@ def _parse_args() -> argparse.Namespace:
         default=8,
         help="Optional batch size used while accumulating gradients over the sampled pairs.",
     )
-    parser.add_argument("--num-candidates", type=int, default=100)
+    parser.add_argument("--num-candidates", type=int, default=10)
     parser.add_argument(
         "--candidate-mode",
         choices=TOKEN_CANDIDATE_MODE_CHOICES,
@@ -117,6 +127,36 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-regions", type=int, default=3)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
+    parser.add_argument(
+        "--region-index",
+        type=int,
+        default=0,
+        help="Which top gradient region to use for localized prompt editing.",
+    )
+    parser.add_argument(
+        "--num-generated-prompts",
+        type=int,
+        default=0,
+        help="How many prompt variants to generate from the selected gradient region.",
+    )
+    parser.add_argument(
+        "--meta-prompt-max-new-tokens",
+        type=int,
+        default=10000,
+        help="Generation budget for each region-edit meta prompt run.",
+    )
+    parser.add_argument(
+        "--meta-prompt-batch-size",
+        type=int,
+        default=1,
+        help="Batch size for running the region-edit meta prompt repeatedly.",
+    )
+    parser.add_argument(
+        "--validation-batch-size",
+        type=int,
+        default=8,
+        help="Batch size for validating generated prompts on the sampled pairs.",
+    )
     parser.add_argument("--disable-chat-template", action="store_true")
     parser.add_argument("--output-file", type=Path, default=None)
     return parser.parse_args()
@@ -353,6 +393,349 @@ def _pair_index_to_episode_way(pair_index: int, num_ways: int) -> Tuple[int, int
     return divmod(pair_index, num_ways)
 
 
+def _pair_confusion_bucket(label: str, prediction: str) -> str:
+    if label == "yes" and prediction == "yes":
+        return "tp"
+    if label == "no" and prediction == "no":
+        return "tn"
+    if label == "no" and prediction == "yes":
+        return "fp"
+    if label == "yes" and prediction == "no":
+        return "fn"
+    raise ValueError(f"Unsupported label/prediction pair: label={label}, prediction={prediction}")
+
+
+def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
+    pattern = rf"{re.escape(open_tag)}(.*?){re.escape(close_tag)}"
+    match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
+    if not match:
+        return text.strip()
+    return match.group(1).strip()
+
+
+def _resolve_region_details(
+    *,
+    instruction_prompt: str,
+    tokenizer,
+    gradient_results: Dict[str, Any],
+    region_index: int,
+) -> Dict[str, Any]:
+    top_regions = gradient_results.get("top_regions", [])
+    if not top_regions:
+        raise ValueError("No top_regions were returned by the gradient analysis.")
+    if not 0 <= region_index < len(top_regions):
+        raise IndexError(
+            f"region_index={region_index} is out of range for {len(top_regions)} regions."
+        )
+
+    region = top_regions[region_index]
+    encoded = tokenizer(
+        instruction_prompt,
+        return_offsets_mapping=True,
+        add_special_tokens=False,
+    )
+    offsets = encoded["offset_mapping"]
+    if not offsets:
+        raise ValueError("Instruction prompt produced no tokenizer offsets.")
+
+    start_token = min(region["start"], len(offsets) - 1)
+    end_token = min(region["end"], len(offsets) - 1)
+    start_char = int(offsets[start_token][0])
+    end_char = int(offsets[end_token][1])
+    region_text = instruction_prompt[start_char:end_char]
+    marked_prompt = (
+        instruction_prompt[:start_char]
+        + "<edit_start>"
+        + region_text
+        + "<edit_end>"
+        + instruction_prompt[end_char:]
+    )
+
+    return {
+        "region_index": region_index,
+        "start_token": start_token,
+        "end_token": end_token,
+        "start_char": start_char,
+        "end_char": end_char,
+        "region_text": region_text,
+        "marked_prompt": marked_prompt,
+        "region_tokens": region["tokens"],
+        "region_token_indices": region["token_indices"],
+    }
+
+
+def _build_gradient_region_meta_prompt(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+) -> str:
+    prompt = GRADIENT_REGION_MUTATION_PROMPT_V1
+    prompt = prompt.replace("#INFERENCE_PROMPT#", instruction_prompt)
+    prompt = prompt.replace("#MARKED_PROMPT#", region_details["marked_prompt"])
+    return prompt
+
+
+def _resolve_binary_token_id(tokenizer, base_token: str) -> int:
+    token_ids = tokenizer.encode(base_token, add_special_tokens=False)
+    if len(token_ids) == 1:
+        return token_ids[0]
+    spaced_token_ids = tokenizer.encode(f" {base_token}", add_special_tokens=False)
+    if len(spaced_token_ids) == 1:
+        return spaced_token_ids[0]
+    raise ValueError(f"Token '{base_token}' is not a single token for this tokenizer.")
+
+
+def _build_binary_prompts_for_instruction(
+    *,
+    instruction_prompt: str,
+    binary_pairs: Sequence[Dict[str, Any]],
+) -> Tuple[List[str], List[str]]:
+    prompts: List[str] = []
+    target_labels: List[str] = []
+    for pair in binary_pairs:
+        support = pair["support"]
+        query = pair["query"]
+        relation = support["relation"]
+        target_label = "yes" if query["relation"] == relation else "no"
+        prompts.append(
+            build_relation_prompt(
+                instruction_prompt=instruction_prompt,
+                relation=relation,
+                relation_description=pair["relation_description"],
+                support_sentence=pair["support_sentence"],
+                query_sentence=pair["query_sentence"],
+                inference_mode=INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+            )
+        )
+        target_labels.append(target_label)
+    return prompts, target_labels
+
+
+def _score_binary_prompts(
+    *,
+    prompts: Sequence[str],
+    target_labels: Sequence[str],
+    model,
+    tokenizer,
+    batch_size: int,
+    use_chat_template: bool,
+) -> Dict[str, Any]:
+    if len(prompts) != len(target_labels):
+        raise ValueError("prompts/target_labels length mismatch")
+
+    yes_token_id = _resolve_binary_token_id(tokenizer, "yes")
+    no_token_id = _resolve_binary_token_id(tokenizer, "no")
+    target_device = getattr(model, "device", None)
+    original_padding_side = getattr(tokenizer, "padding_side", "right")
+
+    formatted_prompts: List[str] = []
+    predicted_labels: List[str] = []
+    yes_probabilities: List[float] = []
+    no_probabilities: List[float] = []
+    target_probabilities: List[float] = []
+
+    try:
+        tokenizer.padding_side = "left"
+        for start in range(0, len(prompts), batch_size):
+            chunk_prompts = list(prompts[start : start + batch_size])
+            chunk_targets = list(target_labels[start : start + batch_size])
+            if use_chat_template:
+                formatted = [
+                    tokenizer.apply_chat_template(
+                        [{"role": "user", "content": prompt}],
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        enable_thinking=False,
+                    )
+                    for prompt in chunk_prompts
+                ]
+            else:
+                formatted = chunk_prompts
+            formatted_prompts.extend(formatted)
+
+            model_inputs = tokenizer(
+                formatted,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
+            if target_device is not None:
+                model_inputs = model_inputs.to(target_device)
+
+            with torch.inference_mode():
+                outputs = model(**model_inputs, use_cache=False)
+                logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
+                probabilities = torch.softmax(logits, dim=-1)
+
+            predicted_indices = torch.argmax(probabilities, dim=-1).detach().cpu().tolist()
+            prob_rows = probabilities.detach().cpu().tolist()
+            for predicted_index, prob_row, target_label in zip(
+                predicted_indices,
+                prob_rows,
+                chunk_targets,
+            ):
+                predicted_label = "yes" if predicted_index == 0 else "no"
+                predicted_labels.append(predicted_label)
+                yes_probabilities.append(float(prob_row[0]))
+                no_probabilities.append(float(prob_row[1]))
+                target_probabilities.append(
+                    float(prob_row[0] if target_label == "yes" else prob_row[1])
+                )
+    finally:
+        tokenizer.padding_side = original_padding_side
+
+    return {
+        "formatted_prompts": formatted_prompts,
+        "predicted_labels": predicted_labels,
+        "target_labels": list(target_labels),
+        "yes_probabilities": yes_probabilities,
+        "no_probabilities": no_probabilities,
+        "target_probabilities": target_probabilities,
+    }
+
+
+def _summarize_validation_by_bucket(
+    *,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    score_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    buckets: Dict[str, Dict[str, Any]] = {
+        "overall": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
+        "tp": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
+        "tn": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
+        "fp": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
+        "fn": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
+    }
+    fixes_from_mistakes = 0
+    regressions_from_correct = 0
+
+    for pair, predicted_label, target_label, target_probability in zip(
+        sampled_pairs,
+        score_payload["predicted_labels"],
+        score_payload["target_labels"],
+        score_payload["target_probabilities"],
+    ):
+        confusion_bucket = pair["confusion_bucket"]
+        is_correct = predicted_label == target_label
+        for bucket_name in ("overall", confusion_bucket):
+            buckets[bucket_name]["count"] += 1
+            buckets[bucket_name]["correct"] += int(is_correct)
+            buckets[bucket_name]["target_probability_sum"] += float(target_probability)
+
+        if confusion_bucket in {"fp", "fn"} and is_correct:
+            fixes_from_mistakes += 1
+        if confusion_bucket in {"tp", "tn"} and not is_correct:
+            regressions_from_correct += 1
+
+    summary: Dict[str, Any] = {}
+    for bucket_name, stats in buckets.items():
+        count = stats["count"]
+        summary[bucket_name] = {
+            "count": count,
+            "accuracy": (stats["correct"] / count) if count else 0.0,
+            "avg_target_probability": (
+                stats["target_probability_sum"] / count if count else 0.0
+            ),
+        }
+    summary["fixes_from_mistakes"] = fixes_from_mistakes
+    summary["regressions_from_correct"] = regressions_from_correct
+    return summary
+
+
+def _compute_summary_delta(
+    *,
+    baseline_summary: Dict[str, Any],
+    candidate_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    delta: Dict[str, Any] = {}
+    for bucket_name in ("overall", "tp", "tn", "fp", "fn"):
+        delta[bucket_name] = {
+            "accuracy": (
+                candidate_summary[bucket_name]["accuracy"]
+                - baseline_summary[bucket_name]["accuracy"]
+            ),
+            "avg_target_probability": (
+                candidate_summary[bucket_name]["avg_target_probability"]
+                - baseline_summary[bucket_name]["avg_target_probability"]
+            ),
+        }
+    delta["fixes_from_mistakes"] = (
+        candidate_summary["fixes_from_mistakes"] - baseline_summary["fixes_from_mistakes"]
+    )
+    delta["regressions_from_correct"] = (
+        candidate_summary["regressions_from_correct"]
+        - baseline_summary["regressions_from_correct"]
+    )
+    return delta
+
+
+def _build_bucket_comparison(
+    *,
+    baseline_summary: Dict[str, Any],
+    candidate_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    comparison: Dict[str, Any] = {}
+    for bucket_name in ("tp", "tn", "fp", "fn"):
+        baseline_count = int(baseline_summary[bucket_name]["count"])
+        baseline_accuracy = float(baseline_summary[bucket_name]["accuracy"])
+        candidate_count = int(candidate_summary[bucket_name]["count"])
+        candidate_accuracy = float(candidate_summary[bucket_name]["accuracy"])
+        comparison[bucket_name] = {
+            "original": {
+                "count": baseline_count,
+                "accuracy": baseline_accuracy,
+                "num_correct": int(round(baseline_count * baseline_accuracy)),
+            },
+            "updated": {
+                "count": candidate_count,
+                "accuracy": candidate_accuracy,
+                "num_correct": int(round(candidate_count * candidate_accuracy)),
+            },
+        }
+    return comparison
+
+
+def _generate_region_prompt_variants(
+    *,
+    meta_prompt: str,
+    instruction_prompt: str,
+    num_generated_prompts: int,
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+    use_chat_template: bool,
+) -> List[Dict[str, Any]]:
+    if num_generated_prompts <= 0:
+        return []
+
+    raw_outputs = run_prompts(
+        [meta_prompt] * num_generated_prompts,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        batch_size=batch_size,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        do_sample=True,
+        do_log=True,
+        log_label="agent_gradient_eval_debug_meta_prompt",
+    )
+    variants: List[Dict[str, Any]] = []
+    for generation_index, raw_output in enumerate(raw_outputs):
+        revised_prompt = _extract_between(raw_output, "<p>", "</p>")
+        variants.append(
+            {
+                "generation_index": generation_index,
+                "raw_output": raw_output,
+                "revised_prompt": revised_prompt,
+                "changed": bool(revised_prompt) and revised_prompt != instruction_prompt,
+            }
+        )
+    return variants
+
+
 def _binary_pair_debug_record(
     *,
     pair_index: int,
@@ -375,6 +758,7 @@ def _binary_pair_debug_record(
         "episode_index": episode_index,
         "way_index": way_index,
         "sampled_bucket": sampled_bucket,
+        "confusion_bucket": _pair_confusion_bucket(label, prediction),
         "is_correct": label == prediction,
         "label": label,
         "prediction": prediction,
@@ -391,6 +775,7 @@ def build_sampled_batch(
     *,
     eval_payload: Dict[str, Any],
     dataset: Dict[str, Any],
+    dataset_type: str,
     query_index: int,
     sampled_indices: Dict[str, List[int]],
     seed: int,
@@ -420,6 +805,8 @@ def build_sampled_batch(
         episode = episodes[episode_index]
         support_id = episode["meta_train"][way_index][0]
         query_id = episode["meta_test"][query_index]
+        label = labels[pair_index]
+        prediction = predictions[pair_index]
         sampled_pairs.append(
             {
                 "pair_index": pair_index,
@@ -427,6 +814,15 @@ def build_sampled_batch(
                 "way_index": way_index,
                 "support": shots[support_id],
                 "query": queries[query_id],
+                "label": label,
+                "prediction": prediction,
+                "confusion_bucket": _pair_confusion_bucket(label, prediction),
+                "support_sentence": get_sentence_with_tags(shots[support_id]).strip(),
+                "query_sentence": get_sentence_with_tags(queries[query_id]).strip(),
+                "relation_description": get_relation_description(
+                    shots[support_id]["relation"],
+                    dt=dataset_type,
+                ),
             }
         )
 
@@ -466,6 +862,10 @@ def main() -> None:
     print(
         "[agent_gradient_eval_debug] prompt resolved:",
         prompt_info.get("prompt_source_type"),
+    )
+    print(
+        "[agent_gradient_eval_debug] initial instruction prompt:\n"
+        f"{instruction_prompt}"
     )
 
     eval_payload = _load_json(args.eval_output_path)
@@ -510,6 +910,7 @@ def main() -> None:
     sampled_pairs, sampled_examples = build_sampled_batch(
         eval_payload=eval_payload,
         dataset=dataset,
+        dataset_type=args.dataset_type,
         query_index=args.query_index,
         sampled_indices=sampled_indices,
         seed=args.seed,
@@ -547,6 +948,135 @@ def main() -> None:
         f"top_regions={len(gradient_results['top_regions'])}",
     )
 
+    baseline_score_payload = {
+        "formatted_prompts": gradient_results["formatted_prompts"],
+        "predicted_labels": gradient_results["predicted_labels"],
+        "target_labels": gradient_results["target_labels"],
+        "target_probabilities": gradient_results["target_probabilities"],
+    }
+    baseline_validation = _summarize_validation_by_bucket(
+        sampled_pairs=sampled_pairs,
+        score_payload=baseline_score_payload,
+    )
+    print(
+        "[agent_gradient_eval_debug] baseline validation:",
+        f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
+        f"overall_avg_target_probability={baseline_validation['overall']['avg_target_probability']:.4f}",
+        f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
+        f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
+    )
+
+    prompt_editing_payload: Dict[str, Any] = {
+        "baseline_validation": baseline_validation,
+        "selected_region": None,
+        "meta_prompt": None,
+        "generated_prompt_variants": [],
+    }
+    if args.num_generated_prompts > 0:
+        region_details = _resolve_region_details(
+            instruction_prompt=instruction_prompt,
+            tokenizer=tokenizer,
+            gradient_results=gradient_results,
+            region_index=args.region_index,
+        )
+        meta_prompt = _build_gradient_region_meta_prompt(
+            instruction_prompt=instruction_prompt,
+            region_details=region_details,
+        )
+        print(
+            "[agent_gradient_eval_debug] meta prompt:\n"
+            f"{meta_prompt}"
+        )
+        print(
+            "[agent_gradient_eval_debug] generating prompt variants:",
+            f"region_index={args.region_index}",
+            f"region_tokens={region_details['region_token_indices']}",
+            f"num_generated_prompts={args.num_generated_prompts}",
+        )
+        generated_variants = _generate_region_prompt_variants(
+            meta_prompt=meta_prompt,
+            instruction_prompt=instruction_prompt,
+            num_generated_prompts=args.num_generated_prompts,
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=args.meta_prompt_max_new_tokens,
+            batch_size=args.meta_prompt_batch_size,
+            use_chat_template=not args.disable_chat_template,
+        )
+        validated_variants: List[Dict[str, Any]] = []
+        for variant in generated_variants:
+            revised_prompt = variant["revised_prompt"]
+            if not revised_prompt:
+                print(
+                    "[agent_gradient_eval_debug] prompt variant generated:",
+                    f"generation_index={variant['generation_index']}",
+                    "revised_prompt=<empty>",
+                    "validation_skipped=True",
+                )
+                validated_variants.append(
+                    {
+                        **variant,
+                        "validation": None,
+                        "delta_vs_baseline": None,
+                    }
+                )
+                continue
+
+            prompts, target_labels = _build_binary_prompts_for_instruction(
+                instruction_prompt=revised_prompt,
+                binary_pairs=sampled_pairs,
+            )
+            score_payload = _score_binary_prompts(
+                prompts=prompts,
+                target_labels=target_labels,
+                model=model,
+                tokenizer=tokenizer,
+                batch_size=args.validation_batch_size,
+                use_chat_template=not args.disable_chat_template,
+            )
+            validation_summary = _summarize_validation_by_bucket(
+                sampled_pairs=sampled_pairs,
+                score_payload=score_payload,
+            )
+            delta_vs_baseline = _compute_summary_delta(
+                baseline_summary=baseline_validation,
+                candidate_summary=validation_summary,
+            )
+            print(
+                "[agent_gradient_eval_debug] prompt variant text:\n"
+                f"{revised_prompt}"
+            )
+            print(
+                "[agent_gradient_eval_debug] prompt variant validated:",
+                f"generation_index={variant['generation_index']}",
+                f"overall_accuracy={validation_summary['overall']['accuracy']:.4f}",
+                f"overall_avg_target_probability={validation_summary['overall']['avg_target_probability']:.4f}",
+                f"delta_accuracy={delta_vs_baseline['overall']['accuracy']:.4f}",
+                f"delta_avg_target_probability={delta_vs_baseline['overall']['avg_target_probability']:.4f}",
+            )
+            validated_variants.append(
+                {
+                    **variant,
+                    "validation": {
+                        "predicted_labels": score_payload["predicted_labels"],
+                        "target_labels": score_payload["target_labels"],
+                        "target_probabilities": score_payload["target_probabilities"],
+                        "summary": validation_summary,
+                        "bucket_comparison": _build_bucket_comparison(
+                            baseline_summary=baseline_validation,
+                            candidate_summary=validation_summary,
+                        ),
+                    },
+                    "delta_vs_baseline": delta_vs_baseline,
+                }
+            )
+
+        prompt_editing_payload["selected_region"] = region_details
+        prompt_editing_payload["meta_prompt"] = meta_prompt
+        prompt_editing_payload["generated_prompt_variants"] = validated_variants
+    else:
+        print("[agent_gradient_eval_debug] prompt variant generation skipped")
+
     payload = {
         "args": _namespace_to_json_dict(args),
         "model": args.model,
@@ -569,6 +1099,7 @@ def main() -> None:
         },
         "sampled_examples": sampled_examples,
         "gradient_analysis": gradient_results,
+        "prompt_region_editing": prompt_editing_payload,
     }
 
     if args.output_file:
@@ -576,8 +1107,6 @@ def main() -> None:
         with args.output_file.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, ensure_ascii=False)
         print(f"saved output to {args.output_file}")
-
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
