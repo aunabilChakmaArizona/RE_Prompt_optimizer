@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import sys
 from pathlib import Path
@@ -94,6 +95,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--query-index", type=int, default=0)
     parser.add_argument("--num-correct", type=int, default=4)
     parser.add_argument("--num-mistakes", type=int, default=4)
+    parser.add_argument(
+        "--mistake-coverage",
+        type=float,
+        default=0.0,
+        help="If > 0, sample this coverage fraction of all mistakes and match correct count to it.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-candidates", type=int, default=20)
     parser.add_argument(
@@ -187,9 +194,14 @@ def _sample_indices(
     rng: random.Random,
     label: str,
 ) -> List[int]:
+    unique_indices = sorted(set(indices))
     if len(indices) < k:
         raise ValueError(f"Need {k} {label} samples, but found only {len(indices)}.")
-    return sorted(rng.sample(list(indices), k))
+    if len(unique_indices) < k:
+        raise ValueError(
+            f"Need {k} unique {label} samples, but found only {len(unique_indices)}."
+        )
+    return sorted(rng.sample(unique_indices, k))
 
 
 def sample_eval_pair_indices(
@@ -197,6 +209,7 @@ def sample_eval_pair_indices(
     *,
     num_correct: int,
     num_mistakes: int,
+    mistake_coverage: float,
     seed: int,
 ) -> Dict[str, List[int]]:
     labels = eval_payload.get("pair_labels", [])
@@ -207,11 +220,49 @@ def sample_eval_pair_indices(
     correct_indices = [idx for idx, (label, pred) in enumerate(zip(labels, predictions)) if label == pred]
     mistake_indices = [idx for idx, (label, pred) in enumerate(zip(labels, predictions)) if label != pred]
 
+    if not 0.0 <= mistake_coverage <= 1.0:
+        raise ValueError("--mistake-coverage must be in the [0, 1] range.")
+
+    if mistake_coverage > 0.0:
+        resolved_num_mistakes = math.ceil(len(mistake_indices) * mistake_coverage)
+        resolved_num_mistakes = max(1, resolved_num_mistakes)
+    else:
+        if num_mistakes > len(mistake_indices):
+            raise ValueError(
+                f"num_mistakes={num_mistakes} exceeds available mistakes={len(mistake_indices)}."
+            )
+        resolved_num_mistakes = num_mistakes
+
+    resolved_num_correct = resolved_num_mistakes
+    if len(correct_indices) < resolved_num_correct:
+        raise ValueError(
+            f"Need {resolved_num_correct} correct samples to match mistakes, "
+            f"but found only {len(correct_indices)}."
+        )
+
     rng = random.Random(seed)
-    return {
-        "correct_indices": _sample_indices(correct_indices, k=num_correct, rng=rng, label="correct"),
-        "mistake_indices": _sample_indices(mistake_indices, k=num_mistakes, rng=rng, label="mistake"),
+    result = {
+        "correct_indices": _sample_indices(
+            correct_indices,
+            k=resolved_num_correct,
+            rng=rng,
+            label="correct",
+        ),
+        "mistake_indices": _sample_indices(
+            mistake_indices,
+            k=resolved_num_mistakes,
+            rng=rng,
+            label="mistake",
+        ),
     }
+    print(
+        "[agent_gradient_eval_debug] pair pool:",
+        f"available_mistakes={len(mistake_indices)}",
+        f"available_corrects={len(correct_indices)}",
+        f"selected_mistakes={len(result['mistake_indices'])}",
+        f"selected_corrects={len(result['correct_indices'])}",
+    )
+    return result
 
 
 def _resolve_num_ways(episodes: Sequence[Dict[str, Any]]) -> int:
@@ -351,6 +402,7 @@ def main() -> None:
         eval_payload,
         num_correct=args.num_correct,
         num_mistakes=args.num_mistakes,
+        mistake_coverage=args.mistake_coverage,
         seed=args.seed,
     )
     print(
