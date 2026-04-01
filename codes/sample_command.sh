@@ -277,12 +277,32 @@ python agents/agent_gradient_eval_debug.py \
 ## gradient experiment sample analysis --mistake-coverage
 python agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
-  --device-map "cuda:0" \
+  --device-map "cuda:3" \
   --eval-output-path "../trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
   --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 12 \
   --mistake-coverage 1.0 \
   --output-file "../gradients_experiments/gradient_debug_mc-1.0_node12_f1-37.json"
+
+python agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:3" \
+  --eval-output-path "../trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --candidate-mode first_order_loss_approx \
+  --mistake-coverage 1.0 \
+  --output-file "../gradients_experiments/gradient_debug_mc-1.0_FOLA_node12_f1-37.json"
+
+python agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:0" \
+  --eval-output-path "../trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --candidate-mode first_order_loss_approx_normalized \
+  --mistake-coverage 1.0 \
+  --output-file "../gradients_experiments/gradient_debug_mc-1.0_FOLAN_node12_f1-37.json"
 
 ##################################################
 # tags custom

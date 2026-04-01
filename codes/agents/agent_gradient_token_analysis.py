@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -467,6 +468,7 @@ def analyze_relation_extraction_binary_pairs(
     model,
     tokenizer,
     dataset_type: str = "fs_tacred",
+    gradient_batch_size: int | None = None,
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
@@ -521,88 +523,110 @@ def analyze_relation_extraction_binary_pairs(
                 "Use a stable prompt template so prompt tokens are identical for the batch."
             )
 
-    encoded_inputs = [
-        _prepare_model_inputs(
-            payload["prompt"],
-            tokenizer=tokenizer,
-            use_chat_template=use_chat_template,
-            add_generation_prompt=add_generation_prompt,
-            enable_thinking=enable_thinking,
-        )
-        for payload in batch_payloads
-    ]
-
-    formatted_prompts = [item["formatted_prompt"] for item in encoded_inputs]
-    tokenized_batch = tokenizer.pad(
-        [
-            {
-                "input_ids": item["input_ids"][0],
-                "attention_mask": item["attention_mask"][0],
-            }
-            for item in encoded_inputs
-        ],
-        return_tensors="pt",
-    )
-
     embedding_layer = model.get_input_embeddings()
     embed_device = embedding_layer.weight.device
-    input_ids = tokenized_batch["input_ids"].to(embed_device)
-    attention_mask = tokenized_batch["attention_mask"].to(embed_device)
-
     yes_token_id = _resolve_binary_token_id(tokenizer, "yes")
     no_token_id = _resolve_binary_token_id(tokenizer, "no")
-    target_class_indices = torch.tensor(
-        [0 if payload["label"] == "yes" else 1 for payload in batch_payloads],
-        device=embed_device,
-    )
+    effective_batch_size = gradient_batch_size or len(batch_payloads)
+    if effective_batch_size <= 0:
+        raise ValueError("gradient_batch_size must be positive when provided.")
 
-    model.zero_grad(set_to_none=True)
-    inputs_embeds = embedding_layer(input_ids).detach().clone()
-    inputs_embeds.requires_grad_(True)
-
-    outputs = model(
-        inputs_embeds=inputs_embeds,
-        attention_mask=attention_mask,
-        use_cache=False,
-    )
-    decision_logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
-    probabilities = torch.softmax(decision_logits, dim=-1)
-    predicted_indices = torch.argmax(probabilities, dim=-1)
-    predicted_labels = ["yes" if index.item() == 0 else "no" for index in predicted_indices]
-    target_probabilities = [
-        float(probabilities[row_index, class_index].item())
-        for row_index, class_index in enumerate(target_class_indices.tolist())
-    ]
-
-    loss = F.cross_entropy(decision_logits, target_class_indices, reduction="mean")
-    loss.backward()
-
-    gradients = inputs_embeds.grad
-    prompt_position_lists = [payload["prompt_token_positions"] for payload in batch_payloads]
-    rendered_prompt_ids_list = [payload["rendered_prompt_ids"] for payload in batch_payloads]
-
+    formatted_prompts: List[str] = []
+    predicted_labels: List[str] = []
+    target_probabilities: List[float] = []
     prompt_gradient_sums = torch.zeros(
-        (len(prompt_token_ids), gradients.size(-1)),
-        device=gradients.device,
-        dtype=gradients.dtype,
+        (len(prompt_token_ids), embedding_layer.weight.size(-1)),
+        device=embed_device,
+        dtype=embedding_layer.weight.dtype,
     )
     prompt_embedding_sums = torch.zeros_like(prompt_gradient_sums)
 
-    seq_len = input_ids.size(1)
-    for batch_index, positions in enumerate(prompt_position_lists):
-        formatted_ids = encoded_inputs[batch_index]["input_ids"][0].tolist()
-        rendered_prompt_start = _find_subsequence(
-            formatted_ids,
-            rendered_prompt_ids_list[batch_index],
-            start_index=0,
+    total_batches = math.ceil(len(batch_payloads) / effective_batch_size)
+    for batch_number, start in enumerate(
+        range(0, len(batch_payloads), effective_batch_size),
+        start=1,
+    ):
+        print(
+            "[agent_gradient_token_analysis] gradient batch",
+            f"{batch_number}/{total_batches}",
         )
-        rendered_length = len(formatted_ids)
-        left_pad = seq_len - rendered_length
-        shifted_positions = [
-            left_pad + rendered_prompt_start + position for position in positions
+        chunk_payloads = batch_payloads[start : start + effective_batch_size]
+        encoded_inputs = [
+            _prepare_model_inputs(
+                payload["prompt"],
+                tokenizer=tokenizer,
+                use_chat_template=use_chat_template,
+                add_generation_prompt=add_generation_prompt,
+                enable_thinking=enable_thinking,
+            )
+            for payload in chunk_payloads
         ]
-        prompt_gradient_sums += gradients[batch_index, shifted_positions, :]
-        prompt_embedding_sums += inputs_embeds.detach()[batch_index, shifted_positions, :]
+
+        formatted_prompts.extend(item["formatted_prompt"] for item in encoded_inputs)
+        tokenized_batch = tokenizer.pad(
+            [
+                {
+                    "input_ids": item["input_ids"][0],
+                    "attention_mask": item["attention_mask"][0],
+                }
+                for item in encoded_inputs
+            ],
+            return_tensors="pt",
+        )
+
+        input_ids = tokenized_batch["input_ids"].to(embed_device)
+        attention_mask = tokenized_batch["attention_mask"].to(embed_device)
+        target_class_indices = torch.tensor(
+            [0 if payload["label"] == "yes" else 1 for payload in chunk_payloads],
+            device=embed_device,
+        )
+
+        model.zero_grad(set_to_none=True)
+        inputs_embeds = embedding_layer(input_ids).detach().clone()
+        inputs_embeds.requires_grad_(True)
+
+        outputs = model(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            use_cache=False,
+        )
+        decision_logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
+        probabilities = torch.softmax(decision_logits, dim=-1)
+        predicted_indices = torch.argmax(probabilities, dim=-1)
+        predicted_labels.extend(
+            "yes" if index.item() == 0 else "no" for index in predicted_indices
+        )
+        target_probabilities.extend(
+            float(probabilities[row_index, class_index].item())
+            for row_index, class_index in enumerate(target_class_indices.tolist())
+        )
+
+        loss = F.cross_entropy(decision_logits, target_class_indices, reduction="sum")
+        loss.backward()
+
+        gradients = inputs_embeds.grad
+        prompt_position_lists = [
+            payload["prompt_token_positions"] for payload in chunk_payloads
+        ]
+        rendered_prompt_ids_list = [
+            payload["rendered_prompt_ids"] for payload in chunk_payloads
+        ]
+
+        seq_len = input_ids.size(1)
+        for batch_index, positions in enumerate(prompt_position_lists):
+            formatted_ids = encoded_inputs[batch_index]["input_ids"][0].tolist()
+            rendered_prompt_start = _find_subsequence(
+                formatted_ids,
+                rendered_prompt_ids_list[batch_index],
+                start_index=0,
+            )
+            rendered_length = len(formatted_ids)
+            left_pad = seq_len - rendered_length
+            shifted_positions = [
+                left_pad + rendered_prompt_start + position for position in positions
+            ]
+            prompt_gradient_sums += gradients[batch_index, shifted_positions, :]
+            prompt_embedding_sums += inputs_embeds.detach()[batch_index, shifted_positions, :]
 
     prompt_gradient_means = prompt_gradient_sums / len(batch_payloads)
     prompt_embedding_means = prompt_embedding_sums / len(batch_payloads)
@@ -673,6 +697,7 @@ def analyze_relation_extraction_dataset(
     tokenizer,
     dataset_type: str = "fs_tacred",
     query_index: int = 0,
+    gradient_batch_size: int | None = None,
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
@@ -698,6 +723,7 @@ def analyze_relation_extraction_dataset(
         model=model,
         tokenizer=tokenizer,
         dataset_type=dataset_type,
+        gradient_batch_size=gradient_batch_size,
         num_candidates=num_candidates,
         max_regions=max_regions,
         max_total_region_tokens=max_total_region_tokens,
@@ -724,6 +750,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--ep-start", type=int, default=0)
     parser.add_argument("--ep-end", type=int, default=5)
     parser.add_argument("--query-index", type=int, default=0)
+    parser.add_argument("--gradient-batch-size", type=int, default=8)
     parser.add_argument("--num-candidates", type=int, default=5)
     parser.add_argument("--max-regions", type=int, default=1)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
@@ -764,6 +791,7 @@ def main() -> None:
         tokenizer=tokenizer,
         dataset_type=args.dataset_type,
         query_index=args.query_index,
+        gradient_batch_size=args.gradient_batch_size,
         num_candidates=args.num_candidates,
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,

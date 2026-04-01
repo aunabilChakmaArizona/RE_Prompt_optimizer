@@ -102,6 +102,12 @@ def _parse_args() -> argparse.Namespace:
         help="If > 0, sample this coverage fraction of all mistakes and match correct count to it.",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--gradient-batch-size",
+        type=int,
+        default=8,
+        help="Optional batch size used while accumulating gradients over the sampled pairs.",
+    )
     parser.add_argument("--num-candidates", type=int, default=20)
     parser.add_argument(
         "--candidate-mode",
@@ -452,6 +458,7 @@ def main() -> None:
         model=model,
         tokenizer=tokenizer,
         dataset_type=args.dataset_type,
+        gradient_batch_size=args.gradient_batch_size,
         num_candidates=args.num_candidates,
         candidate_mode=args.candidate_mode,
         max_regions=args.max_regions,
