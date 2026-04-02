@@ -18,7 +18,8 @@ CODES_DIR = CURRENT_DIR.parent
 if str(CODES_DIR) not in sys.path:
     sys.path.append(str(CODES_DIR))
 
-from agents.agent_data_loader import DEFAULT_DATA_DIR, load_split_episodes
+from agents.agent_data_loader import DEFAULT_DATA_DIR, load_split_episodes, load_train_samples
+from agents.agent_binary_inference import run_binary_inference
 from agents.agent_gradient_token_analysis import (
     TOKEN_CANDIDATE_MODE_CHOICES,
     TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
@@ -26,12 +27,14 @@ from agents.agent_gradient_token_analysis import (
     build_relation_prompt,
 )
 from agents.agent_llm_prompting import run_prompts
+from agents.agent_metrics import compute_prf_stats
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import (
     GRADIENT_REGION_MUTATION_PROMPT_V1,
     INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
 )
 from agents.agent_relation_utils import get_relation_description
+from agents.agent_sample_feedback import sample_feedback_fn
 from agents.agent_utils import get_sentence_with_tags
 
 
@@ -82,8 +85,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--eval-output-path",
         type=Path,
-        required=True,
-        help="Path to EVALID_*_labels_predictions.json",
+        default=None,
+        help=(
+            "Path to EVALID_*_labels_predictions.json. If provided, runs the old "
+            "eval-json sampling mode."
+        ),
     )
     parser.add_argument(
         "--prompt-source-path",
@@ -106,6 +112,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset-type", default="fs_tacred")
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR)
     parser.add_argument(
+        "--train-samples",
+        default="fs_tacred_train_samples.pkl",
+        help="Train samples pickle used by the trainer-style feedback sampler.",
+    )
+    parser.add_argument(
         "--split",
         default=None,
         help="Dataset split to load. Defaults to split saved inside the eval output file.",
@@ -120,6 +131,24 @@ def _parse_args() -> argparse.Namespace:
         help="If > 0, sample this coverage fraction of all mistakes and match correct count to it.",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--train-gradient-sample-size",
+        type=int,
+        default=None,
+        help=(
+            "New mode only. Sample D binary pairs from the train split, bucket them "
+            "by fresh predictions from the original prompt, and use a balanced subset "
+            "for gradient collection."
+        ),
+    )
+    parser.add_argument(
+        "--full-eval-split",
+        default="dev",
+        help=(
+            "Split used for full evaluation of generated prompts in the new mode. "
+            "Defaults to dev."
+        ),
+    )
     parser.add_argument(
         "--gradient-batch-size",
         type=int,
@@ -275,14 +304,7 @@ def _bucket_pair_indices(
         "fn": [],
     }
     for idx, (label, prediction) in enumerate(zip(labels, predictions)):
-        if label == "yes" and prediction == "yes":
-            buckets["tp"].append(idx)
-        elif label == "no" and prediction == "no":
-            buckets["tn"].append(idx)
-        elif label == "no" and prediction == "yes":
-            buckets["fp"].append(idx)
-        elif label == "yes" and prediction == "no":
-            buckets["fn"].append(idx)
+        buckets[_pair_confusion_bucket(label, prediction)].append(idx)
     return buckets
 
 
@@ -300,7 +322,7 @@ def sample_eval_pair_indices(
         raise ValueError("eval output pair_labels/pair_predictions length mismatch")
 
     buckets = _bucket_pair_indices(labels, predictions)
-    correct_indices = buckets["tp"] + buckets["tn"]
+    correct_indices = buckets["tp"] + buckets["tn"] # not needed
     mistake_indices = buckets["fp"] + buckets["fn"]
 
     if not 0.0 <= mistake_coverage <= 1.0:
@@ -417,6 +439,127 @@ def _pair_confusion_bucket(label: str, prediction: str) -> str:
     if label == "yes" and prediction == "no":
         return "fn"
     raise ValueError(f"Unsupported label/prediction pair: label={label}, prediction={prediction}")
+
+
+def _build_prf_scores(
+    *,
+    predicted_labels: Sequence[str],
+    target_labels: Sequence[str],
+) -> Dict[str, float]:
+    stats = compute_prf_stats(target_labels, predicted_labels, n_chunks=1)
+    return {
+        "precision": float(stats["precision_mean"]),
+        "recall": float(stats["recall_mean"]),
+        "f1": float(stats["f1_mean"]),
+    }
+
+def _build_binary_pairs_from_feedback_samples(
+    *,
+    feedback_samples,
+    shots_by_id: Dict[str, dict],
+    dataset_type: str,
+) -> List[Dict[str, Any]]:
+    pairs: List[Dict[str, Any]] = []
+    for pair_index, sample in enumerate(feedback_samples.all_samples):
+        support = shots_by_id[sample.id_1shot]
+        query = shots_by_id[sample.id_query]
+        label = sample.label
+        pairs.append(
+            {
+                "pair_index": pair_index,
+                "episode_index": None,
+                "way_index": None,
+                "support": support,
+                "query": query,
+                "label": label,
+                "prediction": None,
+                "confusion_bucket": None,
+                "support_sentence": get_sentence_with_tags(support).strip(),
+                "query_sentence": get_sentence_with_tags(query).strip(),
+                "relation_description": get_relation_description(
+                    support["relation"],
+                    dt=dataset_type,
+                ),
+            }
+        )
+    return pairs
+
+
+def _attach_predictions_to_pairs(
+    *,
+    pairs: Sequence[Dict[str, Any]],
+    predicted_labels: Sequence[str],
+) -> List[Dict[str, Any]]:
+    if len(pairs) != len(predicted_labels):
+        raise ValueError("pairs/predicted_labels length mismatch")
+
+    updated_pairs: List[Dict[str, Any]] = []
+    for pair, predicted_label in zip(pairs, predicted_labels):
+        updated_pair = dict(pair)
+        updated_pair["prediction"] = predicted_label
+        updated_pair["confusion_bucket"] = _pair_confusion_bucket(
+            updated_pair["label"],
+            predicted_label,
+        )
+        updated_pairs.append(updated_pair)
+    return updated_pairs
+
+
+def _sample_balanced_pairs_from_bucketed_pool(
+    *,
+    bucketed_pairs: Sequence[Dict[str, Any]],
+    seed: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    buckets: Dict[str, List[Dict[str, Any]]] = {
+        "tp": [],
+        "tn": [],
+        "fp": [],
+        "fn": [],
+    }
+    for pair in bucketed_pairs:
+        buckets[pair["confusion_bucket"]].append(pair)
+
+    selected_per_bucket = min(len(buckets["tp"]), len(buckets["tn"]), len(buckets["fp"]), len(buckets["fn"]))
+    if selected_per_bucket <= 0:
+        raise ValueError(
+            "Unable to sample balanced tp/tn/fp/fn buckets from the train D set. "
+            f"available_tp={len(buckets['tp'])}, available_tn={len(buckets['tn'])}, "
+            f"available_fp={len(buckets['fp'])}, available_fn={len(buckets['fn'])}."
+        )
+
+    rng = random.Random(seed)
+    selected_pairs: List[Dict[str, Any]] = []
+    selected_counts: Dict[str, int] = {}
+    for bucket_name in ("tp", "tn", "fp", "fn"):
+        chosen = rng.sample(buckets[bucket_name], selected_per_bucket)
+        selected_counts[bucket_name] = len(chosen)
+        selected_pairs.extend(chosen)
+
+    rng.shuffle(selected_pairs)
+    bucket_stats = {
+        "available": {bucket_name: len(bucket) for bucket_name, bucket in buckets.items()},
+        "selected": selected_counts,
+    }
+    return selected_pairs, bucket_stats
+
+
+def _build_evaluation_report(
+    *,
+    score_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    confusion_matrix = _build_confusion_matrix_counts(
+        predicted_labels=score_payload["predicted_labels"],
+        target_labels=score_payload["target_labels"],
+    )
+    return {
+        "predicted_labels": score_payload["predicted_labels"],
+        "target_labels": score_payload["target_labels"],
+        "confusion_matrix": confusion_matrix,
+        "prf": _build_prf_scores(
+            predicted_labels=score_payload["predicted_labels"],
+            target_labels=score_payload["target_labels"],
+        ),
+    }
 
 
 def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
@@ -1035,6 +1178,7 @@ def build_full_binary_pairs(
 def main() -> None:
     args = _parse_args()
     print("[agent_gradient_eval_debug] starting")
+    use_old_eval_mode = args.eval_output_path is not None
 
     instruction_prompt, prompt_info = resolve_instruction_prompt(
         args.prompt_source_path,
@@ -1048,58 +1192,6 @@ def main() -> None:
     print(
         "[agent_gradient_eval_debug] initial instruction prompt:\n"
         f"{instruction_prompt}"
-    )
-
-    eval_payload = _load_json(args.eval_output_path)
-    saved_split = args.split or eval_payload.get("split") or "validation"
-    split = _resolve_dataset_split(saved_split)
-    print(
-        "[agent_gradient_eval_debug] eval output loaded:",
-        args.eval_output_path,
-        f"(saved_split={saved_split}, dataset_split={split})",
-    )
-    sampled_indices = sample_eval_pair_indices(
-        eval_payload,
-        num_correct=args.num_correct,
-        num_mistakes=args.num_mistakes,
-        mistake_coverage=args.mistake_coverage,
-        seed=args.seed,
-    )
-    print(
-        "[agent_gradient_eval_debug] sampled binary pairs:",
-        f"mistakes={len(sampled_indices['mistake_indices'])}",
-        f"correct={len(sampled_indices['correct_indices'])}",
-    )
-
-    dataset = load_split_episodes(
-        split=split,
-        data_dir=args.data_dir,
-        dataset_type=args.dataset_type,
-    )
-    print(
-        "[agent_gradient_eval_debug] dataset loaded:",
-        f"episodes={len(dataset['episodes'])}",
-        f"dataset_type={args.dataset_type}",
-    )
-    pair_labels = eval_payload.get("pair_labels", [])
-    num_ways = _resolve_num_ways(dataset["episodes"])
-    if len(pair_labels) != len(dataset["episodes"]) * num_ways:
-        raise ValueError(
-            "Loaded split shape does not match the eval output pair count: "
-            f"{len(dataset['episodes'])} episodes x {num_ways} ways vs {len(pair_labels)} pairs."
-        )
-
-    sampled_pairs, sampled_examples = build_sampled_batch(
-        eval_payload=eval_payload,
-        dataset=dataset,
-        dataset_type=args.dataset_type,
-        query_index=args.query_index,
-        sampled_indices=sampled_indices,
-        seed=args.seed,
-    )
-    print(
-        "[agent_gradient_eval_debug] batch built:",
-        f"pairs={len(sampled_pairs)}",
     )
 
     model, tokenizer = load_model_and_tokenizer(
@@ -1119,6 +1211,196 @@ def main() -> None:
         print(
             "[agent_gradient_eval_debug] meta-prompt model and tokenizer loaded:",
             args.meta_prompt_model,
+        )
+
+    eval_payload: Dict[str, Any] | None = None
+    saved_split = None
+    split = None
+    sampled_indices: Dict[str, Any] = {}
+    sampled_pairs: List[Dict[str, Any]] = []
+    sampled_examples: List[Dict[str, Any]] = []
+    baseline_vs_saved_eval: Dict[str, Any] | None = None
+    original_full_evaluation: Dict[str, Any] | None = None
+    full_eval_pairs: List[Dict[str, Any]] = []
+    train_d_pairs: List[Dict[str, Any]] = []
+    train_gradient_collection: Dict[str, Any] | None = None
+
+    if use_old_eval_mode:
+        eval_payload = _load_json(args.eval_output_path)
+        saved_split = args.split or eval_payload.get("split") or "validation"
+        split = _resolve_dataset_split(saved_split)
+        print(
+            "[agent_gradient_eval_debug] eval output loaded:",
+            args.eval_output_path,
+            f"(saved_split={saved_split}, dataset_split={split})",
+        )
+        sampled_indices = sample_eval_pair_indices(
+            eval_payload,
+            num_correct=args.num_correct,
+            num_mistakes=args.num_mistakes,
+            mistake_coverage=args.mistake_coverage,
+            seed=args.seed,
+        )
+        print(
+            "[agent_gradient_eval_debug] sampled binary pairs:",
+            f"mistakes={len(sampled_indices['mistake_indices'])}",
+            f"correct={len(sampled_indices['correct_indices'])}",
+        )
+
+        dataset = load_split_episodes(
+            split=split,
+            data_dir=args.data_dir,
+            dataset_type=args.dataset_type,
+        )
+        print(
+            "[agent_gradient_eval_debug] dataset loaded:",
+            f"episodes={len(dataset['episodes'])}",
+            f"dataset_type={args.dataset_type}",
+        )
+        pair_labels = eval_payload.get("pair_labels", [])
+        num_ways = _resolve_num_ways(dataset["episodes"])
+        if len(pair_labels) != len(dataset["episodes"]) * num_ways:
+            raise ValueError(
+                "Loaded split shape does not match the eval output pair count: "
+                f"{len(dataset['episodes'])} episodes x {num_ways} ways vs {len(pair_labels)} pairs."
+            )
+
+        sampled_pairs, sampled_examples = build_sampled_batch(
+            eval_payload=eval_payload,
+            dataset=dataset,
+            dataset_type=args.dataset_type,
+            query_index=args.query_index,
+            sampled_indices=sampled_indices,
+            seed=args.seed,
+        )
+        print(
+            "[agent_gradient_eval_debug] batch built:",
+            f"pairs={len(sampled_pairs)}",
+        )
+        full_eval_pairs = build_full_binary_pairs(
+            dataset=dataset,
+            dataset_type=args.dataset_type,
+            query_index=args.query_index,
+        )
+    else:
+        if args.train_gradient_sample_size is None or args.train_gradient_sample_size <= 0:
+            raise ValueError(
+                "--train-gradient-sample-size must be set to a positive integer when "
+                "--eval-output-path is omitted."
+            )
+
+        train_samples = load_train_samples(
+            data_dir=args.data_dir,
+            filename=args.train_samples,
+        )
+        print(
+            "[agent_gradient_eval_debug] train samples loaded:",
+            f"relations={len(train_samples)}",
+            f"dataset_type={args.dataset_type}",
+        )
+        rng = random.Random(args.seed)
+        train_feedback_samples = sample_feedback_fn(
+            train_samples,
+            k=args.train_gradient_sample_size,
+            rng=rng,
+        )
+        train_d_pairs = _build_binary_pairs_from_feedback_samples(
+            feedback_samples=train_feedback_samples,
+            shots_by_id=train_samples,
+            dataset_type=args.dataset_type,
+        )
+        print(
+            "[agent_gradient_eval_debug] train D sample built:",
+            f"D={len(train_d_pairs)}",
+        )
+
+        train_d_prompts, train_d_target_labels = _build_binary_prompts_for_instruction(
+            instruction_prompt=instruction_prompt,
+            binary_pairs=train_d_pairs,
+        )
+        train_d_predicted_labels = run_binary_inference(
+            train_d_prompts,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.validation_batch_size,
+            use_chat_template=not args.disable_chat_template,
+            add_generation_prompt=True,
+            enable_thinking=False,
+            log_label="train_gradient_collection",
+        )
+        train_d_score_payload = {
+            "predicted_labels": train_d_predicted_labels,
+            "target_labels": train_d_target_labels,
+        }
+        train_d_pairs = _attach_predictions_to_pairs(
+            pairs=train_d_pairs,
+            predicted_labels=train_d_predicted_labels,
+        )
+        train_d_report = {
+            "confusion_matrix": _build_confusion_matrix_counts(
+                predicted_labels=train_d_predicted_labels,
+                target_labels=train_d_target_labels,
+            ),
+            "prf": _build_prf_scores(
+                predicted_labels=train_d_predicted_labels,
+                target_labels=train_d_target_labels,
+            ),
+        }
+        sampled_pairs, bucket_stats = _sample_balanced_pairs_from_bucketed_pool(
+            bucketed_pairs=train_d_pairs,
+            seed=args.seed,
+        )
+        sampled_examples = [dict(pair) for pair in sampled_pairs]
+        sampled_indices = {
+            "correct_indices": [
+                pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"tp", "tn"}
+            ],
+            "mistake_indices": [
+                pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"fp", "fn"}
+            ],
+            "bucket_stats": bucket_stats,
+        }
+        train_gradient_collection = {
+            "gradient_split": "train",
+            "evaluation_split": args.full_eval_split,
+            "train_gradient_sample_size": args.train_gradient_sample_size,
+            "train_d_pair_indices": [pair["pair_index"] for pair in train_d_pairs],
+            "train_d_bucket_stats": {
+                "available": bucket_stats["available"],
+                "selected_for_gradients": bucket_stats["selected"],
+            },
+            "train_d_evaluation_original_prompt": train_d_report,
+        }
+        print(
+            "[agent_gradient_eval_debug] train D pair pool:",
+            f"available_tp={bucket_stats['available']['tp']}",
+            f"available_tn={bucket_stats['available']['tn']}",
+            f"available_fp={bucket_stats['available']['fp']}",
+            f"available_fn={bucket_stats['available']['fn']}",
+            f"selected_tp={bucket_stats['selected']['tp']}",
+            f"selected_tn={bucket_stats['selected']['tn']}",
+            f"selected_fp={bucket_stats['selected']['fp']}",
+            f"selected_fn={bucket_stats['selected']['fn']}",
+        )
+        print(
+            "[agent_gradient_eval_debug] train gradient batch built:",
+            f"pairs={len(sampled_pairs)}",
+        )
+
+        full_eval_dataset = load_split_episodes(
+            split=args.full_eval_split,
+            data_dir=args.data_dir,
+            dataset_type=args.dataset_type,
+        )
+        print(
+            "[agent_gradient_eval_debug] full evaluation dataset loaded:",
+            f"split={args.full_eval_split}",
+            f"episodes={len(full_eval_dataset['episodes'])}",
+        )
+        full_eval_pairs = build_full_binary_pairs(
+            dataset=full_eval_dataset,
+            dataset_type=args.dataset_type,
+            query_index=args.query_index,
         )
 
     print("[agent_gradient_eval_debug] running gradient analysis")
@@ -1161,12 +1443,13 @@ def main() -> None:
         predicted_labels=baseline_score_payload["predicted_labels"],
         target_labels=baseline_score_payload["target_labels"],
     )
-    baseline_vs_saved_eval = _compare_with_saved_eval_predictions(
-        sampled_pairs=sampled_pairs,
-        eval_payload=eval_payload,
-        predicted_labels=baseline_score_payload["predicted_labels"],
-        target_labels=baseline_score_payload["target_labels"],
-    )
+    if use_old_eval_mode and eval_payload is not None:
+        baseline_vs_saved_eval = _compare_with_saved_eval_predictions(
+            sampled_pairs=sampled_pairs,
+            eval_payload=eval_payload,
+            predicted_labels=baseline_score_payload["predicted_labels"],
+            target_labels=baseline_score_payload["target_labels"],
+        )
     baseline_validation = _summarize_validation_by_bucket(
         sampled_pairs=sampled_pairs,
         score_payload=baseline_score_payload,
@@ -1178,58 +1461,55 @@ def main() -> None:
         f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
     )
-    print(
-        "[agent_gradient_eval_debug] baseline vs saved eval:",
-        f"compared={baseline_vs_saved_eval['num_compared']}",
-        f"mismatches={baseline_vs_saved_eval['num_mismatches']}",
-    )
+    if baseline_vs_saved_eval is not None:
+        print(
+            "[agent_gradient_eval_debug] baseline vs saved eval:",
+            f"compared={baseline_vs_saved_eval['num_compared']}",
+            f"mismatches={baseline_vs_saved_eval['num_mismatches']}",
+        )
 
-    print(
-        "[agent_gradient_eval_debug] running original full evaluation:",
-        f"pairs={len(dataset['episodes']) * _resolve_num_ways(dataset['episodes'])}",
-        f"batch_size={args.validation_batch_size}",
-    )
-    full_binary_pairs = build_full_binary_pairs(
-        dataset=dataset,
-        dataset_type=args.dataset_type,
-        query_index=args.query_index,
-    )
-    full_prompts, full_target_labels = _build_binary_prompts_for_instruction(
-        instruction_prompt=instruction_prompt,
-        binary_pairs=full_binary_pairs,
-    )
-    original_full_score_payload = _score_binary_prompts(
-        prompts=full_prompts,
-        target_labels=full_target_labels,
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=args.validation_batch_size,
-        use_chat_template=not args.disable_chat_template,
-    )
-    original_full_vs_source_eval = _compare_full_eval_with_source_predictions(
-        eval_payload=eval_payload,
-        predicted_labels=original_full_score_payload["predicted_labels"],
-        target_labels=original_full_score_payload["target_labels"],
-    )
-    original_full_evaluation = {
-        "batch_size": args.validation_batch_size,
-        "num_pairs": len(full_binary_pairs),
-        "predicted_labels": original_full_score_payload["predicted_labels"],
-        "target_labels": original_full_score_payload["target_labels"],
-        "scores": _build_confusion_matrix_counts(
+    if use_old_eval_mode and eval_payload is not None:
+        print(
+            "[agent_gradient_eval_debug] running original full evaluation:",
+            f"pairs={len(full_eval_pairs)}",
+            f"batch_size={args.validation_batch_size}",
+        )
+        full_prompts, full_target_labels = _build_binary_prompts_for_instruction(
+            instruction_prompt=instruction_prompt,
+            binary_pairs=full_eval_pairs,
+        )
+        original_full_score_payload = _score_binary_prompts(
+            prompts=full_prompts,
+            target_labels=full_target_labels,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.validation_batch_size,
+            use_chat_template=not args.disable_chat_template,
+        )
+        original_full_vs_source_eval = _compare_full_eval_with_source_predictions(
+            eval_payload=eval_payload,
             predicted_labels=original_full_score_payload["predicted_labels"],
             target_labels=original_full_score_payload["target_labels"],
-        ),
-        "vs_source_eval": original_full_vs_source_eval,
-    }
-    print(
-        "[agent_gradient_eval_debug] original full evaluation done:",
-        f"tp={original_full_evaluation['scores']['tp']}",
-        f"tn={original_full_evaluation['scores']['tn']}",
-        f"fp={original_full_evaluation['scores']['fp']}",
-        f"fn={original_full_evaluation['scores']['fn']}",
-        f"source_mismatches={original_full_vs_source_eval['num_mismatches']}",
-    )
+        )
+        original_full_evaluation = {
+            "batch_size": args.validation_batch_size,
+            "num_pairs": len(full_eval_pairs),
+            "predicted_labels": original_full_score_payload["predicted_labels"],
+            "target_labels": original_full_score_payload["target_labels"],
+            "scores": _build_confusion_matrix_counts(
+                predicted_labels=original_full_score_payload["predicted_labels"],
+                target_labels=original_full_score_payload["target_labels"],
+            ),
+            "vs_source_eval": original_full_vs_source_eval,
+        }
+        print(
+            "[agent_gradient_eval_debug] original full evaluation done:",
+            f"tp={original_full_evaluation['scores']['tp']}",
+            f"tn={original_full_evaluation['scores']['tn']}",
+            f"fp={original_full_evaluation['scores']['fp']}",
+            f"fn={original_full_evaluation['scores']['fn']}",
+            f"source_mismatches={original_full_vs_source_eval['num_mismatches']}",
+        )
 
     prompt_editing_payload: Dict[str, Any] = {
         "baseline_validation": baseline_validation,
@@ -1336,6 +1616,8 @@ def main() -> None:
                             "updated": updated_confusion_matrix,
                         },
                     },
+                    "train_d_evaluation": None,
+                    "full_evaluation": None,
                     "delta_vs_baseline": delta_vs_baseline,
                 }
             )
@@ -1343,6 +1625,50 @@ def main() -> None:
         prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
         prompt_editing_payload["meta_prompt"] = meta_prompt
         prompt_editing_payload["generated_prompt_variants"] = validated_variants
+
+        if not use_old_eval_mode:
+            for variant in prompt_editing_payload["generated_prompt_variants"]:
+                revised_prompt = variant["revised_prompt"]
+                if not revised_prompt:
+                    continue
+
+                train_variant_prompts, train_variant_targets = _build_binary_prompts_for_instruction(
+                    instruction_prompt=revised_prompt,
+                    binary_pairs=train_d_pairs,
+                )
+                train_variant_score_payload = _score_binary_prompts(
+                    prompts=train_variant_prompts,
+                    target_labels=train_variant_targets,
+                    model=model,
+                    tokenizer=tokenizer,
+                    batch_size=args.validation_batch_size,
+                    use_chat_template=not args.disable_chat_template,
+                )
+                variant["train_d_evaluation"] = _build_evaluation_report(
+                    score_payload=train_variant_score_payload
+                )
+
+                full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
+                    instruction_prompt=revised_prompt,
+                    binary_pairs=full_eval_pairs,
+                )
+                full_variant_score_payload = _score_binary_prompts(
+                    prompts=full_variant_prompts,
+                    target_labels=full_variant_targets,
+                    model=model,
+                    tokenizer=tokenizer,
+                    batch_size=args.validation_batch_size,
+                    use_chat_template=not args.disable_chat_template,
+                )
+                variant["full_evaluation"] = _build_evaluation_report(
+                    score_payload=full_variant_score_payload
+                )
+                print(
+                    "[agent_gradient_eval_debug] prompt variant extra evaluations:",
+                    f"generation_index={variant['generation_index']}",
+                    f"train_d_f1={variant['train_d_evaluation']['prf']['f1']:.4f}",
+                    f"full_eval_f1={variant['full_evaluation']['prf']['f1']:.4f}",
+                )
     else:
         print("[agent_gradient_eval_debug] prompt variant generation skipped")
 
@@ -1353,9 +1679,10 @@ def main() -> None:
         "device_map": args.device_map,
         "dataset_type": args.dataset_type,
         "candidate_mode": args.candidate_mode,
-        "split": saved_split,
-        "dataset_split": split,
-        "eval_output_path": str(args.eval_output_path),
+        "mode": "old_eval_json" if use_old_eval_mode else "train_gradient_sampling",
+        "split": saved_split if use_old_eval_mode else None,
+        "dataset_split": split if use_old_eval_mode else "train",
+        "eval_output_path": str(args.eval_output_path) if args.eval_output_path else None,
         "prompt_source_path": str(args.prompt_source_path),
         "prompt_info": prompt_info,
         "sampling": {
@@ -1371,6 +1698,7 @@ def main() -> None:
         "gradient_analysis": gradient_results,
         "baseline_vs_saved_eval": baseline_vs_saved_eval,
         "original_full_evaluation": original_full_evaluation,
+        "train_gradient_collection": train_gradient_collection,
         "prompt_region_editing": prompt_editing_payload,
     }
     summary_payload = _build_summary_payload(
