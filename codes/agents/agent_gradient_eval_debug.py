@@ -67,6 +67,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model", required=True, help="HF model id to load")
     parser.add_argument(
+        "--meta-prompt-model",
+        default=None,
+        help=(
+            "Optional HF model id used only for generating prompt variants from the "
+            "meta prompt. If omitted, --model is reused."
+        ),
+    )
+    parser.add_argument(
         "--device-map",
         default="cuda:0",
         help="Device map override (e.g. cuda:0, cuda:1, cpu, auto)",
@@ -124,14 +132,20 @@ def _parse_args() -> argparse.Namespace:
         choices=TOKEN_CANDIDATE_MODE_CHOICES,
         default=TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     )
-    parser.add_argument("--max-regions", type=int, default=3)
-    parser.add_argument("--max-total-region-tokens", type=int, default=10)
+    parser.add_argument("--max-regions", type=int, default=5)
+    parser.add_argument("--max-total-region-tokens", type=int, default=15)
+    parser.add_argument(
+        "--region-expansion-threshold-ratio",
+        type=float,
+        default=0.6,
+        help="Threshold ratio used when expanding a peak token into a larger gradient region.",
+    )
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
     parser.add_argument(
-        "--region-index",
+        "--num-edit-regions",
         type=int,
-        default=0,
-        help="Which top gradient region to use for localized prompt editing.",
+        default=1,
+        help="Use the top X ranked gradient regions for localized prompt editing.",
     )
     parser.add_argument(
         "--num-generated-prompts",
@@ -418,17 +432,14 @@ def _resolve_region_details(
     instruction_prompt: str,
     tokenizer,
     gradient_results: Dict[str, Any],
-    region_index: int,
+    num_edit_regions: int,
 ) -> Dict[str, Any]:
     top_regions = gradient_results.get("top_regions", [])
     if not top_regions:
         raise ValueError("No top_regions were returned by the gradient analysis.")
-    if not 0 <= region_index < len(top_regions):
-        raise IndexError(
-            f"region_index={region_index} is out of range for {len(top_regions)} regions."
-        )
+    if num_edit_regions <= 0:
+        raise ValueError("--num-edit-regions must be positive.")
 
-    region = top_regions[region_index]
     encoded = tokenizer(
         instruction_prompt,
         return_offsets_mapping=True,
@@ -438,29 +449,40 @@ def _resolve_region_details(
     if not offsets:
         raise ValueError("Instruction prompt produced no tokenizer offsets.")
 
-    start_token = min(region["start"], len(offsets) - 1)
-    end_token = min(region["end"], len(offsets) - 1)
-    start_char = int(offsets[start_token][0])
-    end_char = int(offsets[end_token][1])
-    region_text = instruction_prompt[start_char:end_char]
-    marked_prompt = (
-        instruction_prompt[:start_char]
-        + "<edit_start>"
-        + region_text
-        + "<edit_end>"
-        + instruction_prompt[end_char:]
-    )
+    selected_regions: List[Dict[str, Any]] = []
+    for region_rank, region in enumerate(top_regions[:num_edit_regions], start=1):
+        start_token = min(region["start"], len(offsets) - 1)
+        end_token = min(region["end"], len(offsets) - 1)
+        start_char = int(offsets[start_token][0])
+        end_char = int(offsets[end_token][1])
+        selected_regions.append(
+            {
+                "region_rank": region_rank,
+                "start_token": start_token,
+                "end_token": end_token,
+                "start_char": start_char,
+                "end_char": end_char,
+                "region_text": instruction_prompt[start_char:end_char],
+                "region_score": region["score"],
+                "region_tokens": region["tokens"],
+                "region_token_indices": region["token_indices"],
+            }
+        )
+
+    marked_prompt = instruction_prompt
+    for region in sorted(selected_regions, key=lambda item: item["start_char"], reverse=True):
+        marked_prompt = (
+            marked_prompt[: region["start_char"]]
+            + f"<edit_start_{region['region_rank']}>"
+            + marked_prompt[region["start_char"] : region["end_char"]]
+            + f"<edit_end_{region['region_rank']}>"
+            + marked_prompt[region["end_char"] :]
+        )
 
     return {
-        "region_index": region_index,
-        "start_token": start_token,
-        "end_token": end_token,
-        "start_char": start_char,
-        "end_char": end_char,
-        "region_text": region_text,
+        "num_edit_regions": len(selected_regions),
+        "selected_regions": selected_regions,
         "marked_prompt": marked_prompt,
-        "region_tokens": region["tokens"],
-        "region_token_indices": region["token_indices"],
     }
 
 
@@ -925,6 +947,20 @@ def main() -> None:
         device_map=args.device_map,
     )
     print("[agent_gradient_eval_debug] model and tokenizer loaded")
+
+    meta_prompt_model = model
+    meta_prompt_tokenizer = tokenizer
+    meta_prompt_model_id = args.meta_prompt_model or args.model
+    if args.num_generated_prompts > 0 and args.meta_prompt_model:
+        meta_prompt_model, meta_prompt_tokenizer = load_model_and_tokenizer(
+            model_id=args.meta_prompt_model,
+            device_map=args.device_map,
+        )
+        print(
+            "[agent_gradient_eval_debug] meta-prompt model and tokenizer loaded:",
+            args.meta_prompt_model,
+        )
+
     print("[agent_gradient_eval_debug] running gradient analysis")
     gradient_results = analyze_relation_extraction_binary_pairs(
         instruction_prompt=instruction_prompt,
@@ -937,6 +973,7 @@ def main() -> None:
         candidate_mode=args.candidate_mode,
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,
+        region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
         embedding_step_size=args.embedding_step_size,
         use_chat_template=not args.disable_chat_template,
     )
@@ -968,7 +1005,7 @@ def main() -> None:
 
     prompt_editing_payload: Dict[str, Any] = {
         "baseline_validation": baseline_validation,
-        "selected_region": None,
+        "selected_regions": [],
         "meta_prompt": None,
         "generated_prompt_variants": [],
     }
@@ -977,7 +1014,7 @@ def main() -> None:
             instruction_prompt=instruction_prompt,
             tokenizer=tokenizer,
             gradient_results=gradient_results,
-            region_index=args.region_index,
+            num_edit_regions=args.num_edit_regions,
         )
         meta_prompt = _build_gradient_region_meta_prompt(
             instruction_prompt=instruction_prompt,
@@ -989,16 +1026,16 @@ def main() -> None:
         )
         print(
             "[agent_gradient_eval_debug] generating prompt variants:",
-            f"region_index={args.region_index}",
-            f"region_tokens={region_details['region_token_indices']}",
+            f"num_edit_regions={region_details['num_edit_regions']}",
+            f"region_ranks={[region['region_rank'] for region in region_details['selected_regions']]}",
             f"num_generated_prompts={args.num_generated_prompts}",
         )
         generated_variants = _generate_region_prompt_variants(
             meta_prompt=meta_prompt,
             instruction_prompt=instruction_prompt,
             num_generated_prompts=args.num_generated_prompts,
-            model=model,
-            tokenizer=tokenizer,
+            model=meta_prompt_model,
+            tokenizer=meta_prompt_tokenizer,
             max_new_tokens=args.meta_prompt_max_new_tokens,
             batch_size=args.meta_prompt_batch_size,
             use_chat_template=not args.disable_chat_template,
@@ -1071,7 +1108,7 @@ def main() -> None:
                 }
             )
 
-        prompt_editing_payload["selected_region"] = region_details
+        prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
         prompt_editing_payload["meta_prompt"] = meta_prompt
         prompt_editing_payload["generated_prompt_variants"] = validated_variants
     else:
@@ -1080,6 +1117,7 @@ def main() -> None:
     payload = {
         "args": _namespace_to_json_dict(args),
         "model": args.model,
+        "meta_prompt_model": meta_prompt_model_id,
         "device_map": args.device_map,
         "dataset_type": args.dataset_type,
         "candidate_mode": args.candidate_mode,

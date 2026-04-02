@@ -225,15 +225,16 @@ GRADIENT_REGION_MUTATION_PROMPT_V1 = '''You are an expert prompt generator for a
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
 
-You are given below the current instruction prompt used by another LLM for this task. The editable region is marked using <edit_start> and <edit_end>:
+You are given below the current instruction prompt used by another LLM for this task. The editable regions are marked using numbered tags such as <edit_start_1> and <edit_end_1>.
+These numbered edit regions are ordered by gradient ranking, where `edit_region_1` is the highest-ranked region, `edit_region_2` is the second-highest-ranked region, and so on:
 ```
 #MARKED_PROMPT#
 ```
 
-Your task is to generate one revised full instruction prompt by replacing only the marked local region so that the prompt can improve generalization for this relation extraction task.
+Your task is to generate one revised full instruction prompt by editing only the marked `edit_region_X` regions so that the prompt can improve generalization for this relation extraction task.
 Keep the rest of the prompt unchanged as much as possible.
 You may make a minimal nearby adjustment only if needed to keep the revised prompt natural and semantically coherent.
-Do not include the <edit_start> or <edit_end> tags in the final revised prompt.
+Do not include any edit tags such as <edit_start_1> or <edit_end_1> in the final revised prompt.
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''

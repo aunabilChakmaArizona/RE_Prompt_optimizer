@@ -472,6 +472,7 @@ def analyze_relation_extraction_binary_pairs(
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
+    region_expansion_threshold_ratio: float = 0.6,
     embedding_step_size: float = 1.0,
     candidate_mode: str = TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
@@ -670,6 +671,7 @@ def analyze_relation_extraction_binary_pairs(
         prompt_tokens,
         max_regions=max_regions,
         max_total_tokens=max_total_region_tokens,
+        expansion_threshold_ratio=region_expansion_threshold_ratio,
     )
 
     return asdict(
@@ -701,6 +703,7 @@ def analyze_relation_extraction_dataset(
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
+    region_expansion_threshold_ratio: float = 0.6,
     embedding_step_size: float = 1.0,
     candidate_mode: str = TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
@@ -727,6 +730,7 @@ def analyze_relation_extraction_dataset(
         num_candidates=num_candidates,
         max_regions=max_regions,
         max_total_region_tokens=max_total_region_tokens,
+        region_expansion_threshold_ratio=region_expansion_threshold_ratio,
         embedding_step_size=embedding_step_size,
         candidate_mode=candidate_mode,
         inference_mode=inference_mode,
@@ -754,6 +758,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-candidates", type=int, default=5)
     parser.add_argument("--max-regions", type=int, default=1)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
+    parser.add_argument("--region-expansion-threshold-ratio", type=float, default=0.6)
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
     parser.add_argument(
         "--candidate-mode",
@@ -795,6 +800,7 @@ def main() -> None:
         num_candidates=args.num_candidates,
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,
+        region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
         embedding_step_size=args.embedding_step_size,
         candidate_mode=args.candidate_mode,
         use_chat_template=not args.disable_chat_template,
