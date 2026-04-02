@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
+import torch
+
 CURRENT_DIR = Path(__file__).resolve().parent
 CODES_DIR = CURRENT_DIR.parent
 if str(CODES_DIR) not in sys.path:
@@ -794,18 +796,7 @@ def main() -> None:
     )
     print("[agent_gradient_eval_debug] model and tokenizer loaded")
 
-    meta_prompt_model = model
-    meta_prompt_tokenizer = tokenizer
     meta_prompt_model_id = args.meta_prompt_model or args.model
-    if args.num_generated_prompts > 0 and args.meta_prompt_model:
-        meta_prompt_model, meta_prompt_tokenizer = load_model_and_tokenizer(
-            model_id=args.meta_prompt_model,
-            device_map=args.device_map,
-        )
-        print(
-            "[agent_gradient_eval_debug] meta-prompt model and tokenizer loaded:",
-            args.meta_prompt_model,
-        )
 
     sampled_indices: Dict[str, Any] = {}
     sampled_pairs: List[Dict[str, Any]] = []
@@ -993,6 +984,19 @@ def main() -> None:
             f"region_ranks={[region['region_rank'] for region in region_details['selected_regions']]}",
             f"num_generated_prompts={args.num_generated_prompts}",
         )
+        if args.meta_prompt_model:
+            meta_prompt_model, meta_prompt_tokenizer = load_model_and_tokenizer(
+                model_id=args.meta_prompt_model,
+                device_map=args.device_map,
+            )
+            print(
+                "[agent_gradient_eval_debug] meta-prompt model and tokenizer loaded:",
+                args.meta_prompt_model,
+            )
+        else:
+            meta_prompt_model = model
+            meta_prompt_tokenizer = tokenizer
+
         generated_variants = _generate_region_prompt_variants(
             meta_prompt=meta_prompt,
             instruction_prompt=instruction_prompt,
@@ -1003,6 +1007,13 @@ def main() -> None:
             batch_size=args.meta_prompt_batch_size,
             use_chat_template=not args.disable_chat_template,
         )
+        if args.meta_prompt_model:
+            del meta_prompt_model
+            del meta_prompt_tokenizer
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print("[agent_gradient_eval_debug] meta-prompt model cleared from memory")
+            
         validated_variants: List[Dict[str, Any]] = []
         for variant in generated_variants:
             revised_prompt = variant["revised_prompt"]
