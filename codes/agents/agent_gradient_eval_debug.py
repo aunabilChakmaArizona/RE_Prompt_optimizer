@@ -555,10 +555,15 @@ def _score_binary_prompts(
     yes_probabilities: List[float] = []
     no_probabilities: List[float] = []
     target_probabilities: List[float] = []
+    total_batches = math.ceil(len(prompts) / batch_size) if prompts else 0
 
     try:
         tokenizer.padding_side = "left"
-        for start in range(0, len(prompts), batch_size):
+        for batch_index, start in enumerate(range(0, len(prompts), batch_size), start=1):
+            print(
+                "[agent_gradient_eval_debug] scoring batch",
+                f"{batch_index}/{total_batches}",
+            )
             chunk_prompts = list(prompts[start : start + batch_size])
             chunk_targets = list(target_labels[start : start + batch_size])
             if use_chat_template:
@@ -760,6 +765,43 @@ def _compare_with_saved_eval_predictions(
     }
 
 
+def _compare_full_eval_with_source_predictions(
+    *,
+    eval_payload: Dict[str, Any],
+    predicted_labels: Sequence[str],
+    target_labels: Sequence[str],
+) -> Dict[str, Any]:
+    saved_pair_labels = eval_payload.get("pair_labels", [])
+    saved_pair_predictions = eval_payload.get("pair_predictions", [])
+    if len(saved_pair_labels) != len(target_labels):
+        raise ValueError("Saved pair_labels length does not match full target_labels length.")
+    if len(saved_pair_predictions) != len(predicted_labels):
+        raise ValueError(
+            "Saved pair_predictions length does not match full predicted_labels length."
+        )
+
+    mismatches: List[Dict[str, Any]] = []
+    for pair_index, (saved_label, saved_prediction, fresh_label, fresh_prediction) in enumerate(
+        zip(saved_pair_labels, saved_pair_predictions, target_labels, predicted_labels)
+    ):
+        if saved_label != fresh_label or saved_prediction != fresh_prediction:
+            mismatches.append(
+                {
+                    "pair_index": pair_index,
+                    "saved_label": saved_label,
+                    "saved_prediction": saved_prediction,
+                    "fresh_label": fresh_label,
+                    "fresh_prediction": fresh_prediction,
+                }
+            )
+
+    return {
+        "num_compared": len(predicted_labels),
+        "num_mismatches": len(mismatches),
+        "mismatches": mismatches,
+    }
+
+
 def _build_summary_payload(
     *,
     instruction_prompt: str,
@@ -948,6 +990,48 @@ def build_sampled_batch(
     return sampled_pairs, debug_records
 
 
+def build_full_binary_pairs(
+    *,
+    dataset: Dict[str, Any],
+    dataset_type: str,
+    query_index: int,
+) -> List[Dict[str, Any]]:
+    episodes = dataset["episodes"]
+    shots = dataset["shots"]
+    queries = dataset["queries"]
+    num_ways = _resolve_num_ways(episodes)
+
+    full_pairs: List[Dict[str, Any]] = []
+    for pair_index in range(len(episodes) * num_ways):
+        episode_index, way_index = _pair_index_to_episode_way(pair_index, num_ways)
+        episode = episodes[episode_index]
+        support_id = episode["meta_train"][way_index][0]
+        query_id = episode["meta_test"][query_index]
+        support = shots[support_id]
+        query = queries[query_id]
+        label = "yes" if support["relation"] == query["relation"] else "no"
+        prediction = None
+        full_pairs.append(
+            {
+                "pair_index": pair_index,
+                "episode_index": episode_index,
+                "way_index": way_index,
+                "support": support,
+                "query": query,
+                "label": label,
+                "prediction": prediction,
+                "confusion_bucket": None,
+                "support_sentence": get_sentence_with_tags(support).strip(),
+                "query_sentence": get_sentence_with_tags(query).strip(),
+                "relation_description": get_relation_description(
+                    support["relation"],
+                    dt=dataset_type,
+                ),
+            }
+        )
+    return full_pairs
+
+
 def main() -> None:
     args = _parse_args()
     print("[agent_gradient_eval_debug] starting")
@@ -1100,6 +1184,53 @@ def main() -> None:
         f"mismatches={baseline_vs_saved_eval['num_mismatches']}",
     )
 
+    print(
+        "[agent_gradient_eval_debug] running original full evaluation:",
+        f"pairs={len(dataset['episodes']) * _resolve_num_ways(dataset['episodes'])}",
+        f"batch_size={args.validation_batch_size}",
+    )
+    full_binary_pairs = build_full_binary_pairs(
+        dataset=dataset,
+        dataset_type=args.dataset_type,
+        query_index=args.query_index,
+    )
+    full_prompts, full_target_labels = _build_binary_prompts_for_instruction(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=full_binary_pairs,
+    )
+    original_full_score_payload = _score_binary_prompts(
+        prompts=full_prompts,
+        target_labels=full_target_labels,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=args.validation_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+    original_full_vs_source_eval = _compare_full_eval_with_source_predictions(
+        eval_payload=eval_payload,
+        predicted_labels=original_full_score_payload["predicted_labels"],
+        target_labels=original_full_score_payload["target_labels"],
+    )
+    original_full_evaluation = {
+        "batch_size": args.validation_batch_size,
+        "num_pairs": len(full_binary_pairs),
+        "predicted_labels": original_full_score_payload["predicted_labels"],
+        "target_labels": original_full_score_payload["target_labels"],
+        "scores": _build_confusion_matrix_counts(
+            predicted_labels=original_full_score_payload["predicted_labels"],
+            target_labels=original_full_score_payload["target_labels"],
+        ),
+        "vs_source_eval": original_full_vs_source_eval,
+    }
+    print(
+        "[agent_gradient_eval_debug] original full evaluation done:",
+        f"tp={original_full_evaluation['scores']['tp']}",
+        f"tn={original_full_evaluation['scores']['tn']}",
+        f"fp={original_full_evaluation['scores']['fp']}",
+        f"fn={original_full_evaluation['scores']['fn']}",
+        f"source_mismatches={original_full_vs_source_eval['num_mismatches']}",
+    )
+
     prompt_editing_payload: Dict[str, Any] = {
         "baseline_validation": baseline_validation,
         "selected_regions": [],
@@ -1239,6 +1370,7 @@ def main() -> None:
         "sampled_examples": sampled_examples,
         "gradient_analysis": gradient_results,
         "baseline_vs_saved_eval": baseline_vs_saved_eval,
+        "original_full_evaluation": original_full_evaluation,
         "prompt_region_editing": prompt_editing_payload,
     }
     summary_payload = _build_summary_payload(
