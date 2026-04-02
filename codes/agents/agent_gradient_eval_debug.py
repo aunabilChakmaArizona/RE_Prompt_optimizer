@@ -717,6 +717,49 @@ def _build_bucket_comparison(
     return comparison
 
 
+def _build_count_only_bucket_summary(summary: Dict[str, Any]) -> Dict[str, int]:
+    result: Dict[str, int] = {}
+    for bucket_name in ("tp", "tn", "fp", "fn"):
+        count = int(summary[bucket_name]["count"])
+        accuracy = float(summary[bucket_name]["accuracy"])
+        result[bucket_name] = int(round(count * accuracy))
+    return result
+
+
+def _build_summary_payload(
+    *,
+    instruction_prompt: str,
+    prompt_editing_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    baseline_validation = prompt_editing_payload.get("baseline_validation", {})
+    generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
+    summary_variants: List[Dict[str, Any]] = []
+    for variant in generated_variants:
+        validation = variant.get("validation")
+        summary_variants.append(
+            {
+                "generation_index": variant.get("generation_index"),
+                "revised_prompt": variant.get("revised_prompt"),
+                "scores": (
+                    _build_count_only_bucket_summary(validation["summary"])
+                    if validation
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "original_prompt": instruction_prompt,
+        "original_scores": (
+            _build_count_only_bucket_summary(baseline_validation)
+            if baseline_validation
+            else {}
+        ),
+        "meta_prompt": prompt_editing_payload.get("meta_prompt"),
+        "generated_prompts": summary_variants,
+    }
+
+
 def _generate_region_prompt_variants(
     *,
     meta_prompt: str,
@@ -1139,12 +1182,22 @@ def main() -> None:
         "gradient_analysis": gradient_results,
         "prompt_region_editing": prompt_editing_payload,
     }
+    summary_payload = _build_summary_payload(
+        instruction_prompt=instruction_prompt,
+        prompt_editing_payload=prompt_editing_payload,
+    )
 
     if args.output_file:
         args.output_file.parent.mkdir(parents=True, exist_ok=True)
         with args.output_file.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, ensure_ascii=False)
         print(f"saved output to {args.output_file}")
+        summary_output_file = args.output_file.with_name(
+            f"{args.output_file.stem}_summary{args.output_file.suffix}"
+        )
+        with summary_output_file.open("w", encoding="utf-8") as handle:
+            json.dump(summary_payload, handle, indent=2, ensure_ascii=False)
+        print(f"saved summary output to {summary_output_file}")
 
 
 if __name__ == "__main__":
