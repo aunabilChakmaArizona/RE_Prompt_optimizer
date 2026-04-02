@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import random
 import re
@@ -195,6 +196,8 @@ def _resolve_prompt_from_generated_candidates(
         if item.get("candidate_index") == candidate_index:
             metadata = item
             break
+    
+    # todo: load prf scores here too form the json
 
     return prompts[prompt_index], {
         "prompt_source_type": "generated_prompt_candidates",
@@ -313,6 +316,20 @@ def _build_prf_scores(
         "precision": float(stats["precision_mean"] * 100.0),
         "recall": float(stats["recall_mean"] * 100.0),
         "f1": float(stats["f1_mean"] * 100.0),
+    }
+
+
+def _extract_prf_from_prompt_info(prompt_info: Dict[str, Any]) -> Dict[str, float] | None:
+    node_summary = prompt_info.get("node_summary")
+    if not isinstance(node_summary, dict):
+        return None
+    val_score = node_summary.get("val_score")
+    if not isinstance(val_score, dict):
+        return None
+    return {
+        "precision": float(val_score.get("precision_mean", 0.0) * 100.0),
+        "recall": float(val_score.get("recall_mean", 0.0) * 100.0),
+        "f1": float(val_score.get("f1_mean", 0.0) * 100.0),
     }
 
 def _build_binary_pairs_from_feedback_samples(
@@ -659,31 +676,44 @@ def _build_confusion_matrix_counts(
 def _build_summary_payload(
     *,
     instruction_prompt: str,
+    baseline_prf: Dict[str, float],
     prompt_editing_payload: Dict[str, Any],
     baseline_confusion_matrix: Dict[str, int],
+    original_dev_prf: Dict[str, float] | None,
 ) -> Dict[str, Any]:
     generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
     summary_variants: List[Dict[str, Any]] = []
     for variant in generated_variants:
         validation = variant.get("validation")
+        full_evaluation = variant.get("full_evaluation")
         summary_variants.append(
             {
-                "generation_index": variant.get("generation_index"),
-                "revised_prompt": variant.get("revised_prompt"),
-                "updated_scores": (
-                    _build_confusion_matrix_counts(
-                        predicted_labels=validation["predicted_labels"],
-                        target_labels=validation["target_labels"],
-                    )
+                "prompt": variant.get("revised_prompt"),
+                "bucket_scores": (
+                    validation["confusion_matrix"]["updated"]
                     if validation
+                    else None
+                ),
+                "balanced_train_prf": (
+                    validation["prf"]
+                    if validation
+                    else None
+                ),
+                "dev_prf": (
+                    full_evaluation["prf"]
+                    if full_evaluation
                     else None
                 ),
             }
         )
 
     return {
-        "original_prompt": instruction_prompt,
-        "original_scores": baseline_confusion_matrix,
+        "original_prompt": {
+            "prompt": instruction_prompt,
+            "bucket_scores": baseline_confusion_matrix,
+            "balanced_train_prf": baseline_prf,
+            "dev_prf": original_dev_prf,
+        },
         "meta_prompt": prompt_editing_payload.get("meta_prompt"),
         "generated_prompts": summary_variants,
     }
@@ -946,6 +976,10 @@ def main() -> None:
         predicted_labels=baseline_score_payload["predicted_labels"],
         target_labels=baseline_score_payload["target_labels"],
     )
+    baseline_prf = _build_prf_scores(
+        predicted_labels=baseline_score_payload["predicted_labels"],
+        target_labels=baseline_score_payload["target_labels"],
+    )
     baseline_validation = _summarize_validation_by_bucket(
         sampled_pairs=sampled_pairs,
         score_payload=baseline_score_payload,
@@ -956,6 +990,7 @@ def main() -> None:
         f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
     )
+    original_dev_prf = _extract_prf_from_prompt_info(prompt_info)
 
     prompt_editing_payload: Dict[str, Any] = {
         "baseline_validation": baseline_validation,
@@ -1015,6 +1050,7 @@ def main() -> None:
             print("[agent_gradient_eval_debug] meta-prompt model cleared from memory")
             
         validated_variants: List[Dict[str, Any]] = []
+        prompt_result_cache: Dict[str, Dict[str, Any]] = {}
         for variant in generated_variants:
             revised_prompt = variant["revised_prompt"]
             if not revised_prompt:
@@ -1030,6 +1066,22 @@ def main() -> None:
                         "validation": None,
                         "full_evaluation": None,
                         "delta_vs_baseline": None,
+                    }
+                )
+                continue
+
+            cached_result = prompt_result_cache.get(revised_prompt)
+            if cached_result is not None:
+                print(
+                    "[agent_gradient_eval_debug] prompt variant reused cached results:",
+                    f"generation_index={variant['generation_index']}",
+                )
+                validated_variants.append(
+                    {
+                        **variant,
+                        "validation": copy.deepcopy(cached_result["validation"]),
+                        "full_evaluation": copy.deepcopy(cached_result["full_evaluation"]),
+                        "delta_vs_baseline": copy.deepcopy(cached_result["delta_vs_baseline"]),
                     }
                 )
                 continue
@@ -1085,22 +1137,28 @@ def main() -> None:
                 f"balanced_train_f1={_build_prf_scores(predicted_labels=score_payload['predicted_labels'], target_labels=score_payload['target_labels'])['f1']:.4f}",
                 f"full_eval_f1={full_evaluation['prf']['f1']:.4f}",
             )
+            validation_payload = {
+                "predicted_labels": score_payload["predicted_labels"],
+                "target_labels": score_payload["target_labels"],
+                "summary": validation_summary,
+                "prf": _build_prf_scores(
+                    predicted_labels=score_payload["predicted_labels"],
+                    target_labels=score_payload["target_labels"],
+                ),
+                "confusion_matrix": {
+                    "original": baseline_confusion_matrix,
+                    "updated": updated_confusion_matrix,
+                },
+            }
+            prompt_result_cache[revised_prompt] = {
+                "validation": copy.deepcopy(validation_payload),
+                "full_evaluation": copy.deepcopy(full_evaluation),
+                "delta_vs_baseline": copy.deepcopy(delta_vs_baseline),
+            }
             validated_variants.append(
                 {
                     **variant,
-                    "validation": {
-                        "predicted_labels": score_payload["predicted_labels"],
-                        "target_labels": score_payload["target_labels"],
-                        "summary": validation_summary,
-                        "prf": _build_prf_scores(
-                            predicted_labels=score_payload["predicted_labels"],
-                            target_labels=score_payload["target_labels"],
-                        ),
-                        "confusion_matrix": {
-                            "original": baseline_confusion_matrix,
-                            "updated": updated_confusion_matrix,
-                        },
-                    },
+                    "validation": validation_payload,
                     "full_evaluation": full_evaluation,
                     "delta_vs_baseline": delta_vs_baseline,
                 }
@@ -1136,8 +1194,10 @@ def main() -> None:
     }
     summary_payload = _build_summary_payload(
         instruction_prompt=instruction_prompt,
+        baseline_prf=baseline_prf,
         prompt_editing_payload=prompt_editing_payload,
         baseline_confusion_matrix=baseline_confusion_matrix,
+        original_dev_prf=original_dev_prf,
     )
 
     if args.output_file:
