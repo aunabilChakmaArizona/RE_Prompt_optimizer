@@ -448,9 +448,9 @@ def _build_prf_scores(
 ) -> Dict[str, float]:
     stats = compute_prf_stats(target_labels, predicted_labels, n_chunks=1)
     return {
-        "precision": float(stats["precision_mean"]),
-        "recall": float(stats["recall_mean"]),
-        "f1": float(stats["f1_mean"]),
+        "precision": float(stats["precision_mean"] * 100.0),
+        "recall": float(stats["recall_mean"] * 100.0),
+        "f1": float(stats["f1_mean"] * 100.0),
     }
 
 def _build_binary_pairs_from_feedback_samples(
@@ -562,6 +562,15 @@ def _build_evaluation_report(
     }
 
 
+def _build_score_payload_from_pairs(
+    pairs: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
+        "predicted_labels": [pair["prediction"] for pair in pairs],
+        "target_labels": [pair["label"] for pair in pairs],
+    }
+
+
 def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
     pattern = rf"{re.escape(open_tag)}(.*?){re.escape(close_tag)}"
     match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
@@ -640,16 +649,6 @@ def _build_gradient_region_meta_prompt(
     return prompt
 
 
-def _resolve_binary_token_id(tokenizer, base_token: str) -> int:
-    token_ids = tokenizer.encode(base_token, add_special_tokens=False)
-    if len(token_ids) == 1:
-        return token_ids[0]
-    spaced_token_ids = tokenizer.encode(f" {base_token}", add_special_tokens=False)
-    if len(spaced_token_ids) == 1:
-        return spaced_token_ids[0]
-    raise ValueError(f"Token '{base_token}' is not a single token for this tokenizer.")
-
-
 def _build_binary_prompts_for_instruction(
     *,
     instruction_prompt: str,
@@ -659,9 +658,8 @@ def _build_binary_prompts_for_instruction(
     target_labels: List[str] = []
     for pair in binary_pairs:
         support = pair["support"]
-        query = pair["query"]
         relation = support["relation"]
-        target_label = "yes" if query["relation"] == relation else "no"
+        target_label = pair["label"]
         prompts.append(
             build_relation_prompt(
                 instruction_prompt=instruction_prompt,
@@ -676,7 +674,7 @@ def _build_binary_prompts_for_instruction(
     return prompts, target_labels
 
 
-def _score_binary_prompts(
+def _predict_binary_prompts(
     *,
     prompts: Sequence[str],
     target_labels: Sequence[str],
@@ -687,80 +685,20 @@ def _score_binary_prompts(
 ) -> Dict[str, Any]:
     if len(prompts) != len(target_labels):
         raise ValueError("prompts/target_labels length mismatch")
-
-    yes_token_id = _resolve_binary_token_id(tokenizer, "yes")
-    no_token_id = _resolve_binary_token_id(tokenizer, "no")
-    target_device = getattr(model, "device", None)
-    original_padding_side = getattr(tokenizer, "padding_side", "right")
-
-    formatted_prompts: List[str] = []
-    predicted_labels: List[str] = []
-    yes_probabilities: List[float] = []
-    no_probabilities: List[float] = []
-    target_probabilities: List[float] = []
-    total_batches = math.ceil(len(prompts) / batch_size) if prompts else 0
-
-    try:
-        tokenizer.padding_side = "left"
-        for batch_index, start in enumerate(range(0, len(prompts), batch_size), start=1):
-            print(
-                "[agent_gradient_eval_debug] scoring batch",
-                f"{batch_index}/{total_batches}",
-            )
-            chunk_prompts = list(prompts[start : start + batch_size])
-            chunk_targets = list(target_labels[start : start + batch_size])
-            if use_chat_template:
-                formatted = [
-                    tokenizer.apply_chat_template(
-                        [{"role": "user", "content": prompt}],
-                        tokenize=False,
-                        add_generation_prompt=True,
-                        enable_thinking=False,
-                    )
-                    for prompt in chunk_prompts
-                ]
-            else:
-                formatted = chunk_prompts
-            formatted_prompts.extend(formatted)
-
-            model_inputs = tokenizer(
-                formatted,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-            )
-            if target_device is not None:
-                model_inputs = model_inputs.to(target_device)
-
-            with torch.inference_mode():
-                outputs = model(**model_inputs, use_cache=False)
-                logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
-                probabilities = torch.softmax(logits, dim=-1)
-
-            predicted_indices = torch.argmax(probabilities, dim=-1).detach().cpu().tolist()
-            prob_rows = probabilities.detach().cpu().tolist()
-            for predicted_index, prob_row, target_label in zip(
-                predicted_indices,
-                prob_rows,
-                chunk_targets,
-            ):
-                predicted_label = "yes" if predicted_index == 0 else "no"
-                predicted_labels.append(predicted_label)
-                yes_probabilities.append(float(prob_row[0]))
-                no_probabilities.append(float(prob_row[1]))
-                target_probabilities.append(
-                    float(prob_row[0] if target_label == "yes" else prob_row[1])
-                )
-    finally:
-        tokenizer.padding_side = original_padding_side
+    predicted_labels = run_binary_inference(
+        prompts,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        log_label="gradient_eval_debug",
+    )
 
     return {
-        "formatted_prompts": formatted_prompts,
         "predicted_labels": predicted_labels,
         "target_labels": list(target_labels),
-        "yes_probabilities": yes_probabilities,
-        "no_probabilities": no_probabilities,
-        "target_probabilities": target_probabilities,
     }
 
 
@@ -770,27 +708,25 @@ def _summarize_validation_by_bucket(
     score_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     buckets: Dict[str, Dict[str, Any]] = {
-        "overall": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
-        "tp": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
-        "tn": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
-        "fp": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
-        "fn": {"count": 0, "correct": 0, "target_probability_sum": 0.0},
+        "overall": {"count": 0, "correct": 0},
+        "tp": {"count": 0, "correct": 0},
+        "tn": {"count": 0, "correct": 0},
+        "fp": {"count": 0, "correct": 0},
+        "fn": {"count": 0, "correct": 0},
     }
     fixes_from_mistakes = 0
     regressions_from_correct = 0
 
-    for pair, predicted_label, target_label, target_probability in zip(
+    for pair, predicted_label, target_label in zip(
         sampled_pairs,
         score_payload["predicted_labels"],
         score_payload["target_labels"],
-        score_payload["target_probabilities"],
     ):
         confusion_bucket = pair["confusion_bucket"]
         is_correct = predicted_label == target_label
         for bucket_name in ("overall", confusion_bucket):
             buckets[bucket_name]["count"] += 1
             buckets[bucket_name]["correct"] += int(is_correct)
-            buckets[bucket_name]["target_probability_sum"] += float(target_probability)
 
         if confusion_bucket in {"fp", "fn"} and is_correct:
             fixes_from_mistakes += 1
@@ -804,9 +740,6 @@ def _summarize_validation_by_bucket(
             "total": count,
             "count": stats["correct"],
             "accuracy": (stats["correct"] / count) if count else 0.0,
-            "avg_target_probability": (
-                stats["target_probability_sum"] / count if count else 0.0
-            ),
         }
     summary["fixes_from_mistakes"] = fixes_from_mistakes
     summary["regressions_from_correct"] = regressions_from_correct
@@ -824,10 +757,6 @@ def _compute_summary_delta(
             "accuracy": (
                 candidate_summary[bucket_name]["accuracy"]
                 - baseline_summary[bucket_name]["accuracy"]
-            ),
-            "avg_target_probability": (
-                candidate_summary[bucket_name]["avg_target_probability"]
-                - baseline_summary[bucket_name]["avg_target_probability"]
             ),
         }
     delta["fixes_from_mistakes"] = (
@@ -1328,10 +1257,7 @@ def main() -> None:
             enable_thinking=False,
             log_label="train_gradient_collection",
         )
-        train_d_score_payload = {
-            "predicted_labels": train_d_predicted_labels,
-            "target_labels": train_d_target_labels,
-        }
+
         train_d_pairs = _attach_predictions_to_pairs(
             pairs=train_d_pairs,
             predicted_labels=train_d_predicted_labels,
@@ -1431,14 +1357,17 @@ def main() -> None:
         instruction_prompt=instruction_prompt,
         binary_pairs=sampled_pairs,
     )
-    baseline_score_payload = _score_binary_prompts(
-        prompts=baseline_prompts,
-        target_labels=baseline_target_labels,
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=args.validation_batch_size,
-        use_chat_template=not args.disable_chat_template,
-    )
+    if use_old_eval_mode:
+        baseline_score_payload = _predict_binary_prompts(
+            prompts=baseline_prompts,
+            target_labels=baseline_target_labels,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.validation_batch_size,
+            use_chat_template=not args.disable_chat_template,
+        )
+    else:
+        baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
     baseline_confusion_matrix = _build_confusion_matrix_counts(
         predicted_labels=baseline_score_payload["predicted_labels"],
         target_labels=baseline_score_payload["target_labels"],
@@ -1457,7 +1386,6 @@ def main() -> None:
     print(
         "[agent_gradient_eval_debug] baseline validation:",
         f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
-        f"overall_avg_target_probability={baseline_validation['overall']['avg_target_probability']:.4f}",
         f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
     )
@@ -1478,7 +1406,7 @@ def main() -> None:
             instruction_prompt=instruction_prompt,
             binary_pairs=full_eval_pairs,
         )
-        original_full_score_payload = _score_binary_prompts(
+        original_full_score_payload = _predict_binary_prompts(
             prompts=full_prompts,
             target_labels=full_target_labels,
             model=model,
@@ -1571,7 +1499,7 @@ def main() -> None:
                 instruction_prompt=revised_prompt,
                 binary_pairs=sampled_pairs,
             )
-            score_payload = _score_binary_prompts(
+            score_payload = _predict_binary_prompts(
                 prompts=prompts,
                 target_labels=target_labels,
                 model=model,
@@ -1599,9 +1527,7 @@ def main() -> None:
                 "[agent_gradient_eval_debug] prompt variant validated:",
                 f"generation_index={variant['generation_index']}",
                 f"overall_accuracy={validation_summary['overall']['accuracy']:.4f}",
-                f"overall_avg_target_probability={validation_summary['overall']['avg_target_probability']:.4f}",
                 f"delta_accuracy={delta_vs_baseline['overall']['accuracy']:.4f}",
-                f"delta_avg_target_probability={delta_vs_baseline['overall']['avg_target_probability']:.4f}",
             )
             validated_variants.append(
                 {
@@ -1609,14 +1535,16 @@ def main() -> None:
                     "validation": {
                         "predicted_labels": score_payload["predicted_labels"],
                         "target_labels": score_payload["target_labels"],
-                        "target_probabilities": score_payload["target_probabilities"],
                         "summary": validation_summary,
+                        "prf": _build_prf_scores(
+                            predicted_labels=score_payload["predicted_labels"],
+                            target_labels=score_payload["target_labels"],
+                        ),
                         "confusion_matrix": {
                             "original": baseline_confusion_matrix,
                             "updated": updated_confusion_matrix,
                         },
                     },
-                    "train_d_evaluation": None,
                     "full_evaluation": None,
                     "delta_vs_baseline": delta_vs_baseline,
                 }
@@ -1632,27 +1560,11 @@ def main() -> None:
                 if not revised_prompt:
                     continue
 
-                train_variant_prompts, train_variant_targets = _build_binary_prompts_for_instruction(
-                    instruction_prompt=revised_prompt,
-                    binary_pairs=train_d_pairs,
-                )
-                train_variant_score_payload = _score_binary_prompts(
-                    prompts=train_variant_prompts,
-                    target_labels=train_variant_targets,
-                    model=model,
-                    tokenizer=tokenizer,
-                    batch_size=args.validation_batch_size,
-                    use_chat_template=not args.disable_chat_template,
-                )
-                variant["train_d_evaluation"] = _build_evaluation_report(
-                    score_payload=train_variant_score_payload
-                )
-
                 full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
                     instruction_prompt=revised_prompt,
                     binary_pairs=full_eval_pairs,
                 )
-                full_variant_score_payload = _score_binary_prompts(
+                full_variant_score_payload = _predict_binary_prompts(
                     prompts=full_variant_prompts,
                     target_labels=full_variant_targets,
                     model=model,
@@ -1666,7 +1578,7 @@ def main() -> None:
                 print(
                     "[agent_gradient_eval_debug] prompt variant extra evaluations:",
                     f"generation_index={variant['generation_index']}",
-                    f"train_d_f1={variant['train_d_evaluation']['prf']['f1']:.4f}",
+                    f"balanced_train_f1={variant['validation']['prf']['f1']:.4f}",
                     f"full_eval_f1={variant['full_evaluation']['prf']['f1']:.4f}",
                 )
     else:
