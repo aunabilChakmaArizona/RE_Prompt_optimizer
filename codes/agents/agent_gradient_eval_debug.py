@@ -717,6 +717,49 @@ def _build_confusion_matrix_counts(
     return counts
 
 
+def _compare_with_saved_eval_predictions(
+    *,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    eval_payload: Dict[str, Any],
+    predicted_labels: Sequence[str],
+    target_labels: Sequence[str],
+) -> Dict[str, Any]:
+    saved_pair_labels = eval_payload.get("pair_labels", [])
+    saved_pair_predictions = eval_payload.get("pair_predictions", [])
+    if len(predicted_labels) != len(sampled_pairs) or len(target_labels) != len(sampled_pairs):
+        raise ValueError("Predictions/targets length mismatch in saved-eval comparison.")
+
+    mismatches: List[Dict[str, Any]] = []
+    for pair, predicted_label, target_label in zip(
+        sampled_pairs,
+        predicted_labels,
+        target_labels,
+    ):
+        pair_index = pair["pair_index"]
+        saved_label = saved_pair_labels[pair_index]
+        saved_prediction = saved_pair_predictions[pair_index]
+        if saved_label != target_label or saved_prediction != predicted_label:
+            mismatches.append(
+                {
+                    "pair_index": pair_index,
+                    "saved_label": saved_label,
+                    "saved_prediction": saved_prediction,
+                    "fresh_label": target_label,
+                    "fresh_prediction": predicted_label,
+                    "confusion_bucket": pair["confusion_bucket"],
+                    "relation": pair["support"]["relation"],
+                    "support_sentence": pair["support_sentence"],
+                    "query_sentence": pair["query_sentence"],
+                }
+            )
+
+    return {
+        "num_compared": len(sampled_pairs),
+        "num_mismatches": len(mismatches),
+        "mismatches": mismatches,
+    }
+
+
 def _build_summary_payload(
     *,
     instruction_prompt: str,
@@ -1018,13 +1061,25 @@ def main() -> None:
         f"top_regions={len(gradient_results['top_regions'])}",
     )
 
-    baseline_score_payload = {
-        "formatted_prompts": gradient_results["formatted_prompts"],
-        "predicted_labels": gradient_results["predicted_labels"],
-        "target_labels": gradient_results["target_labels"],
-        "target_probabilities": gradient_results["target_probabilities"],
-    }
+    baseline_prompts, baseline_target_labels = _build_binary_prompts_for_instruction(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=sampled_pairs,
+    )
+    baseline_score_payload = _score_binary_prompts(
+        prompts=baseline_prompts,
+        target_labels=baseline_target_labels,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=args.validation_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
     baseline_confusion_matrix = _build_confusion_matrix_counts(
+        predicted_labels=baseline_score_payload["predicted_labels"],
+        target_labels=baseline_score_payload["target_labels"],
+    )
+    baseline_vs_saved_eval = _compare_with_saved_eval_predictions(
+        sampled_pairs=sampled_pairs,
+        eval_payload=eval_payload,
         predicted_labels=baseline_score_payload["predicted_labels"],
         target_labels=baseline_score_payload["target_labels"],
     )
@@ -1038,6 +1093,11 @@ def main() -> None:
         f"overall_avg_target_probability={baseline_validation['overall']['avg_target_probability']:.4f}",
         f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
+    )
+    print(
+        "[agent_gradient_eval_debug] baseline vs saved eval:",
+        f"compared={baseline_vs_saved_eval['num_compared']}",
+        f"mismatches={baseline_vs_saved_eval['num_mismatches']}",
     )
 
     prompt_editing_payload: Dict[str, Any] = {
@@ -1178,6 +1238,7 @@ def main() -> None:
         },
         "sampled_examples": sampled_examples,
         "gradient_analysis": gradient_results,
+        "baseline_vs_saved_eval": baseline_vs_saved_eval,
         "prompt_region_editing": prompt_editing_payload,
     }
     summary_payload = _build_summary_payload(
