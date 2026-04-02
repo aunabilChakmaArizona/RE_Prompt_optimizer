@@ -399,6 +399,22 @@ python agents/agent_gradient_eval_debug.py \
   --validation-batch-size 1 \
   --output-file "../gradients_experiments/gradient_debug_mpm_mc-1.0_4b_bln_node12_f1-37_region_top3_k5.json"
 
+## gradient based baseline stable run
+
+python agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --meta-prompt-model "Qwen/Qwen3-14B" \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --train-gradient-sample-size 3000 \
+  --num-edit-regions 3 \
+  --num-generated-prompts 5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 5 \
+  --validation-batch-size 8 \
+  --output-file "../gradients_experiments/gradient_baseline_train_node12_top3_k5.json"
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"

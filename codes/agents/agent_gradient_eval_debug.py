@@ -364,6 +364,25 @@ def _build_binary_pairs_from_feedback_samples(
     return pairs
 
 
+def _build_train_sample_index(train_samples: Dict[str, Any]) -> Dict[str, dict]:
+    index: Dict[str, dict] = {}
+    for instances in train_samples.values():
+        if not isinstance(instances, list):
+            continue
+        for inst in instances:
+            instance_id = inst.get("id")
+            if instance_id is not None:
+                index[instance_id] = inst
+    return index
+
+
+def _clear_model_from_memory(model, tokenizer) -> None:
+    del model
+    del tokenizer
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def _attach_predictions_to_pairs(
     *,
     pairs: Sequence[Dict[str, Any]],
@@ -840,6 +859,7 @@ def main() -> None:
         data_dir=args.data_dir,
         filename=args.train_samples,
     )
+    train_sample_index = _build_train_sample_index(train_samples)
     print(
         "[agent_gradient_eval_debug] train samples loaded:",
         f"relations={len(train_samples)}",
@@ -853,7 +873,7 @@ def main() -> None:
     )
     train_d_pairs = _build_binary_pairs_from_feedback_samples(
         feedback_samples=train_feedback_samples,
-        shots_by_id=train_samples,
+        shots_by_id=train_sample_index,
         dataset_type=args.dataset_type,
     )
     print(
@@ -1020,6 +1040,8 @@ def main() -> None:
             f"num_generated_prompts={args.num_generated_prompts}",
         )
         if args.meta_prompt_model:
+            _clear_model_from_memory(model, tokenizer)
+            print("[agent_gradient_eval_debug] base model cleared from memory before mutation")
             meta_prompt_model, meta_prompt_tokenizer = load_model_and_tokenizer(
                 model_id=args.meta_prompt_model,
                 device_map=args.device_map,
@@ -1043,11 +1065,13 @@ def main() -> None:
             use_chat_template=not args.disable_chat_template,
         )
         if args.meta_prompt_model:
-            del meta_prompt_model
-            del meta_prompt_tokenizer
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            _clear_model_from_memory(meta_prompt_model, meta_prompt_tokenizer)
             print("[agent_gradient_eval_debug] meta-prompt model cleared from memory")
+            model, tokenizer = load_model_and_tokenizer(
+                model_id=args.model,
+                device_map=args.device_map,
+            )
+            print("[agent_gradient_eval_debug] base model and tokenizer reloaded")
             
         validated_variants: List[Dict[str, Any]] = []
         prompt_result_cache: Dict[str, Dict[str, Any]] = {}
