@@ -315,7 +315,12 @@ def _prepare_model_inputs(
     else:
         formatted_prompt = prompt
 
-    encoded = tokenizer(formatted_prompt, return_tensors="pt", add_special_tokens=False)
+    encoded = tokenizer(
+        formatted_prompt,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    )
     return {
         "formatted_prompt": formatted_prompt,
         "input_ids": encoded["input_ids"],

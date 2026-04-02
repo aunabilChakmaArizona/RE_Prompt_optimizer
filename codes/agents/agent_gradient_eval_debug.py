@@ -653,7 +653,8 @@ def _summarize_validation_by_bucket(
     for bucket_name, stats in buckets.items():
         count = stats["count"]
         summary[bucket_name] = {
-            "count": count,
+            "total": count,
+            "count": stats["correct"],
             "accuracy": (stats["correct"] / count) if count else 0.0,
             "avg_target_probability": (
                 stats["target_probability_sum"] / count if count else 0.0
@@ -691,47 +692,37 @@ def _compute_summary_delta(
     return delta
 
 
-def _build_bucket_comparison(
+def _build_confusion_matrix_counts(
     *,
-    baseline_summary: Dict[str, Any],
-    candidate_summary: Dict[str, Any],
-) -> Dict[str, Any]:
-    comparison: Dict[str, Any] = {}
-    for bucket_name in ("tp", "tn", "fp", "fn"):
-        baseline_count = int(baseline_summary[bucket_name]["count"])
-        baseline_accuracy = float(baseline_summary[bucket_name]["accuracy"])
-        candidate_count = int(candidate_summary[bucket_name]["count"])
-        candidate_accuracy = float(candidate_summary[bucket_name]["accuracy"])
-        comparison[bucket_name] = {
-            "original": {
-                "count": baseline_count,
-                "accuracy": baseline_accuracy,
-                "num_correct": int(round(baseline_count * baseline_accuracy)),
-            },
-            "updated": {
-                "count": candidate_count,
-                "accuracy": candidate_accuracy,
-                "num_correct": int(round(candidate_count * candidate_accuracy)),
-            },
-        }
-    return comparison
+    predicted_labels: Sequence[str],
+    target_labels: Sequence[str],
+) -> Dict[str, int]:
+    if len(predicted_labels) != len(target_labels):
+        raise ValueError("predicted_labels/target_labels length mismatch")
 
-
-def _build_count_only_bucket_summary(summary: Dict[str, Any]) -> Dict[str, int]:
-    result: Dict[str, int] = {}
-    for bucket_name in ("tp", "tn", "fp", "fn"):
-        count = int(summary[bucket_name]["count"])
-        accuracy = float(summary[bucket_name]["accuracy"])
-        result[bucket_name] = int(round(count * accuracy))
-    return result
+    counts = {"tp": 0, "tn": 0, "fp": 0, "fn": 0}
+    for prediction, target in zip(predicted_labels, target_labels):
+        if target == "yes" and prediction == "yes":
+            counts["tp"] += 1
+        elif target == "no" and prediction == "no":
+            counts["tn"] += 1
+        elif target == "no" and prediction == "yes":
+            counts["fp"] += 1
+        elif target == "yes" and prediction == "no":
+            counts["fn"] += 1
+        else:
+            raise ValueError(
+                f"Unsupported target/prediction pair: target={target}, prediction={prediction}"
+            )
+    return counts
 
 
 def _build_summary_payload(
     *,
     instruction_prompt: str,
     prompt_editing_payload: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
 ) -> Dict[str, Any]:
-    baseline_validation = prompt_editing_payload.get("baseline_validation", {})
     generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
     summary_variants: List[Dict[str, Any]] = []
     for variant in generated_variants:
@@ -740,8 +731,11 @@ def _build_summary_payload(
             {
                 "generation_index": variant.get("generation_index"),
                 "revised_prompt": variant.get("revised_prompt"),
-                "scores": (
-                    _build_count_only_bucket_summary(validation["summary"])
+                "updated_scores": (
+                    _build_confusion_matrix_counts(
+                        predicted_labels=validation["predicted_labels"],
+                        target_labels=validation["target_labels"],
+                    )
                     if validation
                     else None
                 ),
@@ -750,11 +744,7 @@ def _build_summary_payload(
 
     return {
         "original_prompt": instruction_prompt,
-        "original_scores": (
-            _build_count_only_bucket_summary(baseline_validation)
-            if baseline_validation
-            else {}
-        ),
+        "original_scores": baseline_confusion_matrix,
         "meta_prompt": prompt_editing_payload.get("meta_prompt"),
         "generated_prompts": summary_variants,
     }
@@ -1034,6 +1024,10 @@ def main() -> None:
         "target_labels": gradient_results["target_labels"],
         "target_probabilities": gradient_results["target_probabilities"],
     }
+    baseline_confusion_matrix = _build_confusion_matrix_counts(
+        predicted_labels=baseline_score_payload["predicted_labels"],
+        target_labels=baseline_score_payload["target_labels"],
+    )
     baseline_validation = _summarize_validation_by_bucket(
         sampled_pairs=sampled_pairs,
         score_payload=baseline_score_payload,
@@ -1118,6 +1112,10 @@ def main() -> None:
                 sampled_pairs=sampled_pairs,
                 score_payload=score_payload,
             )
+            updated_confusion_matrix = _build_confusion_matrix_counts(
+                predicted_labels=score_payload["predicted_labels"],
+                target_labels=score_payload["target_labels"],
+            )
             delta_vs_baseline = _compute_summary_delta(
                 baseline_summary=baseline_validation,
                 candidate_summary=validation_summary,
@@ -1142,10 +1140,10 @@ def main() -> None:
                         "target_labels": score_payload["target_labels"],
                         "target_probabilities": score_payload["target_probabilities"],
                         "summary": validation_summary,
-                        "bucket_comparison": _build_bucket_comparison(
-                            baseline_summary=baseline_validation,
-                            candidate_summary=validation_summary,
-                        ),
+                        "confusion_matrix": {
+                            "original": baseline_confusion_matrix,
+                            "updated": updated_confusion_matrix,
+                        },
                     },
                     "delta_vs_baseline": delta_vs_baseline,
                 }
@@ -1185,6 +1183,7 @@ def main() -> None:
     summary_payload = _build_summary_payload(
         instruction_prompt=instruction_prompt,
         prompt_editing_payload=prompt_editing_payload,
+        baseline_confusion_matrix=baseline_confusion_matrix,
     )
 
     if args.output_file:

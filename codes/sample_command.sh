@@ -387,7 +387,7 @@ python agents/agent_gradient_eval_debug.py \
 python agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --meta-prompt-model "Qwen/Qwen3-14B" \
-  --device-map "cuda:3" \
+  --device-map "cuda:1" \
   --eval-output-path "../trainings/20260303_002034_Qwen-Qwen3-4B/eval_outputs/EVALID_12_labels_predictions.json" \
   --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 12 \
