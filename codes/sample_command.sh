@@ -407,7 +407,7 @@ python agents/agent_gradient_eval_debug.py \
   --device-map "cuda:2" \
   --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 12 \
-  --train-gradient-sample-size 3000 \
+  --train-gradient-sample-size 10000 \
   --num-edit-regions 3 \
   --num-generated-prompts 5 \
   --meta-prompt-max-new-tokens 10000 \

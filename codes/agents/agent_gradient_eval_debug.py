@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gc
 import json
 import random
 import re
@@ -35,6 +36,7 @@ from agents.agent_prompts import (
 )
 from agents.agent_relation_utils import get_relation_description
 from agents.agent_sample_feedback import sample_feedback_fn
+from agents.agent_scorer import NO_RELATION
 from agents.agent_utils import get_sentence_with_tags
 
 
@@ -311,7 +313,54 @@ def _build_prf_scores(
     predicted_labels: Sequence[str],
     target_labels: Sequence[str],
 ) -> Dict[str, float]:
-    stats = compute_prf_stats(target_labels, predicted_labels, n_chunks=1)
+    mapped_target_labels = [
+        "relation" if label == "yes" else NO_RELATION for label in target_labels
+    ]
+    mapped_predicted_labels = [
+        "relation" if label == "yes" else NO_RELATION for label in predicted_labels
+    ]
+    stats = compute_prf_stats(mapped_target_labels, mapped_predicted_labels, n_chunks=1)
+    return {
+        "precision": float(stats["precision_mean"] * 100.0),
+        "recall": float(stats["recall_mean"] * 100.0),
+        "f1": float(stats["f1_mean"] * 100.0),
+    }
+
+
+def _build_episode_prf_scores(
+    *,
+    binary_pairs: Sequence[Dict[str, Any]],
+    predicted_labels: Sequence[str],
+) -> Dict[str, float]:
+    if len(binary_pairs) != len(predicted_labels):
+        raise ValueError("binary_pairs/predicted_labels length mismatch")
+
+    episode_to_rows: Dict[int, List[Tuple[int, str, str, str]]] = {}
+    for pair, predicted_label in zip(binary_pairs, predicted_labels):
+        episode_index = pair.get("episode_index")
+        if episode_index is None:
+            raise ValueError("Episode-level PRF requires pairs with episode_index.")
+        way_index = pair.get("way_index")
+        relation = pair["support"]["relation"]
+        episode_to_rows.setdefault(int(episode_index), []).append(
+            (int(way_index), relation, pair["label"], predicted_label)
+        )
+
+    episode_labels: List[str] = []
+    episode_predictions: List[str] = []
+    for episode_index in sorted(episode_to_rows):
+        rows = sorted(episode_to_rows[episode_index], key=lambda item: item[0])
+        gold_relation = NO_RELATION
+        predicted_relation = NO_RELATION
+        for _, relation, target_label, predicted_label in rows:
+            if target_label == "yes":
+                gold_relation = relation
+            if predicted_relation == NO_RELATION and predicted_label == "yes":
+                predicted_relation = relation
+        episode_labels.append(gold_relation)
+        episode_predictions.append(predicted_relation)
+
+    stats = compute_prf_stats(episode_labels, episode_predictions, n_chunks=1)
     return {
         "precision": float(stats["precision_mean"] * 100.0),
         "recall": float(stats["recall_mean"] * 100.0),
@@ -376,11 +425,12 @@ def _build_train_sample_index(train_samples: Dict[str, Any]) -> Dict[str, dict]:
     return index
 
 
-def _clear_model_from_memory(model, tokenizer) -> None:
-    del model
-    del tokenizer
+def _clear_model_from_memory() -> None:
+    gc.collect() # todo: check why it helped to work to clear memory
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+        if hasattr(torch.cuda, "ipc_collect"):
+            torch.cuda.ipc_collect()
 
 
 def _attach_predictions_to_pairs(
@@ -444,19 +494,30 @@ def _sample_balanced_pairs_from_bucketed_pool(
 def _build_evaluation_report(
     *,
     score_payload: Dict[str, Any],
+    binary_pairs: Sequence[Dict[str, Any]] | None = None,
+    prf_mode: str = "binary",
 ) -> Dict[str, Any]:
     confusion_matrix = _build_confusion_matrix_counts(
         predicted_labels=score_payload["predicted_labels"],
         target_labels=score_payload["target_labels"],
     )
+    if prf_mode == "episode":
+        if binary_pairs is None:
+            raise ValueError("binary_pairs are required for episode-level PRF.")
+        prf = _build_episode_prf_scores(
+            binary_pairs=binary_pairs,
+            predicted_labels=score_payload["predicted_labels"],
+        )
+    else:
+        prf = _build_prf_scores(
+            predicted_labels=score_payload["predicted_labels"],
+            target_labels=score_payload["target_labels"],
+        )
     return {
         "predicted_labels": score_payload["predicted_labels"],
         "target_labels": score_payload["target_labels"],
         "confusion_matrix": confusion_matrix,
-        "prf": _build_prf_scores(
-            predicted_labels=score_payload["predicted_labels"],
-            target_labels=score_payload["target_labels"],
-        ),
+        "prf": prf,
     }
 
 
@@ -1040,7 +1101,9 @@ def main() -> None:
             f"num_generated_prompts={args.num_generated_prompts}",
         )
         if args.meta_prompt_model:
-            _clear_model_from_memory(model, tokenizer)
+            model = None
+            tokenizer = None
+            _clear_model_from_memory()
             print("[agent_gradient_eval_debug] base model cleared from memory before mutation")
             meta_prompt_model, meta_prompt_tokenizer = load_model_and_tokenizer(
                 model_id=args.meta_prompt_model,
@@ -1065,7 +1128,9 @@ def main() -> None:
             use_chat_template=not args.disable_chat_template,
         )
         if args.meta_prompt_model:
-            _clear_model_from_memory(meta_prompt_model, meta_prompt_tokenizer)
+            meta_prompt_model = None
+            meta_prompt_tokenizer = None
+            _clear_model_from_memory()
             print("[agent_gradient_eval_debug] meta-prompt model cleared from memory")
             model, tokenizer = load_model_and_tokenizer(
                 model_id=args.model,
@@ -1147,7 +1212,9 @@ def main() -> None:
                 use_chat_template=not args.disable_chat_template,
             )
             full_evaluation = _build_evaluation_report(
-                score_payload=full_variant_score_payload
+                score_payload=full_variant_score_payload,
+                binary_pairs=full_eval_pairs,
+                prf_mode="episode",
             )
             print(
                 "[agent_gradient_eval_debug] prompt variant text:\n"
