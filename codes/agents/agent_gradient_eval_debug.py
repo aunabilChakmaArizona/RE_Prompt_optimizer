@@ -7,6 +7,7 @@ import copy
 import json
 import random
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
@@ -51,6 +52,25 @@ MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
     MODE_LLM_CANDIDATE_SUGGESTION,
 ]
+
+
+def _create_output_run_dir(
+    *,
+    output_root_dir: Path,
+    output_substring: str,
+) -> Path:
+    run_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    cleaned_substring = output_substring.strip().replace("/", "-")
+    run_name = f"{run_stamp}_{cleaned_substring}" if cleaned_substring else run_stamp
+    run_dir = output_root_dir / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+def _save_json(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=False)
 
 
 def _namespace_to_json_dict(args: argparse.Namespace) -> Dict[str, Any]:
@@ -207,7 +227,17 @@ def _parse_args() -> argparse.Namespace:
         help="Batch size for validating generated prompts on the sampled pairs.",
     )
     parser.add_argument("--disable-chat-template", action="store_true")
-    parser.add_argument("--output-file", type=Path, default=None)
+    parser.add_argument(
+        "--output-root-dir",
+        type=Path,
+        default=Path("gradients_experiments"),
+        help="Root directory under which a timestamped run folder will be created.",
+    )
+    parser.add_argument(
+        "--output-substring",
+        default="",
+        help="Optional suffix appended to the timestamped output directory name.",
+    )
     return parser.parse_args()
 
 
@@ -1137,6 +1167,34 @@ def _evaluate_prompt_variant(
     }
 
 
+def _save_prompt_eval_outputs(
+    *,
+    eval_outputs_dir: Path,
+    full_eval_split: str,
+    generated_prompt_variants: Sequence[Dict[str, Any]],
+) -> None:
+    for variant in generated_prompt_variants:
+        full_evaluation = variant.get("full_evaluation")
+        revised_prompt = variant.get("revised_prompt")
+        if not full_evaluation or not revised_prompt:
+            continue
+        generation_index = variant.get("generation_index")
+        output_path = eval_outputs_dir / f"EVALID_prompt_{generation_index}_labels_predictions.json"
+        _save_json(
+            output_path,
+            {
+                "eval_id": f"prompt_{generation_index}",
+                "split": full_eval_split,
+                "prompt": revised_prompt,
+                "generation_index": generation_index,
+                "pair_labels": full_evaluation.get("target_labels", []),
+                "pair_predictions": full_evaluation.get("predicted_labels", []),
+                "confusion_matrix": full_evaluation.get("confusion_matrix"),
+                "metrics": full_evaluation.get("prf"),
+            },
+        )
+
+
 def _run_direct_candidate_generation(
     *,
     args: argparse.Namespace,
@@ -1701,18 +1759,24 @@ def main() -> None:
         baseline_confusion_matrix=baseline_confusion_matrix,
         original_dev_prf=original_dev_prf,
     )
-
-    if args.output_file:
-        args.output_file.parent.mkdir(parents=True, exist_ok=True)
-        with args.output_file.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-        print(f"saved output to {args.output_file}")
-        summary_output_file = args.output_file.with_name(
-            f"{args.output_file.stem}_summary{args.output_file.suffix}"
-        )
-        with summary_output_file.open("w", encoding="utf-8") as handle:
-            json.dump(summary_payload, handle, indent=2, ensure_ascii=False)
-        print(f"saved summary output to {summary_output_file}")
+    run_dir = _create_output_run_dir(
+        output_root_dir=args.output_root_dir,
+        output_substring=args.output_substring,
+    )
+    eval_outputs_dir = run_dir / "eval_outputs"
+    _save_json(run_dir / "args.json", _namespace_to_json_dict(args))
+    _save_json(run_dir / "all_data.json", payload)
+    _save_json(run_dir / "summary.json", summary_payload)
+    _save_prompt_eval_outputs(
+        eval_outputs_dir=eval_outputs_dir,
+        full_eval_split=args.full_eval_split,
+        generated_prompt_variants=prompt_editing_payload.get("generated_prompt_variants", []),
+    )
+    print(f"saved run directory to {run_dir}")
+    print(f"saved args to {run_dir / 'args.json'}")
+    print(f"saved full payload to {run_dir / 'all_data.json'}")
+    print(f"saved summary to {run_dir / 'summary.json'}")
+    print(f"saved eval outputs to {eval_outputs_dir}")
 
 
 if __name__ == "__main__":
