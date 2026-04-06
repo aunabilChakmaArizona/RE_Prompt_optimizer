@@ -1,11 +1,12 @@
-import json, sys
+import sys
 from pathlib import Path
 sys.path.append('codes')
 from agents.agent_scorer import score, NO_RELATION
 from agents.agent_data_loader import load_split_episodes
+from agents.agent_utils import load_json_file
 
 json_path = Path('gradients_experiments/gradient_baseline_train_node12_top3_k5.json')
-obj = json.load(open(json_path, 'r', encoding='utf-8'))
+obj = load_json_file(json_path)
 
 variant = next(v for v in obj['prompt_region_editing']['generated_prompt_variants'] if v.get('revised_prompt'))
 idx = variant['generation_index']

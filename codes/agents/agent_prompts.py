@@ -239,6 +239,51 @@ Do not include any edit tags such as <edit_start_1> or <edit_end_1> in the final
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
+GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1 = '''You are an expert prompt editor for a relation extraction inference task. You specialize in proposing strong alternative rewrites for a marked region of given prompt.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given the current full instruction prompt below. The selected editable region is marked using <edit_start> and <edit_end>:
+```
+#MARKED_PROMPT#
+```
+
+Your task is to propose exactly #NUM_CANDIDATES# candidate rewrites for only the text inside the marked region. Each candidate should be a replacement for the marked region text, not a full prompt.
+Focus on edits that can improve generalization for binary relation inference.
+The candidates should be distinct and concise. They should remain focused on the marked region, but may require a small adjustment to nearby surrounding text for grammaticality or coherence.
+
+Please reason through the problem, but output the candidates using the valid JSON in the following form:
+```json
+{
+  "1": "candidate 1",
+  "2": "candidate 2",
+  "...": "...",
+  "#NUM_CANDIDATES#": "candidate #NUM_CANDIDATES#"
+}
+```
+'''
+
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in synthesizing improved full instruction prompts from region-level candidate edits.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given the current full instruction prompt below:
+```
+#INFERENCE_PROMPT#
+```
+
+The top gradient-ranked editable regions are listed below together with candidate rewrites for each region:
+#REGION_CANDIDATE_BLOCKS#
+
+Your task is to generate one revised full instruction prompt by selecting and combining promising candidate rewrites across these regions.
+You may use at most one candidate per region, and you may leave a region unchanged if that is better.
+Preserve the rest of the prompt as much as possible unless a small nearby adjustment is necessary for coherence.
+
+Please reason through the problem, but output only the revised full prompt enclosed within the <p> and </p> tags.
+'''
+
 MUTATION_TRACES_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.

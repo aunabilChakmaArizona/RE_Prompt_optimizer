@@ -328,6 +328,103 @@ def _prepare_model_inputs(
     }
 
 
+def score_binary_prompts_with_ce_and_perplexity(
+    *,
+    prompts: Sequence[str],
+    target_labels: Sequence[str],
+    model,
+    tokenizer,
+    batch_size: int = 8,
+    use_chat_template: bool = True,
+    add_generation_prompt: bool = True,
+    enable_thinking: bool = False,
+) -> Dict[str, Any]:
+    if len(prompts) != len(target_labels):
+        raise ValueError("prompts/target_labels length mismatch")
+    if not prompts:
+        return {
+            "predicted_labels": [],
+            "target_labels": [],
+            "cross_entropy_losses": [],
+            "perplexities": [],
+            "mean_cross_entropy": 0.0,
+            "mean_perplexity": 0.0,
+        }
+
+    yes_token_id = _resolve_binary_token_id(tokenizer, "yes")
+    no_token_id = _resolve_binary_token_id(tokenizer, "no")
+    target_device = getattr(model, "device", None)
+    original_padding_side = getattr(tokenizer, "padding_side", "right")
+
+    predicted_labels: List[str] = []
+    cross_entropy_losses: List[float] = []
+    perplexities: List[float] = []
+
+    try:
+        tokenizer.padding_side = "left"
+        for start in range(0, len(prompts), batch_size):
+            prompt_batch = list(prompts[start : start + batch_size])
+            label_batch = list(target_labels[start : start + batch_size])
+
+            if use_chat_template:
+                formatted_batch = [
+                    tokenizer.apply_chat_template(
+                        [{"role": "user", "content": prompt}],
+                        tokenize=False,
+                        add_generation_prompt=add_generation_prompt,
+                        enable_thinking=enable_thinking,
+                    )
+                    for prompt in prompt_batch
+                ]
+            else:
+                formatted_batch = prompt_batch
+
+            model_inputs = tokenizer(
+                formatted_batch,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
+            if target_device is not None:
+                model_inputs = model_inputs.to(target_device)
+
+            target_class_indices = torch.tensor(
+                [0 if label == "yes" else 1 for label in label_batch],
+                device=model_inputs["input_ids"].device,
+            )
+
+            with torch.inference_mode():
+                outputs = model(**model_inputs, use_cache=False)
+                decision_logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
+                batch_losses = F.cross_entropy(
+                    decision_logits,
+                    target_class_indices,
+                    reduction="none",
+                )
+                batch_probabilities = torch.softmax(decision_logits, dim=-1)
+
+            batch_predictions = torch.argmax(batch_probabilities, dim=-1)
+            predicted_labels.extend(
+                "yes" if prediction.item() == 0 else "no"
+                for prediction in batch_predictions
+            )
+            cross_entropy_losses.extend(float(loss.item()) for loss in batch_losses)
+            perplexities.extend(float(torch.exp(loss).item()) for loss in batch_losses)
+    finally:
+        tokenizer.padding_side = original_padding_side
+
+    mean_cross_entropy = sum(cross_entropy_losses) / len(cross_entropy_losses)
+    mean_perplexity = sum(perplexities) / len(perplexities)
+    return {
+        "predicted_labels": predicted_labels,
+        "target_labels": list(target_labels),
+        "cross_entropy_losses": cross_entropy_losses,
+        "perplexities": perplexities,
+        "mean_cross_entropy": mean_cross_entropy,
+        "mean_perplexity": mean_perplexity,
+    }
+
+
 def _candidate_tokens_for_position(
     *,
     token_id: int,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
-from typing import Dict, List, Sequence
+from pathlib import Path
+from typing import Any, Dict, List, Sequence
 
 from agents.agent_llm_prompting import run_prompt
 from agents.agent_prompts import DIFFERENTIATE_PROMPT
@@ -23,6 +25,25 @@ def extract_tagged_text(text: str, open_tag: str, close_tag: str) -> str:
     if not match:
         return text.strip()
     return match.group(1).strip()
+
+
+def extract_json_object(text: str) -> Dict[str, Any]:
+    fenced_match = re.search(
+        r"```(?:json)?\s*(\{.*?\})\s*```",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    candidate_text = fenced_match.group(1) if fenced_match else text.strip()
+    start = candidate_text.find("{")
+    end = candidate_text.rfind("}")
+    if start < 0 or end < start:
+        raise ValueError("No JSON object found in model output.")
+    return json.loads(candidate_text[start : end + 1])
+
+
+def load_json_file(path: str | Path) -> Any:
+    with Path(path).open("r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def has_tagged_text(text: str, open_tag: str, close_tag: str) -> bool:

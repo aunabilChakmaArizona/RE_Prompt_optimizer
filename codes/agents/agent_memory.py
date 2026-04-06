@@ -12,3 +12,7 @@ def clear_iteration_memory(_: int, __, ___) -> None:
         if hasattr(torch.cuda, "ipc_collect"):
             torch.cuda.ipc_collect()
     gc.collect()
+
+
+def clear_model_memory() -> None:
+    clear_iteration_memory(0, None, None)

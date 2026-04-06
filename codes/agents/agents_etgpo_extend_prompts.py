@@ -29,6 +29,7 @@ from etgpo.etgpo_full_adjusted import (  # noqa: E402
     compute_per_run_stats,
     run_re_episode_set_evaluation,
 )
+from agents.agent_utils import load_json_file
 
 
 def _parse_args() -> argparse.Namespace:
@@ -70,12 +71,6 @@ def _parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-
-def _load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def _write_json(path: Path, payload: Dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, cls=NumpyEncoder)
@@ -85,7 +80,7 @@ def _load_run_config(source_run_dir: Path) -> Dict[str, Any]:
     final_results_path = source_run_dir / "final_results.json"
     if not final_results_path.exists():
         raise FileNotFoundError(f"Missing final_results.json in {source_run_dir}")
-    final_results = _load_json(final_results_path)
+    final_results = load_json_file(final_results_path)
     config = final_results.get("config")
     if not isinstance(config, dict):
         raise ValueError(f"Saved config missing in {final_results_path}")
@@ -98,7 +93,7 @@ def _load_existing_prompt_bundle(
     bundle_path = source_run_dir / "generated_prompt_candidates.json"
     if not bundle_path.exists():
         return [], [], []
-    bundle = _load_json(bundle_path)
+    bundle = load_json_file(bundle_path)
     return (
         list(bundle.get("candidate_prompts", [])),
         list(bundle.get("candidate_metadata", [])),
@@ -110,7 +105,7 @@ def _load_original_prompt_count(source_run_dir: Path, current_prompt_count: int)
     backup_path = source_run_dir / "generated_prompt_candidates.before_extension.json"
     if not backup_path.exists():
         return current_prompt_count
-    backup = _load_json(backup_path)
+    backup = load_json_file(backup_path)
     return len(backup.get("candidate_prompts", []))
 
 
@@ -121,7 +116,7 @@ def _load_taxonomy_state(
     if not taxonomy_path.exists():
         raise FileNotFoundError(f"Missing taxonomy.json in {source_run_dir}")
 
-    payload = _load_json(taxonomy_path)
+    payload = load_json_file(taxonomy_path)
 
     issue_categories = [
         IssueCategory(**item) for item in payload.get("categories", [])
@@ -298,7 +293,7 @@ def _load_existing_validation_result(
         )
         if not path.exists():
             return None
-        payload = _load_json(path)
+        payload = load_json_file(path)
         metrics = payload.get("metrics", {})
         per_run_scores.append(float(metrics.get("f1_mean", 0.0)))
 
@@ -389,7 +384,7 @@ def _update_final_results(
     extension_summary: Dict[str, Any],
 ) -> None:
     final_results_path = source_run_dir / "final_results.json"
-    final_results = _load_json(final_results_path)
+    final_results = load_json_file(final_results_path)
 
     results = final_results.setdefault("results", {})
     for candidate_name, payload in new_evaluation_results.items():
@@ -411,7 +406,7 @@ def main() -> None:
         raise FileNotFoundError(f"Source run directory not found: {args.source_run_dir}")
 
     config = _load_run_config(args.source_run_dir)
-    existing_final_results = _load_json(args.source_run_dir / "final_results.json")
+    existing_final_results = load_json_file(args.source_run_dir / "final_results.json")
     method_name = _resolve_method(config)
     issue_categories, trace_assignments, failure_records = _load_taxonomy_state(args.source_run_dir)
     existing_prompts, existing_metadata, existing_clusters = _load_existing_prompt_bundle(args.source_run_dir)

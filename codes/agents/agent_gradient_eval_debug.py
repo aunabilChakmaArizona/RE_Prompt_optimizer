@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import argparse
 import copy
-import gc
 import json
 import random
-import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
 import torch
-
 CURRENT_DIR = Path(__file__).resolve().parent
 CODES_DIR = CURRENT_DIR.parent
 if str(CODES_DIR) not in sys.path:
@@ -26,23 +23,34 @@ from agents.agent_gradient_token_analysis import (
     TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     analyze_relation_extraction_binary_pairs,
     build_relation_prompt,
+    score_binary_prompts_with_ce_and_perplexity,
 )
 from agents.agent_llm_prompting import run_prompts
+from agents.agent_memory import clear_model_memory
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import (
+    GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1,
+    GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1,
     GRADIENT_REGION_MUTATION_PROMPT_V1,
     INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
 )
 from agents.agent_relation_utils import get_relation_description
 from agents.agent_sample_feedback import sample_feedback_fn
 from agents.agent_scorer import NO_RELATION
-from agents.agent_utils import get_sentence_with_tags
+from agents.agent_utils import (
+    extract_json_object,
+    extract_tagged_text,
+    get_sentence_with_tags,
+    load_json_file,
+)
 
-
-def _load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+MODE_DIRECT_CANDIDATE_GENERATION = "DIRECT_CANDIDATE_GENERATION"
+MODE_LLM_CANDIDATE_SUGGESTION = "LLM_CANDIDATE_SUGGESTION"
+MODE_CHOICES = [
+    MODE_DIRECT_CANDIDATE_GENERATION,
+    MODE_LLM_CANDIDATE_SUGGESTION,
+]
 
 
 def _namespace_to_json_dict(args: argparse.Namespace) -> Dict[str, Any]:
@@ -65,11 +73,18 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model", required=True, help="HF model id to load")
     parser.add_argument(
+        "--mode",
+        choices=MODE_CHOICES,
+        default=MODE_DIRECT_CANDIDATE_GENERATION,
+        help="Prompt generation mode after gradient analysis.",
+    )
+    parser.add_argument(
         "--meta-prompt-model",
         default=None,
         help=(
-            "Optional HF model id used only for generating prompt variants from the "
-            "meta prompt. If omitted, --model is reused."
+            "Optional HF model id used only by DIRECT_CANDIDATE_GENERATION for "
+            "generating prompt variants from the meta prompt. If omitted, --model "
+            "is reused."
         ),
     )
     parser.add_argument(
@@ -153,7 +168,25 @@ def _parse_args() -> argparse.Namespace:
         "--num-generated-prompts",
         type=int,
         default=0,
-        help="How many prompt variants to generate from the selected gradient region.",
+        help="How many prompt variants to generate in the active mode.",
+    )
+    parser.add_argument(
+        "--num-region-candidates",
+        type=int,
+        default=5,
+        help="LLM_CANDIDATE_SUGGESTION only. Number of candidate rewrites to generate per region.",
+    )
+    parser.add_argument(
+        "--top-k-prompts",
+        type=int,
+        default=5,
+        help="LLM_CANDIDATE_SUGGESTION only. Number of lowest-scoring prompts to keep for full validation.",
+    )
+    parser.add_argument(
+        "--selection-perplexity-lambda",
+        type=float,
+        default=0.2,
+        help="LLM_CANDIDATE_SUGGESTION only. Combined score = cross_entropy + lambda * perplexity.",
     )
     parser.add_argument(
         "--meta-prompt-max-new-tokens",
@@ -240,7 +273,7 @@ def resolve_instruction_prompt(
     prompt_index: int | None,
     prompt_node_id: int | None,
 ) -> Tuple[str, Dict[str, Any]]:
-    payload = _load_json(prompt_source_path)
+    payload = load_json_file(prompt_source_path)
     if prompt_source_path.name == "generated_prompt_candidates.json":
         return _resolve_prompt_from_generated_candidates(payload, prompt_index)
     if prompt_source_path.name == "population.json":
@@ -249,39 +282,6 @@ def resolve_instruction_prompt(
         "Unsupported prompt source file. Expected generated_prompt_candidates.json "
         "or population.json."
     )
-
-
-def _sample_indices(
-    indices: Sequence[int],
-    *,
-    k: int,
-    rng: random.Random,
-    label: str,
-) -> List[int]:
-    unique_indices = sorted(set(indices))
-    if len(indices) < k:
-        raise ValueError(f"Need {k} {label} samples, but found only {len(indices)}.")
-    if len(unique_indices) < k:
-        raise ValueError(
-            f"Need {k} unique {label} samples, but found only {len(unique_indices)}."
-        )
-    return sorted(rng.sample(unique_indices, k))
-
-
-def _bucket_pair_indices(
-    labels: Sequence[str],
-    predictions: Sequence[str],
-) -> Dict[str, List[int]]:
-    buckets = {
-        "tp": [],
-        "tn": [],
-        "fp": [],
-        "fn": [],
-    }
-    for idx, (label, prediction) in enumerate(zip(labels, predictions)):
-        buckets[_pair_confusion_bucket(label, prediction)].append(idx)
-    return buckets
-
 
 def _resolve_num_ways(episodes: Sequence[Dict[str, Any]]) -> int:
     if not episodes:
@@ -423,16 +423,6 @@ def _build_train_sample_index(train_samples: Dict[str, Any]) -> Dict[str, dict]:
             if instance_id is not None:
                 index[instance_id] = inst
     return index
-
-
-def _clear_model_from_memory() -> None:
-    gc.collect() # todo: check why it helped to work to clear memory
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        if hasattr(torch.cuda, "ipc_collect"):
-            torch.cuda.ipc_collect()
-
-
 def _attach_predictions_to_pairs(
     *,
     pairs: Sequence[Dict[str, Any]],
@@ -530,14 +520,6 @@ def _build_score_payload_from_pairs(
     }
 
 
-def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
-    pattern = rf"{re.escape(open_tag)}(.*?){re.escape(close_tag)}"
-    match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
-    if not match:
-        return text.strip()
-    return match.group(1).strip()
-
-
 def _resolve_region_details(
     *,
     instruction_prompt: str,
@@ -605,6 +587,80 @@ def _build_gradient_region_meta_prompt(
     prompt = GRADIENT_REGION_MUTATION_PROMPT_V1
     prompt = prompt.replace("#INFERENCE_PROMPT#", instruction_prompt)
     prompt = prompt.replace("#MARKED_PROMPT#", region_details["marked_prompt"])
+    return prompt
+
+
+def _build_single_region_marked_prompt(
+    *,
+    instruction_prompt: str,
+    region: Dict[str, Any],
+) -> str:
+    return (
+        instruction_prompt[: region["start_char"]]
+        + "<edit_start>"
+        + instruction_prompt[region["start_char"] : region["end_char"]]
+        + "<edit_end>"
+        + instruction_prompt[region["end_char"] :]
+    )
+
+
+def _build_region_candidate_meta_prompt(
+    *,
+    instruction_prompt: str,
+    region: Dict[str, Any],
+    num_region_candidates: int,
+) -> str:
+    prompt = GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1
+    prompt = prompt.replace(
+        "#MARKED_PROMPT#",
+        _build_single_region_marked_prompt(
+            instruction_prompt=instruction_prompt,
+            region=region,
+        ),
+    )
+    prompt = prompt.replace("#NUM_CANDIDATES#", str(num_region_candidates))
+    return prompt
+
+
+def _build_region_candidate_blocks(
+    *,
+    selected_regions: Sequence[Dict[str, Any]],
+    region_candidates: Sequence[Dict[str, Any]],
+) -> str:
+    candidate_index = {
+        int(item["region_rank"]): item for item in region_candidates
+    }
+    blocks: List[str] = []
+    for region in selected_regions:
+        candidates = candidate_index.get(int(region["region_rank"]), {}).get("candidates", [])
+        candidate_list_text = json.dumps(candidates if candidates else [], ensure_ascii=False)
+        blocks.append(
+            "\n".join(
+                [
+                    f"Region {region['region_rank']}",
+                    f"Current region text: {region['region_text']}",
+                    f"Candidates: {candidate_list_text}",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
+
+
+def _build_region_candidate_synthesis_prompt(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    region_candidates: Sequence[Dict[str, Any]],
+) -> str:
+    prompt = GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1
+    prompt = prompt.replace("#INFERENCE_PROMPT#", instruction_prompt)
+    prompt = prompt.replace(
+        "#REGION_CANDIDATE_BLOCKS#",
+        _build_region_candidate_blocks(
+            selected_regions=region_details["selected_regions"],
+            region_candidates=region_candidates,
+        ),
+    )
     return prompt
 
 
@@ -769,6 +825,7 @@ def _build_summary_payload(
         summary_variants.append(
             {
                 "prompt": variant.get("revised_prompt"),
+                "selection_metrics": variant.get("selection_metrics"),
                 "bucket_scores": (
                     validation["confusion_matrix"]["updated"]
                     if validation
@@ -794,7 +851,10 @@ def _build_summary_payload(
             "balanced_train_prf": baseline_prf,
             "dev_prf": original_dev_prf,
         },
-        "meta_prompt": prompt_editing_payload.get("meta_prompt"),
+        "meta_prompt": (
+            prompt_editing_payload.get("meta_prompt")
+            or prompt_editing_payload.get("synthesis_meta_prompt")
+        ),
         "generated_prompts": summary_variants,
     }
 
@@ -828,7 +888,7 @@ def _generate_region_prompt_variants(
     )
     variants: List[Dict[str, Any]] = []
     for generation_index, raw_output in enumerate(raw_outputs):
-        revised_prompt = _extract_between(raw_output, "<p>", "</p>")
+        revised_prompt = extract_tagged_text(raw_output, "<p>", "</p>")
         variants.append(
             {
                 "generation_index": generation_index,
@@ -838,6 +898,128 @@ def _generate_region_prompt_variants(
             }
         )
     return variants
+
+
+def _generate_region_candidates(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    num_region_candidates: int,
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+    use_chat_template: bool,
+) -> List[Dict[str, Any]]:
+    if num_region_candidates <= 0:
+        return []
+
+    region_candidates: List[Dict[str, Any]] = []
+    for region in region_details["selected_regions"]:
+        meta_prompt = _build_region_candidate_meta_prompt(
+            instruction_prompt=instruction_prompt,
+            region=region,
+            num_region_candidates=num_region_candidates,
+        )
+        raw_output = run_prompts(
+            [meta_prompt],
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+            batch_size=batch_size,
+            use_chat_template=use_chat_template,
+            add_generation_prompt=True,
+            enable_thinking=False,
+            do_sample=True,
+            do_log=True,
+            log_label="agent_gradient_eval_debug_region_candidates",
+        )[0]
+        candidates: List[str] = []
+        seen: set[str] = set()
+        try:
+            parsed_output = extract_json_object(raw_output)
+        except (ValueError, TypeError):
+            parsed_output = {}
+        for _, candidate_text in sorted(parsed_output.items(), key=lambda item: int(item[0])):
+            normalized = str(candidate_text).strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            candidates.append(normalized)
+            if len(candidates) == num_region_candidates:
+                break
+        region_candidates.append(
+            {
+                "region_rank": region["region_rank"],
+                "region_text": region["region_text"],
+                "meta_prompt": meta_prompt,
+                "raw_output": raw_output,
+                "candidates": candidates,
+            }
+        )
+    return region_candidates
+
+
+def _generate_prompt_variants_from_region_candidates(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    region_candidates: Sequence[Dict[str, Any]],
+    num_generated_prompts: int,
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+    use_chat_template: bool,
+) -> Dict[str, Any]:
+    if num_generated_prompts <= 0:
+        return {
+            "meta_prompt": None,
+            "raw_outputs": [],
+            "generated_prompt_variants": [],
+        }
+
+    meta_prompt = _build_region_candidate_synthesis_prompt(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        region_candidates=region_candidates,
+    )
+    raw_outputs = run_prompts(
+        [meta_prompt] * num_generated_prompts, #todo: need to check the diversity of the created prompts
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        batch_size=batch_size,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        do_sample=True,
+        do_log=True,
+        log_label="agent_gradient_eval_debug_region_synthesis",
+    )
+
+    variants: List[Dict[str, Any]] = []
+    seen_prompts: set[str] = set()
+    for generation_index, raw_output in enumerate(raw_outputs):
+        revised_prompt = extract_tagged_text(raw_output, "<p>", "</p>")
+        normalized_prompt = revised_prompt.strip()
+        is_duplicate = bool(normalized_prompt) and normalized_prompt in seen_prompts
+        if normalized_prompt:
+            seen_prompts.add(normalized_prompt)
+        variants.append(
+            {
+                "generation_index": generation_index,
+                "raw_output": raw_output,
+                "revised_prompt": normalized_prompt,
+                "changed": bool(normalized_prompt) and normalized_prompt != instruction_prompt,
+                "duplicate_prompt": is_duplicate,
+            }
+        )
+    return {
+        "meta_prompt": meta_prompt,
+        "raw_outputs": raw_outputs,
+        "generated_prompt_variants": variants,
+    }
 
 
 def build_full_binary_pairs(
@@ -882,6 +1064,394 @@ def build_full_binary_pairs(
     return full_pairs
 
 
+def _evaluate_prompt_variant(
+    *,
+    revised_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    baseline_validation: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    model,
+    tokenizer,
+    validation_batch_size: int,
+    use_chat_template: bool,
+) -> Dict[str, Any]:
+    prompts, target_labels = _build_binary_prompts_for_instruction(
+        instruction_prompt=revised_prompt,
+        binary_pairs=sampled_pairs,
+    )
+    score_payload = _predict_binary_prompts(
+        prompts=prompts,
+        target_labels=target_labels,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=validation_batch_size,
+        use_chat_template=use_chat_template,
+    )
+    validation_summary = _summarize_validation_by_bucket(
+        sampled_pairs=sampled_pairs,
+        score_payload=score_payload,
+    )
+    updated_confusion_matrix = _build_confusion_matrix_counts(
+        predicted_labels=score_payload["predicted_labels"],
+        target_labels=score_payload["target_labels"],
+    )
+    delta_vs_baseline = _compute_summary_delta(
+        baseline_summary=baseline_validation,
+        candidate_summary=validation_summary,
+    )
+    full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
+        instruction_prompt=revised_prompt,
+        binary_pairs=full_eval_pairs,
+    )
+    full_variant_score_payload = _predict_binary_prompts(
+        prompts=full_variant_prompts,
+        target_labels=full_variant_targets,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=validation_batch_size,
+        use_chat_template=use_chat_template,
+    )
+    full_evaluation = _build_evaluation_report(
+        score_payload=full_variant_score_payload,
+        binary_pairs=full_eval_pairs,
+        prf_mode="episode",
+    )
+    validation_payload = {
+        "predicted_labels": score_payload["predicted_labels"],
+        "target_labels": score_payload["target_labels"],
+        "summary": validation_summary,
+        "prf": _build_prf_scores(
+            predicted_labels=score_payload["predicted_labels"],
+            target_labels=score_payload["target_labels"],
+        ),
+        "confusion_matrix": {
+            "original": baseline_confusion_matrix,
+            "updated": updated_confusion_matrix,
+        },
+    }
+    return {
+        "validation": validation_payload,
+        "full_evaluation": full_evaluation,
+        "delta_vs_baseline": delta_vs_baseline,
+    }
+
+
+def _run_direct_candidate_generation(
+    *,
+    args: argparse.Namespace,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    gradient_results: Dict[str, Any],
+    baseline_validation: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    prompt_editing_payload: Dict[str, Any] = {
+        "mode": MODE_DIRECT_CANDIDATE_GENERATION,
+        "baseline_validation": baseline_validation,
+        "selected_regions": [],
+        "meta_prompt": None,
+        "generated_prompt_variants": [],
+    }
+    if args.num_generated_prompts <= 0:
+        print("[agent_gradient_eval_debug] prompt variant generation skipped")
+        return prompt_editing_payload
+
+    region_details = _resolve_region_details(
+        instruction_prompt=instruction_prompt,
+        tokenizer=tokenizer,
+        gradient_results=gradient_results,
+        num_edit_regions=args.num_edit_regions,
+    )
+    meta_prompt = _build_gradient_region_meta_prompt(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+    )
+    print("[agent_gradient_eval_debug] direct meta prompt:\n" f"{meta_prompt}")
+    print(
+        "[agent_gradient_eval_debug] generating direct prompt variants:",
+        f"num_edit_regions={region_details['num_edit_regions']}",
+        f"region_ranks={[region['region_rank'] for region in region_details['selected_regions']]}",
+        f"num_generated_prompts={args.num_generated_prompts}",
+    )
+
+    if args.meta_prompt_model:
+        model = None
+        tokenizer = None
+        clear_model_memory()
+        print("[agent_gradient_eval_debug] base model cleared from memory before direct generation")
+        generation_model, generation_tokenizer = load_model_and_tokenizer(
+            model_id=args.meta_prompt_model,
+            device_map=args.device_map,
+        )
+        print(
+            "[agent_gradient_eval_debug] direct generation model loaded:",
+            args.meta_prompt_model,
+        )
+    else:
+        generation_model = model
+        generation_tokenizer = tokenizer
+
+    generated_variants = _generate_region_prompt_variants(
+        meta_prompt=meta_prompt,
+        instruction_prompt=instruction_prompt,
+        num_generated_prompts=args.num_generated_prompts,
+        model=generation_model,
+        tokenizer=generation_tokenizer,
+        max_new_tokens=args.meta_prompt_max_new_tokens,
+        batch_size=args.meta_prompt_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+
+    if args.meta_prompt_model:
+        generation_model = None
+        generation_tokenizer = None
+        clear_model_memory()
+        print("[agent_gradient_eval_debug] direct generation model cleared from memory")
+        model, tokenizer = load_model_and_tokenizer(
+            model_id=args.model,
+            device_map=args.device_map,
+        )
+        print("[agent_gradient_eval_debug] base model and tokenizer reloaded")
+
+    validated_variants: List[Dict[str, Any]] = []
+    prompt_result_cache: Dict[str, Dict[str, Any]] = {}
+    for variant in generated_variants:
+        revised_prompt = variant["revised_prompt"]
+        if not revised_prompt:
+            validated_variants.append(
+                {
+                    **variant,
+                    "validation": None,
+                    "full_evaluation": None,
+                    "delta_vs_baseline": None,
+                }
+            )
+            continue
+
+        cached_result = prompt_result_cache.get(revised_prompt)
+        if cached_result is None:
+            cached_result = _evaluate_prompt_variant(
+                revised_prompt=revised_prompt,
+                sampled_pairs=sampled_pairs,
+                full_eval_pairs=full_eval_pairs,
+                baseline_validation=baseline_validation,
+                baseline_confusion_matrix=baseline_confusion_matrix,
+                model=model,
+                tokenizer=tokenizer,
+                validation_batch_size=args.validation_batch_size,
+                use_chat_template=not args.disable_chat_template,
+            )
+            prompt_result_cache[revised_prompt] = copy.deepcopy(cached_result)
+        validated_variants.append(
+            {
+                **variant,
+                "validation": copy.deepcopy(cached_result["validation"]),
+                "full_evaluation": copy.deepcopy(cached_result["full_evaluation"]),
+                "delta_vs_baseline": copy.deepcopy(cached_result["delta_vs_baseline"]),
+            }
+        )
+
+    prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
+    prompt_editing_payload["meta_prompt"] = meta_prompt
+    prompt_editing_payload["generated_prompt_variants"] = validated_variants
+    return prompt_editing_payload
+
+
+def _run_llm_candidate_suggestion(
+    *,
+    args: argparse.Namespace,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    gradient_results: Dict[str, Any],
+    baseline_validation: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    prompt_editing_payload: Dict[str, Any] = {
+        "mode": MODE_LLM_CANDIDATE_SUGGESTION,
+        "baseline_validation": baseline_validation,
+        "selected_regions": [],
+        "region_candidate_meta_prompts": [],
+        "region_candidates": [],
+        "synthesis_meta_prompt": None,
+        "generated_prompt_variants": [],
+        "retained_top_k_prompts": [],
+    }
+    if args.num_generated_prompts <= 0:
+        print("[agent_gradient_eval_debug] prompt variant generation skipped")
+        return prompt_editing_payload
+    if args.num_region_candidates <= 0:
+        raise ValueError("--num-region-candidates must be positive in LLM_CANDIDATE_SUGGESTION.")
+    if args.top_k_prompts <= 0:
+        raise ValueError("--top-k-prompts must be positive in LLM_CANDIDATE_SUGGESTION.")
+
+    region_details = _resolve_region_details(
+        instruction_prompt=instruction_prompt,
+        tokenizer=tokenizer,
+        gradient_results=gradient_results,
+        num_edit_regions=args.num_edit_regions,
+    )
+    print(
+        "[agent_gradient_eval_debug] generating per-region candidates:",
+        f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
+        f"num_region_candidates={args.num_region_candidates}",
+    )
+    region_candidates = _generate_region_candidates(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        num_region_candidates=args.num_region_candidates,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.meta_prompt_max_new_tokens,
+        batch_size=args.meta_prompt_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+
+    synthesis_payload = _generate_prompt_variants_from_region_candidates(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        region_candidates=region_candidates,
+        num_generated_prompts=args.num_generated_prompts,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.meta_prompt_max_new_tokens,
+        batch_size=args.meta_prompt_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+
+    prompt_result_cache: Dict[str, Dict[str, Any]] = {}
+    scored_variants: List[Dict[str, Any]] = []
+    for variant in synthesis_payload["generated_prompt_variants"]:
+        revised_prompt = variant["revised_prompt"]
+        if not revised_prompt:
+            scored_variants.append(
+                {
+                    **variant,
+                    "selection_metrics": None,
+                    "validation": None,
+                    "full_evaluation": None,
+                    "delta_vs_baseline": None,
+                    "retained_for_full_validation": False,
+                }
+            )
+            continue
+
+        cached_result = prompt_result_cache.get(revised_prompt)
+        if cached_result is None:
+            prompts, target_labels = _build_binary_prompts_for_instruction(
+                instruction_prompt=revised_prompt,
+                binary_pairs=sampled_pairs,
+            )
+            selection_metrics = score_binary_prompts_with_ce_and_perplexity(
+                prompts=prompts,
+                target_labels=target_labels,
+                model=model,
+                tokenizer=tokenizer,
+                batch_size=args.validation_batch_size,
+                use_chat_template=not args.disable_chat_template,
+            )
+            combined_score = (
+                selection_metrics["mean_cross_entropy"]
+                + args.selection_perplexity_lambda * selection_metrics["mean_perplexity"]
+            )
+            cached_result = {
+                "selection_metrics": {
+                    **selection_metrics,
+                    "combined_score": combined_score,
+                },
+            }
+            prompt_result_cache[revised_prompt] = copy.deepcopy(cached_result)
+
+        scored_variants.append(
+            {
+                **variant,
+                "selection_metrics": copy.deepcopy(cached_result["selection_metrics"]),
+                "validation": None,
+                "full_evaluation": None,
+                "delta_vs_baseline": None,
+                "retained_for_full_validation": False,
+            }
+        )
+
+    ranked_variants = sorted(
+        [
+            variant for variant in scored_variants
+            if variant["selection_metrics"] is not None and variant["changed"]
+        ],
+        key=lambda item: (
+            item["selection_metrics"]["combined_score"],
+            item["selection_metrics"]["mean_cross_entropy"],
+            item["selection_metrics"]["mean_perplexity"],
+        ),
+    )
+    retained_prompt_texts: List[str] = []
+    for variant in ranked_variants:
+        prompt_text = variant["revised_prompt"]
+        if prompt_text in retained_prompt_texts:
+            continue
+        retained_prompt_texts.append(prompt_text)
+        if len(retained_prompt_texts) == args.top_k_prompts:
+            break
+    retained_prompt_text_set = set(retained_prompt_texts)
+    evaluation_cache: Dict[str, Dict[str, Any]] = {}
+    selection_metrics_by_prompt = {
+        variant["revised_prompt"]: variant["selection_metrics"]
+        for variant in ranked_variants
+    }
+
+    for variant in scored_variants:
+        revised_prompt = variant["revised_prompt"]
+        if revised_prompt not in retained_prompt_text_set:
+            continue
+        evaluation = evaluation_cache.get(revised_prompt)
+        if evaluation is None:
+            evaluation = _evaluate_prompt_variant(
+                revised_prompt=revised_prompt,
+                sampled_pairs=sampled_pairs,
+                full_eval_pairs=full_eval_pairs,
+                baseline_validation=baseline_validation,
+                baseline_confusion_matrix=baseline_confusion_matrix,
+                model=model,
+                tokenizer=tokenizer,
+                validation_batch_size=args.validation_batch_size,
+                use_chat_template=not args.disable_chat_template,
+            )
+            evaluation_cache[revised_prompt] = copy.deepcopy(evaluation)
+        variant["validation"] = evaluation["validation"]
+        variant["full_evaluation"] = evaluation["full_evaluation"]
+        variant["delta_vs_baseline"] = evaluation["delta_vs_baseline"]
+        variant["retained_for_full_validation"] = True
+
+    prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
+    prompt_editing_payload["region_candidate_meta_prompts"] = [
+        {
+            "region_rank": item["region_rank"],
+            "meta_prompt": item["meta_prompt"],
+            "raw_output": item["raw_output"],
+        }
+        for item in region_candidates
+    ]
+    prompt_editing_payload["region_candidates"] = region_candidates
+    prompt_editing_payload["synthesis_meta_prompt"] = synthesis_payload["meta_prompt"]
+    prompt_editing_payload["generated_prompt_variants"] = scored_variants
+    prompt_editing_payload["retained_top_k_prompts"] = [
+        {
+            "revised_prompt": prompt_text,
+            "combined_score": selection_metrics_by_prompt[prompt_text]["combined_score"],
+            "mean_cross_entropy": selection_metrics_by_prompt[prompt_text]["mean_cross_entropy"],
+            "mean_perplexity": selection_metrics_by_prompt[prompt_text]["mean_perplexity"],
+        }
+        for prompt_text in retained_prompt_texts
+    ]
+    return prompt_editing_payload
+
+
 def main() -> None:
     args = _parse_args()
     print("[agent_gradient_eval_debug] starting")
@@ -906,7 +1476,11 @@ def main() -> None:
     )
     print("[agent_gradient_eval_debug] model and tokenizer loaded")
 
-    meta_prompt_model_id = args.meta_prompt_model or args.model
+    meta_prompt_model_id = (
+        args.meta_prompt_model
+        if args.mode == MODE_DIRECT_CANDIDATE_GENERATION
+        else args.model
+    )
 
     sampled_indices: Dict[str, Any] = {}
     sampled_pairs: List[Dict[str, Any]] = []
@@ -1073,193 +1647,30 @@ def main() -> None:
     )
     original_dev_prf = _extract_prf_from_prompt_info(prompt_info)
 
-    prompt_editing_payload: Dict[str, Any] = {
-        "baseline_validation": baseline_validation,
-        "selected_regions": [],
-        "meta_prompt": None,
-        "generated_prompt_variants": [],
-    }
-    if args.num_generated_prompts > 0:
-        region_details = _resolve_region_details(
+    if args.mode == MODE_DIRECT_CANDIDATE_GENERATION:
+        prompt_editing_payload = _run_direct_candidate_generation(
+            args=args,
             instruction_prompt=instruction_prompt,
-            tokenizer=tokenizer,
+            sampled_pairs=sampled_pairs,
+            full_eval_pairs=full_eval_pairs,
             gradient_results=gradient_results,
-            num_edit_regions=args.num_edit_regions,
+            baseline_validation=baseline_validation,
+            baseline_confusion_matrix=baseline_confusion_matrix,
+            model=model,
+            tokenizer=tokenizer,
         )
-        meta_prompt = _build_gradient_region_meta_prompt(
-            instruction_prompt=instruction_prompt,
-            region_details=region_details,
-        )
-        print(
-            "[agent_gradient_eval_debug] meta prompt:\n"
-            f"{meta_prompt}"
-        )
-        print(
-            "[agent_gradient_eval_debug] generating prompt variants:",
-            f"num_edit_regions={region_details['num_edit_regions']}",
-            f"region_ranks={[region['region_rank'] for region in region_details['selected_regions']]}",
-            f"num_generated_prompts={args.num_generated_prompts}",
-        )
-        if args.meta_prompt_model:
-            model = None
-            tokenizer = None
-            _clear_model_from_memory()
-            print("[agent_gradient_eval_debug] base model cleared from memory before mutation")
-            meta_prompt_model, meta_prompt_tokenizer = load_model_and_tokenizer(
-                model_id=args.meta_prompt_model,
-                device_map=args.device_map,
-            )
-            print(
-                "[agent_gradient_eval_debug] meta-prompt model and tokenizer loaded:",
-                args.meta_prompt_model,
-            )
-        else:
-            meta_prompt_model = model
-            meta_prompt_tokenizer = tokenizer
-
-        generated_variants = _generate_region_prompt_variants(
-            meta_prompt=meta_prompt,
-            instruction_prompt=instruction_prompt,
-            num_generated_prompts=args.num_generated_prompts,
-            model=meta_prompt_model,
-            tokenizer=meta_prompt_tokenizer,
-            max_new_tokens=args.meta_prompt_max_new_tokens,
-            batch_size=args.meta_prompt_batch_size,
-            use_chat_template=not args.disable_chat_template,
-        )
-        if args.meta_prompt_model:
-            meta_prompt_model = None
-            meta_prompt_tokenizer = None
-            _clear_model_from_memory()
-            print("[agent_gradient_eval_debug] meta-prompt model cleared from memory")
-            model, tokenizer = load_model_and_tokenizer(
-                model_id=args.model,
-                device_map=args.device_map,
-            )
-            print("[agent_gradient_eval_debug] base model and tokenizer reloaded")
-            
-        validated_variants: List[Dict[str, Any]] = []
-        prompt_result_cache: Dict[str, Dict[str, Any]] = {}
-        for variant in generated_variants:
-            revised_prompt = variant["revised_prompt"]
-            if not revised_prompt:
-                print(
-                    "[agent_gradient_eval_debug] prompt variant generated:",
-                    f"generation_index={variant['generation_index']}",
-                    "revised_prompt=<empty>",
-                    "validation_skipped=True",
-                )
-                validated_variants.append(
-                    {
-                        **variant,
-                        "validation": None,
-                        "full_evaluation": None,
-                        "delta_vs_baseline": None,
-                    }
-                )
-                continue
-
-            cached_result = prompt_result_cache.get(revised_prompt)
-            if cached_result is not None:
-                print(
-                    "[agent_gradient_eval_debug] prompt variant reused cached results:",
-                    f"generation_index={variant['generation_index']}",
-                )
-                validated_variants.append(
-                    {
-                        **variant,
-                        "validation": copy.deepcopy(cached_result["validation"]),
-                        "full_evaluation": copy.deepcopy(cached_result["full_evaluation"]),
-                        "delta_vs_baseline": copy.deepcopy(cached_result["delta_vs_baseline"]),
-                    }
-                )
-                continue
-
-            prompts, target_labels = _build_binary_prompts_for_instruction(
-                instruction_prompt=revised_prompt,
-                binary_pairs=sampled_pairs,
-            )
-            score_payload = _predict_binary_prompts(
-                prompts=prompts,
-                target_labels=target_labels,
-                model=model,
-                tokenizer=tokenizer,
-                batch_size=args.validation_batch_size,
-                use_chat_template=not args.disable_chat_template,
-            )
-            validation_summary = _summarize_validation_by_bucket(
-                sampled_pairs=sampled_pairs,
-                score_payload=score_payload,
-            )
-            updated_confusion_matrix = _build_confusion_matrix_counts(
-                predicted_labels=score_payload["predicted_labels"],
-                target_labels=score_payload["target_labels"],
-            )
-            delta_vs_baseline = _compute_summary_delta(
-                baseline_summary=baseline_validation,
-                candidate_summary=validation_summary,
-            )
-            full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
-                instruction_prompt=revised_prompt,
-                binary_pairs=full_eval_pairs,
-            )
-            full_variant_score_payload = _predict_binary_prompts(
-                prompts=full_variant_prompts,
-                target_labels=full_variant_targets,
-                model=model,
-                tokenizer=tokenizer,
-                batch_size=args.validation_batch_size,
-                use_chat_template=not args.disable_chat_template,
-            )
-            full_evaluation = _build_evaluation_report(
-                score_payload=full_variant_score_payload,
-                binary_pairs=full_eval_pairs,
-                prf_mode="episode",
-            )
-            print(
-                "[agent_gradient_eval_debug] prompt variant text:\n"
-                f"{revised_prompt}"
-            )
-            print(
-                "[agent_gradient_eval_debug] prompt variant validated:",
-                f"generation_index={variant['generation_index']}",
-                f"overall_accuracy={validation_summary['overall']['accuracy']:.4f}",
-                f"delta_accuracy={delta_vs_baseline['overall']['accuracy']:.4f}",
-                f"balanced_train_f1={_build_prf_scores(predicted_labels=score_payload['predicted_labels'], target_labels=score_payload['target_labels'])['f1']:.4f}",
-                f"full_eval_f1={full_evaluation['prf']['f1']:.4f}",
-            )
-            validation_payload = {
-                "predicted_labels": score_payload["predicted_labels"],
-                "target_labels": score_payload["target_labels"],
-                "summary": validation_summary,
-                "prf": _build_prf_scores(
-                    predicted_labels=score_payload["predicted_labels"],
-                    target_labels=score_payload["target_labels"],
-                ),
-                "confusion_matrix": {
-                    "original": baseline_confusion_matrix,
-                    "updated": updated_confusion_matrix,
-                },
-            }
-            prompt_result_cache[revised_prompt] = {
-                "validation": copy.deepcopy(validation_payload),
-                "full_evaluation": copy.deepcopy(full_evaluation),
-                "delta_vs_baseline": copy.deepcopy(delta_vs_baseline),
-            }
-            validated_variants.append(
-                {
-                    **variant,
-                    "validation": validation_payload,
-                    "full_evaluation": full_evaluation,
-                    "delta_vs_baseline": delta_vs_baseline,
-                }
-            )
-
-        prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
-        prompt_editing_payload["meta_prompt"] = meta_prompt
-        prompt_editing_payload["generated_prompt_variants"] = validated_variants
     else:
-        print("[agent_gradient_eval_debug] prompt variant generation skipped")
+        prompt_editing_payload = _run_llm_candidate_suggestion(
+            args=args,
+            instruction_prompt=instruction_prompt,
+            sampled_pairs=sampled_pairs,
+            full_eval_pairs=full_eval_pairs,
+            gradient_results=gradient_results,
+            baseline_validation=baseline_validation,
+            baseline_confusion_matrix=baseline_confusion_matrix,
+            model=model,
+            tokenizer=tokenizer,
+        )
 
     payload = {
         "args": _namespace_to_json_dict(args),
@@ -1268,7 +1679,7 @@ def main() -> None:
         "device_map": args.device_map,
         "dataset_type": args.dataset_type,
         "candidate_mode": args.candidate_mode,
-        "mode": "train_gradient_sampling",
+        "mode": args.mode,
         "dataset_split": "train",
         "prompt_source_path": str(args.prompt_source_path),
         "prompt_info": prompt_info,

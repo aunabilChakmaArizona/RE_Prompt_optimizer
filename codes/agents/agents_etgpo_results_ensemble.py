@@ -16,6 +16,7 @@ if str(CODES_DIR) not in sys.path:
     sys.path.append(str(CODES_DIR))
 
 from agents.agent_metrics import compute_prf_stats
+from agents.agent_utils import load_json_file
 
 
 @dataclass
@@ -107,12 +108,6 @@ def _parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-
-def _load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def _iter_run_dirs(root_dir: Path) -> List[Path]:
     return sorted(
         path.parent for path in root_dir.rglob("final_results.json")
@@ -139,7 +134,7 @@ def _load_generated_prompt_bundle(
     bundle_path = run_dir / "generated_prompt_candidates.json"
     if not bundle_path.exists():
         return [], []
-    bundle = _load_json(bundle_path)
+    bundle = load_json_file(bundle_path)
     prompts = bundle.get("candidate_prompts", [])
     metadata = bundle.get("candidate_metadata", [])
     return prompts, metadata
@@ -199,7 +194,7 @@ def _load_candidate_prediction(
     if not prediction_file.exists():
         return None
 
-    payload = _load_json(prediction_file)
+    payload = load_json_file(prediction_file)
     labels = payload.get("labels", [])
     predictions = payload.get("predictions", [])
     metrics = payload.get("metrics", {})
@@ -232,7 +227,7 @@ def _collect_candidates(root_dir: Path, method_name: str, split: str) -> List[Ca
     candidates: List[CandidatePrediction] = []
     for run_dir in _iter_run_dirs(root_dir):
         final_results_path = run_dir / "final_results.json"
-        final_results = _load_json(final_results_path)
+        final_results = load_json_file(final_results_path)
         results = final_results.get("results", {})
         prompts, metadata_list = _load_generated_prompt_bundle(run_dir)
 
@@ -482,7 +477,7 @@ def main() -> None:
             vote_traces=vote_traces,
         )
         output_payload["run_dir"] = str(run_dir)
-        output_payload["run_config"] = _load_json(run_dir / "final_results.json").get("config", {})
+        output_payload["run_config"] = load_json_file(run_dir / "final_results.json").get("config", {})
 
         output_path = args.output if args.output else _default_output_paths(
             args.method,

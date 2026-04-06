@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 import pickle
 from typing import Any, Dict, List, Optional
+
+from agents.agent_utils import load_json_file
 
 
 DEFAULT_DATA_DIR = os.path.abspath(
@@ -12,8 +13,7 @@ DEFAULT_DATA_DIR = os.path.abspath(
 
 
 def read_json_file(file_path: str) -> Any:
-    with open(file_path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+    return load_json_file(file_path)
 
 
 def read_pickle_file(file_path: str) -> Any:

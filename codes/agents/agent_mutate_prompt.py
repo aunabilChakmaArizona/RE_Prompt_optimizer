@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import List, Optional, Tuple
 
 from agents.agent_feedback_samples import FeedbackSamples
@@ -13,15 +12,7 @@ from agents.agent_prompts import (
     MUTATION_TRACES_PROMPT_SEGMENT_V1,
 )
 from agents.agent_relation_utils import get_relation_description
-from agents.agent_utils import differentiate_prompts
-
-
-def _extract_between(text: str, open_tag: str, close_tag: str) -> str:
-    pattern = rf"{re.escape(open_tag)}(.*?){re.escape(close_tag)}"
-    match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
-    if not match:
-        return text.strip()
-    return match.group(1).strip()
+from agents.agent_utils import differentiate_prompts, extract_tagged_text
 
 
 def _pad_list(items: List[str], size: int) -> List[str]:
@@ -169,7 +160,7 @@ def mutate_prompt_fn(
                 f"[agent_mutate_prompt] missing {prompt_open_tag} tag; retry {attempt}/{max_attempts}"
             )
             continue
-        candidate = _extract_between(raw_response, prompt_open_tag, prompt_close_tag)
+        candidate = extract_tagged_text(raw_response, prompt_open_tag, prompt_close_tag)
         (
             raw_differentiation_response,
             core_difference,
