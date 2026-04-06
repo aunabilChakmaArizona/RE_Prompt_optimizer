@@ -415,6 +415,33 @@ python agents/agent_gradient_eval_debug.py \
   --validation-batch-size 8 \
   --output-file "../gradients_experiments/gradient_baseline_train_node12_top3_k5.json"
 
+## gradient based baseline stable run new mode
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 8 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-generated-prompts 5 \
+  --num-region-candidates 5 \
+  --top-k-prompts 3 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_initial1_qwen4" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_initial1_qwen4.out 2>&1 &
+
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
