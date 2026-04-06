@@ -420,9 +420,9 @@ python agents/agent_gradient_eval_debug.py \
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
-  --device-map "cuda:3" \
-  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
-  --prompt-node-id 12 \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 10 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 10000 \
   --gradient-batch-size 8 \
@@ -440,6 +440,8 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "llm_cand_sugg_initial1_qwen4" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_initial1_qwen4.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" > nohup_outs/nohup_v3_qwen4_group2_mixed.out 2>&1 &
 
 
 ##################################################

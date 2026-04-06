@@ -5,6 +5,8 @@ from typing import Iterable, List, Sequence, Tuple
 
 import torch
 
+from agents.agent_memory import clear_cuda_cache
+
 _SAMPLE_LOGGED_LABELS: set[str] = set()
 
 
@@ -90,53 +92,52 @@ def run_binary_inference(
     else:
         iteration_prefix = f"iter {evolution_iteration}/{evolution_max_iterations} "
 
-    try:
-        tokenizer.padding_side = "left"
-        for batch_index, batch in enumerate(
-            _batched(list(prompts), batch_size),
-            start=1,
-        ):
-            if use_chat_template:
-                formatted = [
-                    tokenizer.apply_chat_template(
-                        [{"role": "user", "content": prompt}],
-                        tokenize=False,
-                        add_generation_prompt=add_generation_prompt,
-                        enable_thinking=enable_thinking,
-                    )
-                    for prompt in batch
-                ]
-            else:
-                formatted = list(batch)
-
-            model_inputs = tokenizer(
-                formatted, return_tensors="pt", padding=True, truncation=True
-            )
-            if target_device is not None:
-                model_inputs = model_inputs.to(target_device)
-
-            with torch.inference_mode():
-                outputs = model(**model_inputs, use_cache=False)
-                logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
-
-            yes_logits = logits[:, 0]
-            no_logits = logits[:, 1]
-            batch_predictions = [
-                yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)
-            ]
-            predictions.extend(batch_predictions)
-            if log_label and batch and batch_predictions:
-                _log_first_sample(log_label, batch[0], batch_predictions[0])
-
-            if log_every and (batch_index % log_every == 0 or batch_index == num_batches):
-                batch_elapsed = time.perf_counter() - start_time
-                print(
-                    f"[agent_binary_inference] {iteration_prefix} Processed {batch_index}/{num_batches} batches "
-                    f"in {batch_elapsed:.2f}s",
-                    flush=True,
+    tokenizer.padding_side = "left"
+    for batch_index, batch in enumerate(
+        _batched(list(prompts), batch_size),
+        start=1,
+    ):
+        if use_chat_template:
+            formatted = [
+                tokenizer.apply_chat_template(
+                    [{"role": "user", "content": prompt}],
+                    tokenize=False,
+                    add_generation_prompt=add_generation_prompt,
+                    enable_thinking=enable_thinking,
                 )
-    finally:
-        tokenizer.padding_side = original_padding_side
+                for prompt in batch
+            ]
+        else:
+            formatted = list(batch)
+
+        model_inputs = tokenizer(
+            formatted, return_tensors="pt", padding=True, truncation=True
+        )
+        if target_device is not None:
+            model_inputs = model_inputs.to(target_device)
+
+        with torch.inference_mode():
+            outputs = model(**model_inputs, use_cache=False)
+            logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
+
+        yes_logits = logits[:, 0]
+        no_logits = logits[:, 1]
+        batch_predictions = [
+            yes_token if y >= n else no_token for y, n in zip(yes_logits, no_logits)
+        ]
+        predictions.extend(batch_predictions)
+        if log_label and batch and batch_predictions:
+            _log_first_sample(log_label, batch[0], batch_predictions[0])
+
+        if log_every and (batch_index % log_every == 0 or batch_index == num_batches):
+            batch_elapsed = time.perf_counter() - start_time
+            print(
+                f"[agent_binary_inference] {iteration_prefix} Processed {batch_index}/{num_batches} batches "
+                f"in {batch_elapsed:.2f}s",
+                flush=True,
+            )
+    tokenizer.padding_side = original_padding_side
+    clear_cuda_cache()
 
     elapsed = time.perf_counter() - start_time
     print(f"[agent_binary_inference] run_binary_inference: done in {elapsed:.2f}s")

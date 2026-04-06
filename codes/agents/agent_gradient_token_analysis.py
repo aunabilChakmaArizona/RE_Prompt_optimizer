@@ -19,6 +19,7 @@ if str(CODES_DIR) not in sys.path:
     sys.path.append(str(CODES_DIR))
 
 from agents.agent_data_loader import DEFAULT_DATA_DIR, load_split_episodes
+from agents.agent_memory import clear_cuda_cache
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import (
     INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1,
@@ -776,7 +777,7 @@ def analyze_relation_extraction_binary_pairs(
         expansion_threshold_ratio=region_expansion_threshold_ratio,
     )
 
-    return asdict(
+    result = asdict(
         BatchPromptGradientAnalysis(
             prompt_template=instruction_prompt,
             num_instances=len(batch_payloads),
@@ -789,6 +790,8 @@ def analyze_relation_extraction_binary_pairs(
             top_regions=top_regions,
         )
     )
+    clear_cuda_cache()
+    return result
 
 
 def analyze_relation_extraction_dataset(

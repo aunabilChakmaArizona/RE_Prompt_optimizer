@@ -249,6 +249,8 @@ You are given the current full instruction prompt below. The selected editable r
 #MARKED_PROMPT#
 ```
 
+To be specific, the marked region is the part "<edit_start>#REGION_TEXT#<edit_end>".
+
 Your task is to propose exactly #NUM_CANDIDATES# candidate rewrites for only the text inside the marked region. Each candidate should be a replacement for the marked region text, not a full prompt.
 Focus on edits that can improve generalization for binary relation inference.
 The candidates should be distinct and concise. They should remain focused on the marked region, but may require a small adjustment to nearby surrounding text for grammaticality or coherence.

@@ -6,6 +6,8 @@ from typing import Iterable, List, Sequence
 
 import torch
 
+from agents.agent_memory import clear_cuda_cache
+
 _SAMPLE_LOGGED_LABELS: set[str] = set()
 
 
@@ -91,6 +93,7 @@ def run_prompts(
         outputs.extend(batch_outputs)
         if log_label and batch and batch_outputs:
             _log_first_sample(log_label, batch[0], batch_outputs[0])
+    clear_cuda_cache()
 
     return outputs
 

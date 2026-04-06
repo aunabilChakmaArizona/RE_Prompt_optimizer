@@ -641,6 +641,7 @@ def _build_region_candidate_meta_prompt(
     num_region_candidates: int,
 ) -> str:
     prompt = GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1
+    prompt = prompt.replace("#REGION_TEXT#", region["region_text"])
     prompt = prompt.replace(
         "#MARKED_PROMPT#",
         _build_single_region_marked_prompt(
@@ -951,6 +952,12 @@ def _generate_region_candidates(
             region=region,
             num_region_candidates=num_region_candidates,
         )
+        print(
+            "[agent_gradient_eval_debug] region candidate meta prompt:",
+            f"region_rank={region['region_rank']}",
+            f"region_text={region['region_text']!r}",
+        )
+        print(meta_prompt)
         raw_output = run_prompts(
             [meta_prompt],
             model=model,
@@ -964,6 +971,12 @@ def _generate_region_candidates(
             do_log=True,
             log_label="agent_gradient_eval_debug_region_candidates",
         )[0]
+        print(
+            "[agent_gradient_eval_debug] region candidate raw output:",
+            f"region_rank={region['region_rank']}",
+            f"region_text={region['region_text']!r}",
+        )
+        print(raw_output)
         candidates: List[str] = []
         seen: set[str] = set()
         try:
