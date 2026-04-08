@@ -425,7 +425,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --prompt-node-id 10 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 10000 \
-  --gradient-batch-size 4 \
+  --gradient-batch-size 2 \
   --max-regions 5 \
   --max-total-region-tokens 15 \
   --region-expansion-threshold-ratio 0.6 \

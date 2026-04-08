@@ -990,6 +990,101 @@ def _build_summary_payload(
     }
 
 
+def _build_combination_generated_prompts_payload(
+    *,
+    prompt_editing_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
+    prompts_with_scores: List[Dict[str, Any]] = []
+    for variant in generated_variants:
+        selection_metrics = variant.get("selection_metrics") or {}
+        prompts_with_scores.append(
+            {
+                "generation_index": variant.get("generation_index"),
+                "combination_key": variant.get("combination_key"),
+                "selected_replacements": variant.get("selected_replacements"),
+                "num_changed_spans": variant.get("num_changed_spans"),
+                "prompt": variant.get("revised_prompt"),
+                "changed": variant.get("changed"),
+                "duplicate_prompt": variant.get("duplicate_prompt"),
+                "retained_for_full_validation": variant.get("retained_for_full_validation"),
+                "loss": selection_metrics.get("mean_cross_entropy"),
+                "perplexity": selection_metrics.get("mean_perplexity"),
+                "combined_score": selection_metrics.get("combined_score"),
+            }
+        )
+
+    return {
+        "mode": prompt_editing_payload.get("mode"),
+        "combination_meta_prompt": prompt_editing_payload.get("combination_meta_prompt"),
+        "candidate_combinations": prompt_editing_payload.get("candidate_combinations", []),
+        "generated_prompts_with_scores": prompts_with_scores,
+    }
+
+
+def _strip_prediction_arrays_from_prompt_editing_payload(
+    *,
+    prompt_editing_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    compact_payload = copy.deepcopy(prompt_editing_payload)
+    compact_variants: List[Dict[str, Any]] = []
+    for variant in compact_payload.get("generated_prompt_variants", []):
+        compact_variant = copy.deepcopy(variant)
+        validation = compact_variant.get("validation")
+        if isinstance(validation, dict):
+            validation.pop("predicted_labels", None)
+            validation.pop("target_labels", None)
+        full_evaluation = compact_variant.get("full_evaluation")
+        if isinstance(full_evaluation, dict):
+            full_evaluation.pop("predicted_labels", None)
+            full_evaluation.pop("target_labels", None)
+        compact_variants.append(compact_variant)
+    compact_payload["generated_prompt_variants"] = compact_variants
+    return compact_payload
+
+
+def _build_sampled_data_and_predictions_payload(
+    *,
+    sampling: Dict[str, Any],
+    sampled_examples: Sequence[Dict[str, Any]],
+    prompt_editing_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    generated_variants: List[Dict[str, Any]] = []
+    for variant in prompt_editing_payload.get("generated_prompt_variants", []):
+        validation = variant.get("validation")
+        full_evaluation = variant.get("full_evaluation")
+        generated_variants.append(
+            {
+                "generation_index": variant.get("generation_index"),
+                "combination_key": variant.get("combination_key"),
+                "prompt": variant.get("revised_prompt"),
+                "selected_replacements": variant.get("selected_replacements"),
+                "validation": (
+                    {
+                        "predicted_labels": validation.get("predicted_labels", []),
+                        "target_labels": validation.get("target_labels", []),
+                    }
+                    if validation
+                    else None
+                ),
+                "full_evaluation": (
+                    {
+                        "predicted_labels": full_evaluation.get("predicted_labels", []),
+                        "target_labels": full_evaluation.get("target_labels", []),
+                    }
+                    if full_evaluation
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "sampling": copy.deepcopy(sampling),
+        "sampled_examples": copy.deepcopy(list(sampled_examples)),
+        "generated_prompt_predictions": generated_variants,
+    }
+
+
 def _generate_region_prompt_variants(
     *,
     meta_prompt: str,
@@ -2054,6 +2149,17 @@ def main() -> None:
             tokenizer=tokenizer,
         )
 
+    sampling_payload = {
+        "seed": args.seed,
+        "correct_pair_indices": sampled_indices["correct_indices"],
+        "mistake_pair_indices": sampled_indices["mistake_indices"],
+        "bucket_stats": sampled_indices.get("bucket_stats", {}),
+    }
+    sampled_data_and_predictions_payload = _build_sampled_data_and_predictions_payload(
+        sampling=sampling_payload,
+        sampled_examples=sampled_examples,
+        prompt_editing_payload=prompt_editing_payload,
+    )
     payload = {
         "args": _namespace_to_json_dict(args),
         "model": args.model,
@@ -2065,16 +2171,14 @@ def main() -> None:
         "dataset_split": "train",
         "prompt_source_path": str(args.prompt_source_path),
         "prompt_info": prompt_info,
-        "sampling": {
-            "seed": args.seed,
-            "correct_pair_indices": sampled_indices["correct_indices"],
-            "mistake_pair_indices": sampled_indices["mistake_indices"],
-            "bucket_stats": sampled_indices.get("bucket_stats", {}),
-        },
-        "sampled_examples": sampled_examples,
         "gradient_analysis": gradient_results,
         "train_gradient_collection": train_gradient_collection,
-        "prompt_region_editing": prompt_editing_payload,
+        "prompt_region_editing": _strip_prediction_arrays_from_prompt_editing_payload(
+            prompt_editing_payload=prompt_editing_payload,
+        ),
+        "external_data_files": {
+            "sampled_data_and_predictions": "sampled_data_and_predictions.json",
+        },
     }
     summary_payload = _build_summary_payload(
         instruction_prompt=instruction_prompt,
@@ -2091,6 +2195,17 @@ def main() -> None:
     _save_json(run_dir / "args.json", _namespace_to_json_dict(args))
     _save_json(run_dir / "all_data.json", payload)
     _save_json(run_dir / "summary.json", summary_payload)
+    _save_json(
+        run_dir / "sampled_data_and_predictions.json",
+        sampled_data_and_predictions_payload,
+    )
+    if args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
+        _save_json(
+            run_dir / "combination_generated_prompts.json",
+            _build_combination_generated_prompts_payload(
+                prompt_editing_payload=prompt_editing_payload,
+            ),
+        )
     _save_prompt_eval_outputs(
         eval_outputs_dir=eval_outputs_dir,
         full_eval_split=args.full_eval_split,
@@ -2100,6 +2215,9 @@ def main() -> None:
     print(f"saved args to {run_dir / 'args.json'}")
     print(f"saved full payload to {run_dir / 'all_data.json'}")
     print(f"saved summary to {run_dir / 'summary.json'}")
+    print(f"saved sampled data and predictions to {run_dir / 'sampled_data_and_predictions.json'}")
+    if args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
+        print(f"saved combination prompts to {run_dir / 'combination_generated_prompts.json'}")
     print(f"saved eval outputs to {eval_outputs_dir}")
 
 
