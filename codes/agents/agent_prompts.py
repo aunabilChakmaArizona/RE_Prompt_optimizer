@@ -267,51 +267,60 @@ json
   "#NUM_CANDIDATES#": "replacement #NUM_CANDIDATES#"
 }
 ```
-You are an expert prompt editor for a relation extraction inference task. You specialize in proposing strong alternative rewrites for a marked region of given prompt.
-
-A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
-The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
-
-You are given the current full instruction prompt below. The selected editable region is marked using <edit_start> and <edit_end>:
-```
-#MARKED_PROMPT#
-```
-
-To be specific, the marked region is the part "<edit_start>#REGION_TEXT#<edit_end>".
-
-Your task is to propose exactly #NUM_CANDIDATES# candidate rewrites for only the text inside the marked region. Each candidate should be a replacement for the marked region text, not a full prompt.
-Focus on edits that can improve generalization for binary relation inference.
-The candidates should be distinct and concise. They should remain focused on the marked region, but may require a small adjustment to nearby surrounding text for grammaticality or coherence.
-
-Please reason through the problem, but output the candidates using the valid JSON in the following form:
-```json
-{
-  "1": "candidate 1",
-  "2": "candidate 2",
-  "...": "...",
-  "#NUM_CANDIDATES#": "candidate #NUM_CANDIDATES#"
-}
-```
 '''
 
-GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in synthesizing improved full instruction prompts from region-level candidate edits.
+GRADIENT_REGION_CANDIDATE_COMBINATION_PROMPT_V1 = '''You are an expert in selecting effective candidate combinations for span replacements in a relation extraction prompt.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
 
-You are given the current full instruction prompt below:
+You are given the current instruction prompt with targeted spans below:
 ```
-#INFERENCE_PROMPT#
+#ALL_MARKED_PROMPT#
 ```
 
-The top gradient-ranked editable regions are listed below together with candidate rewrites for each region:
+The editable spans are listed below together with candidate replacements for each span:
 #REGION_CANDIDATE_BLOCKS#
 
-Your task is to generate one revised full instruction prompt by selecting and combining promising candidate rewrites across these regions.
-You may use at most one candidate per region, and you may leave a region unchanged if that is better.
-Preserve the rest of the prompt as much as possible unless a small nearby adjustment is necessary for coherence.
+Your task is to generate #NUM_PROMPT# diverse and promising candidate combinations of edits for the editable spans.
+For each span, select exactly one candidate replacement or you may leave a span unchanged if that is better. 
+Each combination must be distinct and diverse.
 
-Please reason through the problem, but output only the revised full prompt enclosed within the <p> and </p> tags.
+Output only the combinations in the following JSON format:
+
+{
+  "combination_1": {
+        "span_1": "selected replacement",
+        ...
+        "span_#NUM_REGIONS#": "selected replacement"
+      },
+  ...
+  "combination_#NUM_PROMPT#": {
+        "span_1": "selected replacement",
+        ...
+        "span_#NUM_REGIONS#": "selected replacement"
+      }
+}
+'''
+
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given the current instruction prompt with targeted spans below:
+```
+#ALL_MARKED_PROMPT#
+```
+
+Replacements for each spans are given below:
+#SELECTED_REPLACEMENTS#
+
+Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
+Use the replacements exactly as provided.
+Do not modify any other parts of the prompt, except for minimal local adjustments if necessary for grammatical correctness or coherence.
+
+Output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
 MUTATION_TRACES_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
