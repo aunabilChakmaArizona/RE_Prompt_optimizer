@@ -420,7 +420,7 @@ python agents/agent_gradient_eval_debug.py \
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
-  --device-map "cuda:0" \
+  --device-map "cuda:1" \
   --prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 10 \
   --dataset-type "fs_tacred" \
@@ -430,9 +430,9 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --max-total-region-tokens 15 \
   --region-expansion-threshold-ratio 0.6 \
   --num-edit-regions 3 \
-  --num-generated-prompts 5 \
   --num-region-candidates 5 \
-  --top-k-prompts 3 \
+  --num-generated-prompts 15 \
+  --top-k-prompts 5 \
   --selection-perplexity-lambda 0.2 \
   --meta-prompt-max-new-tokens 10000 \
   --meta-prompt-batch-size 1 \

@@ -983,7 +983,20 @@ def _generate_region_candidates(
             parsed_output = extract_json_object(raw_output)
         except (ValueError, TypeError):
             parsed_output = {}
-        for _, candidate_text in sorted(parsed_output.items(), key=lambda item: int(item[0])):
+        ordered_candidates: List[Any] = []
+        if isinstance(parsed_output, dict):
+            numeric_items: List[Tuple[int, Any]] = []
+            fallback_items: List[Tuple[str, Any]] = []
+            for key, candidate_text in parsed_output.items():
+                try:
+                    numeric_items.append((int(str(key)), candidate_text))
+                except (TypeError, ValueError):
+                    fallback_items.append((str(key), candidate_text))
+            numeric_items.sort(key=lambda item: item[0])
+            fallback_items.sort(key=lambda item: item[0])
+            ordered_candidates = [value for _, value in numeric_items]
+            ordered_candidates.extend(value for _, value in fallback_items)
+        for candidate_text in ordered_candidates:
             normalized = str(candidate_text).strip()
             if not normalized or normalized in seen:
                 continue

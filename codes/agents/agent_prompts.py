@@ -239,7 +239,35 @@ Do not include any edit tags such as <edit_start_1> or <edit_end_1> in the final
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
-GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1 = '''You are an expert prompt editor for a relation extraction inference task. You specialize in proposing strong alternative rewrites for a marked region of given prompt.
+GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1 = '''You are an expert on suggesting replacements for a targeted span in a prompt.
+
+Input Prompt with targeted span:
+```
+#MARKED_PROMPT#
+```
+
+Targeted span:
+```#REGION_TEXT#```
+
+Task:
+Suggest #NUM_CANDIDATES# replacements for the targeted span that fit naturally in context.
+
+Rules:
+- Replacements should preserve the meaning
+- Treat the tagged span as a single unit
+- Return only replacements for the targeted span 
+
+Please reason through the problem, but output the replacements in JSON:
+```
+json
+{
+  "1": "replacement 1",
+  "2": "replacement 2",
+  ...
+  "#NUM_CANDIDATES#": "replacement #NUM_CANDIDATES#"
+}
+```
+You are an expert prompt editor for a relation extraction inference task. You specialize in proposing strong alternative rewrites for a marked region of given prompt.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
