@@ -50,6 +50,7 @@ from agents.agent_utils import (
 
 MODE_DIRECT_CANDIDATE_GENERATION = "DIRECT_CANDIDATE_GENERATION"
 MODE_LLM_CANDIDATE_SUGGESTION = "LLM_CANDIDATE_SUGGESTION"
+REGION_CANDIDATE_SUGGESTION_NUM_RUNS = 3
 MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
     MODE_LLM_CANDIDATE_SUGGESTION,
@@ -1153,8 +1154,8 @@ def _generate_region_candidates(
             f"region_text={region['region_text']!r}",
         )
         print(meta_prompt)
-        raw_output = run_prompts(
-            [meta_prompt],
+        raw_outputs = run_prompts(
+            [meta_prompt] * REGION_CANDIDATE_SUGGESTION_NUM_RUNS,
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
@@ -1165,24 +1166,52 @@ def _generate_region_candidates(
             do_sample=True,
             do_log=True,
             log_label="agent_gradient_eval_debug_region_candidates",
-        )[0]
-        print(
-            "[agent_gradient_eval_debug] region candidate raw output:",
-            f"region_rank={region['region_rank']}",
-            f"region_text={region['region_text']!r}",
         )
-        print(raw_output)
+        best_raw_output = raw_outputs[0] if raw_outputs else ""
+        best_parsed_output: Dict[str, Any] = {}
+        best_json_length = float("inf")
+        best_generation_index = 0
+        for generation_index, raw_output in enumerate(raw_outputs):
+            print(
+                "[agent_gradient_eval_debug] region candidate raw output:",
+                f"region_rank={region['region_rank']}",
+                f"generation_index={generation_index}",
+                f"region_text={region['region_text']!r}",
+            )
+            print(raw_output)
+            try:
+                parsed_output = extract_json_object(raw_output)
+            except (ValueError, TypeError):
+                parsed_output = {}
+            if not isinstance(parsed_output, dict):
+                continue
+            json_string = json.dumps(parsed_output, ensure_ascii=False, sort_keys=True)
+            json_length = len(json_string)
+            print(
+                "[agent_gradient_eval_debug] region candidate parsed json length:",
+                f"region_rank={region['region_rank']}",
+                f"generation_index={generation_index}",
+                f"json_length={json_length}",
+            )
+            if json_length < best_json_length:
+                best_raw_output = raw_output
+                best_parsed_output = parsed_output
+                best_json_length = json_length
+                best_generation_index = generation_index
+
+        print(
+            "[agent_gradient_eval_debug] selected region candidate output:",
+            f"region_rank={region['region_rank']}",
+            f"selected_generation_index={best_generation_index}",
+            f"selected_json_length={best_json_length if best_json_length != float('inf') else 'unparsed'}",
+        )
         candidates: List[str] = []
         seen: set[str] = set()
-        try:
-            parsed_output = extract_json_object(raw_output)
-        except (ValueError, TypeError):
-            parsed_output = {}
         ordered_candidates: List[Any] = []
-        if isinstance(parsed_output, dict):
+        if isinstance(best_parsed_output, dict):
             numeric_items: List[Tuple[int, Any]] = []
             fallback_items: List[Tuple[str, Any]] = []
-            for key, candidate_text in parsed_output.items():
+            for key, candidate_text in best_parsed_output.items():
                 try:
                     numeric_items.append((int(str(key)), candidate_text))
                 except (TypeError, ValueError):
@@ -1204,7 +1233,12 @@ def _generate_region_candidates(
                 "region_rank": region["region_rank"],
                 "region_text": region["region_text"],
                 "meta_prompt": meta_prompt,
-                "raw_output": raw_output,
+                "raw_output": best_raw_output,
+                "raw_outputs": raw_outputs,
+                "selected_generation_index": best_generation_index,
+                "selected_json_length": (
+                    None if best_json_length == float("inf") else best_json_length
+                ),
                 "candidates": candidates,
             }
         )
