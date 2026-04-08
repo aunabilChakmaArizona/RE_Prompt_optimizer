@@ -1298,18 +1298,6 @@ def _generate_region_candidate_combinations(
     except (ValueError, TypeError):
         parsed_output = {}
 
-    candidate_lookup: Dict[int, set[str]] = {}
-    for region in region_details["selected_regions"]:
-        region_rank = int(region["region_rank"])
-        candidate_lookup[region_rank] = {region["region_text"]}
-    for item in region_candidates:
-        region_rank = int(item["region_rank"])
-        candidate_lookup.setdefault(region_rank, set()).update(
-            normalized
-            for candidate in item.get("candidates", [])
-            if (normalized := _normalize_span_replacement_text(candidate))
-        )
-
     candidate_combinations: List[Dict[str, Any]] = []
     seen_signatures: set[Tuple[Tuple[int, str], ...]] = set()
     if isinstance(parsed_output, dict):
@@ -1325,9 +1313,6 @@ def _generate_region_candidate_combinations(
                     replacement_payload.get(f"span_{region_rank}", "")
                 )
                 if not replacement_text:
-                    is_valid = False
-                    break
-                if replacement_text not in candidate_lookup.get(region_rank, set()):
                     is_valid = False
                     break
                 selected_replacements[region_rank] = replacement_text
