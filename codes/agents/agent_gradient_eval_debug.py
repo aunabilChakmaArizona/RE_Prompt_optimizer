@@ -6,6 +6,7 @@ import argparse
 import copy
 import json
 import random
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ from agents.agent_memory import clear_model_memory
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import (
+    GRADIENT_REGION_CANDIDATE_COMBINATION_PROMPT_V1,
     GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1,
     GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1,
     GRADIENT_REGION_MUTATION_PROMPT_V1,
@@ -627,11 +629,29 @@ def _build_single_region_marked_prompt(
 ) -> str:
     return (
         instruction_prompt[: region["start_char"]]
-        + "<edit_start>"
+        + "<target>"
         + instruction_prompt[region["start_char"] : region["end_char"]]
-        + "<edit_end>"
+        + "</target>"
         + instruction_prompt[region["end_char"] :]
     )
+
+
+def _build_multi_region_marked_prompt(
+    *,
+    instruction_prompt: str,
+    selected_regions: Sequence[Dict[str, Any]],
+) -> str:
+    marked_prompt = instruction_prompt
+    for region in sorted(selected_regions, key=lambda item: item["start_char"], reverse=True):
+        region_rank = int(region["region_rank"])
+        marked_prompt = (
+            marked_prompt[: region["start_char"]]
+            + f"<span_{region_rank}>"
+            + marked_prompt[region["start_char"] : region["end_char"]]
+            + f"</span_{region_rank}>"
+            + marked_prompt[region["end_char"] :]
+        )
+    return marked_prompt
 
 
 def _build_region_candidate_meta_prompt(
@@ -668,9 +688,56 @@ def _build_region_candidate_blocks(
         blocks.append(
             "\n".join(
                 [
-                    f"Region {region['region_rank']}",
-                    f"Current region text: {region['region_text']}",
+                    f"Span {region['region_rank']}",
+                    f"Text: ```{region['region_text']}```",
                     f"Candidates: {candidate_list_text}",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
+
+
+def _build_region_candidate_combination_prompt(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    region_candidates: Sequence[Dict[str, Any]],
+    num_generated_prompts: int,
+) -> str:
+    prompt = GRADIENT_REGION_CANDIDATE_COMBINATION_PROMPT_V1
+    prompt = prompt.replace(
+        "#ALL_MARKED_PROMPT#",
+        _build_multi_region_marked_prompt(
+            instruction_prompt=instruction_prompt,
+            selected_regions=region_details["selected_regions"],
+        ),
+    )
+    prompt = prompt.replace(
+        "#REGION_CANDIDATE_BLOCKS#",
+        _build_region_candidate_blocks(
+            selected_regions=region_details["selected_regions"],
+            region_candidates=region_candidates,
+        ),
+    )
+    prompt = prompt.replace("#NUM_PROMPT#", str(num_generated_prompts))
+    prompt = prompt.replace("#NUM_REGIONS#", str(region_details["num_edit_regions"]))
+    return prompt
+
+
+def _build_selected_replacement_blocks(
+    *,
+    selected_regions: Sequence[Dict[str, Any]],
+    selected_replacements: Dict[int, str],
+) -> str:
+    blocks: List[str] = []
+    for region in selected_regions:
+        region_rank = int(region["region_rank"])
+        blocks.append(
+            "\n".join(
+                [
+                    f"Span {region_rank}",
+                    f"Text: ```{region['region_text']}```",
+                    f"Replace with: ```{selected_replacements[region_rank]}```",
                 ]
             )
         )
@@ -681,18 +748,48 @@ def _build_region_candidate_synthesis_prompt(
     *,
     instruction_prompt: str,
     region_details: Dict[str, Any],
-    region_candidates: Sequence[Dict[str, Any]],
+    selected_replacements: Dict[int, str],
 ) -> str:
     prompt = GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1
-    prompt = prompt.replace("#INFERENCE_PROMPT#", instruction_prompt)
     prompt = prompt.replace(
-        "#REGION_CANDIDATE_BLOCKS#",
-        _build_region_candidate_blocks(
+        "#ALL_MARKED_PROMPT#",
+        _build_multi_region_marked_prompt(
+            instruction_prompt=instruction_prompt,
             selected_regions=region_details["selected_regions"],
-            region_candidates=region_candidates,
+        ),
+    )
+    prompt = prompt.replace(
+        "#SELECTED_REPLACEMENTS#",
+        _build_selected_replacement_blocks(
+            selected_regions=region_details["selected_regions"],
+            selected_replacements=selected_replacements,
         ),
     )
     return prompt
+
+
+def _normalize_span_replacement_text(value: Any) -> str:
+    text = str(value).strip()
+    if text.startswith("```") and text.endswith("```") and len(text) >= 6:
+        text = text[3:-3].strip()
+    elif text.startswith("`") and text.endswith("`") and len(text) >= 2:
+        text = text[1:-1].strip()
+    return text
+
+
+def _sort_key_with_numeric_suffix(value: Any) -> Tuple[str, int]:
+    text = str(value)
+    match = re.search(r"(\d+)$", text)
+    if match:
+        return text[: match.start()], int(match.group(1))
+    return text, 0
+
+
+def _strip_region_markup(text: str) -> str:
+    cleaned = re.sub(r"</?target>", "", text)
+    cleaned = re.sub(r"</?span_\d+>", "", cleaned)
+    cleaned = re.sub(r"</?span>", "", cleaned)
+    return cleaned.strip()
 
 
 def _build_binary_prompts_for_instruction(
@@ -882,10 +979,13 @@ def _build_summary_payload(
             "balanced_train_prf": baseline_prf,
             "dev_prf": original_dev_prf,
         },
-        "meta_prompt": (
-            prompt_editing_payload.get("meta_prompt")
-            or prompt_editing_payload.get("synthesis_meta_prompt")
+        "meta_prompt": prompt_editing_payload.get("meta_prompt"),
+        "region_candidate_meta_prompts": prompt_editing_payload.get(
+            "region_candidate_meta_prompts", []
         ),
+        "combination_meta_prompt": prompt_editing_payload.get("combination_meta_prompt"),
+        "synthesis_meta_prompt": prompt_editing_payload.get("synthesis_meta_prompt"),
+        "synthesis_meta_prompts": prompt_editing_payload.get("synthesis_meta_prompts", []),
         "generated_prompts": summary_variants,
     }
 
@@ -997,7 +1097,7 @@ def _generate_region_candidates(
             ordered_candidates = [value for _, value in numeric_items]
             ordered_candidates.extend(value for _, value in fallback_items)
         for candidate_text in ordered_candidates:
-            normalized = str(candidate_text).strip()
+            normalized = _normalize_span_replacement_text(candidate_text)
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
@@ -1013,10 +1113,15 @@ def _generate_region_candidates(
                 "candidates": candidates,
             }
         )
+        print(
+            "[agent_gradient_eval_debug] parsed region candidates:",
+            f"region_rank={region['region_rank']}",
+            f"candidates={json.dumps(candidates, ensure_ascii=False)}",
+        )
     return region_candidates
 
 
-def _generate_prompt_variants_from_region_candidates(
+def _generate_region_candidate_combinations(
     *,
     instruction_prompt: str,
     region_details: Dict[str, Any],
@@ -1031,17 +1136,146 @@ def _generate_prompt_variants_from_region_candidates(
     if num_generated_prompts <= 0:
         return {
             "meta_prompt": None,
+            "raw_output": "",
+            "candidate_combinations": [],
+        }
+
+    meta_prompt = _build_region_candidate_combination_prompt(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        region_candidates=region_candidates,
+        num_generated_prompts=num_generated_prompts,
+    )
+    print("[agent_gradient_eval_debug] combination meta prompt:")
+    print(meta_prompt)
+    raw_output = run_prompts(
+        [meta_prompt],
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        batch_size=batch_size,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        do_sample=True,
+        do_log=True,
+        log_label="agent_gradient_eval_debug_region_combinations",
+    )[0]
+    print("[agent_gradient_eval_debug] combination raw output:")
+    print(raw_output)
+
+    try:
+        parsed_output = extract_json_object(raw_output)
+    except (ValueError, TypeError):
+        parsed_output = {}
+
+    candidate_lookup: Dict[int, set[str]] = {}
+    for region in region_details["selected_regions"]:
+        region_rank = int(region["region_rank"])
+        candidate_lookup[region_rank] = {region["region_text"]}
+    for item in region_candidates:
+        region_rank = int(item["region_rank"])
+        candidate_lookup.setdefault(region_rank, set()).update(
+            normalized
+            for candidate in item.get("candidates", [])
+            if (normalized := _normalize_span_replacement_text(candidate))
+        )
+
+    candidate_combinations: List[Dict[str, Any]] = []
+    seen_signatures: set[Tuple[Tuple[int, str], ...]] = set()
+    if isinstance(parsed_output, dict):
+        ordered_items = sorted(parsed_output.items(), key=lambda item: _sort_key_with_numeric_suffix(item[0]))
+        for combination_key, replacement_payload in ordered_items:
+            if not isinstance(replacement_payload, dict):
+                continue
+            selected_replacements: Dict[int, str] = {}
+            is_valid = True
+            for region in region_details["selected_regions"]:
+                region_rank = int(region["region_rank"])
+                replacement_text = _normalize_span_replacement_text(
+                    replacement_payload.get(f"span_{region_rank}", "")
+                )
+                if not replacement_text:
+                    is_valid = False
+                    break
+                if replacement_text not in candidate_lookup.get(region_rank, set()):
+                    is_valid = False
+                    break
+                selected_replacements[region_rank] = replacement_text
+            if not is_valid:
+                continue
+            signature = tuple(
+                (region_rank, selected_replacements[region_rank])
+                for region_rank in sorted(selected_replacements)
+            )
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
+            candidate_combinations.append(
+                {
+                    "combination_key": str(combination_key),
+                    "selected_replacements": selected_replacements,
+                    "num_changed_spans": sum(
+                        1
+                        for region in region_details["selected_regions"]
+                        if selected_replacements[int(region["region_rank"])] != region["region_text"]
+                    ),
+                }
+            )
+
+    print("[agent_gradient_eval_debug] parsed candidate combinations detail:")
+    if candidate_combinations:
+        for combination in candidate_combinations:
+            print(
+                json.dumps(
+                    combination,
+                    indent=2,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            )
+    else:
+        print("[]")
+
+    return {
+        "meta_prompt": meta_prompt,
+        "raw_output": raw_output,
+        "candidate_combinations": candidate_combinations,
+    }
+
+
+def _generate_prompt_variants_from_region_combinations(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    candidate_combinations: Sequence[Dict[str, Any]],
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+    use_chat_template: bool,
+) -> Dict[str, Any]:
+    if not candidate_combinations:
+        return {
+            "meta_prompts": [],
             "raw_outputs": [],
             "generated_prompt_variants": [],
         }
 
-    meta_prompt = _build_region_candidate_synthesis_prompt(
-        instruction_prompt=instruction_prompt,
-        region_details=region_details,
-        region_candidates=region_candidates,
-    )
+    meta_prompts = [
+        _build_region_candidate_synthesis_prompt(
+            instruction_prompt=instruction_prompt,
+            region_details=region_details,
+            selected_replacements=combination["selected_replacements"],
+        )
+        for combination in candidate_combinations
+    ]
+    print("[agent_gradient_eval_debug] synthesis meta prompts:")
+    for generation_index, meta_prompt in enumerate(meta_prompts):
+        print(f"[synthesis_meta_prompt {generation_index}]")
+        print(meta_prompt)
     raw_outputs = run_prompts(
-        [meta_prompt] * num_generated_prompts, #todo: need to check the diversity of the created prompts
+        meta_prompts,
         model=model,
         tokenizer=tokenizer,
         max_new_tokens=max_new_tokens,
@@ -1056,15 +1290,42 @@ def _generate_prompt_variants_from_region_candidates(
 
     variants: List[Dict[str, Any]] = []
     seen_prompts: set[str] = set()
-    for generation_index, raw_output in enumerate(raw_outputs):
+    for generation_index, (combination, meta_prompt, raw_output) in enumerate(
+        zip(candidate_combinations, meta_prompts, raw_outputs)
+    ):
         revised_prompt = extract_tagged_text(raw_output, "<p>", "</p>")
-        normalized_prompt = revised_prompt.strip()
+        normalized_prompt = _strip_region_markup(revised_prompt)
         is_duplicate = bool(normalized_prompt) and normalized_prompt in seen_prompts
         if normalized_prompt:
             seen_prompts.add(normalized_prompt)
+        print(
+            "[agent_gradient_eval_debug] synthesis raw output:",
+            f"generation_index={generation_index}",
+            f"combination_key={combination['combination_key']}",
+        )
+        print(raw_output)
+        print(
+            "[agent_gradient_eval_debug] synthesized prompt:",
+            f"generation_index={generation_index}",
+            f"combination_key={combination['combination_key']}",
+            f"changed={bool(normalized_prompt) and normalized_prompt != instruction_prompt}",
+            f"duplicate_prompt={is_duplicate}",
+        )
+        print(normalized_prompt)
         variants.append(
             {
                 "generation_index": generation_index,
+                "combination_key": combination["combination_key"],
+                "selected_replacements": [
+                    {
+                        "region_rank": int(region["region_rank"]),
+                        "region_text": region["region_text"],
+                        "replacement_text": combination["selected_replacements"][int(region["region_rank"])],
+                    }
+                    for region in region_details["selected_regions"]
+                ],
+                "num_changed_spans": combination["num_changed_spans"],
+                "meta_prompt": meta_prompt,
                 "raw_output": raw_output,
                 "revised_prompt": normalized_prompt,
                 "changed": bool(normalized_prompt) and normalized_prompt != instruction_prompt,
@@ -1072,7 +1333,7 @@ def _generate_prompt_variants_from_region_candidates(
             }
         )
     return {
-        "meta_prompt": meta_prompt,
+        "meta_prompts": meta_prompts,
         "raw_outputs": raw_outputs,
         "generated_prompt_variants": variants,
     }
@@ -1363,7 +1624,11 @@ def _run_llm_candidate_suggestion(
         "selected_regions": [],
         "region_candidate_meta_prompts": [],
         "region_candidates": [],
+        "combination_meta_prompt": None,
+        "combination_raw_output": "",
+        "candidate_combinations": [],
         "synthesis_meta_prompt": None,
+        "synthesis_meta_prompts": [],
         "generated_prompt_variants": [],
         "retained_top_k_prompts": [],
     }
@@ -1397,11 +1662,25 @@ def _run_llm_candidate_suggestion(
         use_chat_template=not args.disable_chat_template,
     )
 
-    synthesis_payload = _generate_prompt_variants_from_region_candidates(
+    combination_payload = _generate_region_candidate_combinations(
         instruction_prompt=instruction_prompt,
         region_details=region_details,
         region_candidates=region_candidates,
         num_generated_prompts=args.num_generated_prompts,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.meta_prompt_max_new_tokens,
+        batch_size=args.meta_prompt_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+    print(
+        "[agent_gradient_eval_debug] parsed candidate combinations:",
+        f"count={len(combination_payload['candidate_combinations'])}",
+    )
+    synthesis_payload = _generate_prompt_variants_from_region_combinations(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        candidate_combinations=combination_payload["candidate_combinations"],
         model=model,
         tokenizer=tokenizer,
         max_new_tokens=args.meta_prompt_max_new_tokens,
@@ -1462,6 +1741,12 @@ def _run_llm_candidate_suggestion(
                 "retained_for_full_validation": False,
             }
         )
+        print(
+            "[agent_gradient_eval_debug] scored synthesized prompt:",
+            f"generation_index={variant['generation_index']}",
+            f"combination_key={variant['combination_key']}",
+            f"combined_score={cached_result['selection_metrics']['combined_score']:.6f}",
+        )
 
     ranked_variants = sorted(
         [
@@ -1483,6 +1768,13 @@ def _run_llm_candidate_suggestion(
         if len(retained_prompt_texts) == args.top_k_prompts:
             break
     retained_prompt_text_set = set(retained_prompt_texts)
+    print("[agent_gradient_eval_debug] retained top-k prompts:")
+    if retained_prompt_texts:
+        for retained_index, prompt_text in enumerate(retained_prompt_texts):
+            print(f"[retained_prompt {retained_index}]")
+            print(prompt_text)
+    else:
+        print("[]")
     evaluation_cache: Dict[str, Dict[str, Any]] = {}
     selection_metrics_by_prompt = {
         variant["revised_prompt"]: variant["selection_metrics"]
@@ -1522,7 +1814,13 @@ def _run_llm_candidate_suggestion(
         for item in region_candidates
     ]
     prompt_editing_payload["region_candidates"] = region_candidates
-    prompt_editing_payload["synthesis_meta_prompt"] = synthesis_payload["meta_prompt"]
+    prompt_editing_payload["combination_meta_prompt"] = combination_payload["meta_prompt"]
+    prompt_editing_payload["combination_raw_output"] = combination_payload["raw_output"]
+    prompt_editing_payload["candidate_combinations"] = combination_payload["candidate_combinations"]
+    prompt_editing_payload["synthesis_meta_prompt"] = (
+        synthesis_payload["meta_prompts"][0] if synthesis_payload["meta_prompts"] else None
+    )
+    prompt_editing_payload["synthesis_meta_prompts"] = synthesis_payload["meta_prompts"]
     prompt_editing_payload["generated_prompt_variants"] = scored_variants
     prompt_editing_payload["retained_top_k_prompts"] = [
         {

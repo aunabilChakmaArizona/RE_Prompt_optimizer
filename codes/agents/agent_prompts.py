@@ -241,6 +241,8 @@ Please reason through the problem, but output only the revised prompt enclosed w
 
 GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1 = '''You are an expert on suggesting replacements for a targeted span in a prompt.
 
+The targeted span is marked using <target> and </target>.
+
 Input Prompt with targeted span:
 ```
 #MARKED_PROMPT#
@@ -278,6 +280,7 @@ You are given the current instruction prompt with targeted spans below:
 ```
 #ALL_MARKED_PROMPT#
 ```
+Each editable span is marked with tags such as <span_1>...</span_1>, <span_2>...</span_2>, and so on.
 
 The editable spans are listed below together with candidate replacements for each span:
 #REGION_CANDIDATE_BLOCKS#
@@ -287,7 +290,7 @@ For each span, select exactly one candidate replacement or you may leave a span 
 Each combination must be distinct and diverse.
 
 Output only the combinations in the following JSON format:
-
+```json
 {
   "combination_1": {
         "span_1": "selected replacement",
@@ -301,6 +304,7 @@ Output only the combinations in the following JSON format:
         "span_#NUM_REGIONS#": "selected replacement"
       }
 }
+```
 '''
 
 GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task.
@@ -312,6 +316,7 @@ You are given the current instruction prompt with targeted spans below:
 ```
 #ALL_MARKED_PROMPT#
 ```
+Each editable span is marked with tags such as <span_1>...</span_1>, <span_2>...</span_2>, and so on.
 
 Replacements for each spans are given below:
 #SELECTED_REPLACEMENTS#
@@ -319,6 +324,7 @@ Replacements for each spans are given below:
 Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
 Use the replacements exactly as provided.
 Do not modify any other parts of the prompt, except for minimal local adjustments if necessary for grammatical correctness or coherence.
+Do not output span labels in the revised prompt.
 
 Output only the revised prompt enclosed within the <p> and </p> tags.
 '''
