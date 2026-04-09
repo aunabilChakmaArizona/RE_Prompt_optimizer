@@ -52,6 +52,12 @@ from agents.agent_utils import (
 MODE_DIRECT_CANDIDATE_GENERATION = "DIRECT_CANDIDATE_GENERATION"
 MODE_LLM_CANDIDATE_SUGGESTION = "LLM_CANDIDATE_SUGGESTION"
 MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION = "LM_PROBABILITY_CANDIDATE_SUGGESTION"
+LM_PROBABILITY_SUBMODE_NO_CONTEXT = "NO_CONTEXT"
+LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT = "FULL_PROMPT_AS_CONTEXT"
+LM_PROBABILITY_SUBMODE_CHOICES = [
+    LM_PROBABILITY_SUBMODE_NO_CONTEXT,
+    LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT,
+]
 REGION_CANDIDATE_SUGGESTION_NUM_RUNS = 3
 MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
@@ -203,6 +209,17 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "LLM_CANDIDATE_SUGGESTION and LM_PROBABILITY_CANDIDATE_SUGGESTION only. "
             "Number of candidate rewrites to generate per region."
+        ),
+    )
+    parser.add_argument(
+        "--lm-probability-submode",
+        choices=LM_PROBABILITY_SUBMODE_CHOICES,
+        default=LM_PROBABILITY_SUBMODE_NO_CONTEXT,
+        help=(
+            "LM_PROBABILITY_CANDIDATE_SUGGESTION only. NO_CONTEXT uses the raw prompt "
+            "prefix for next-token selection. FULL_PROMPT_AS_CONTEXT wraps the full "
+            "prompt in a paraphrase instruction and predicts the next token after the "
+            "rewritten prefix."
         ),
     )
     parser.add_argument(
@@ -881,6 +898,48 @@ def _build_probability_region_prompt_token_ids(
     return list(encoded["input_ids"])
 
 
+def _build_lm_probability_context_prompt(
+    *,
+    full_instruction_prompt: str,
+    prompt_prefix_text: str,
+) -> str:
+    return (
+        "Original Prompt:\n"
+        f"{full_instruction_prompt}\n\n"
+        "Task:\n"
+        "Write a natural revised version of the original prompt while preserving meaning, structure, and tone.\n\n"
+        "Revised prompt:\n"
+        f"{prompt_prefix_text}"
+    )
+
+
+def _build_probability_context_prefix_token_ids(
+    *,
+    instruction_prompt: str,
+    prompt_prefix_text: str,
+    tokenizer,
+    lm_probability_submode: str,
+) -> List[int]:
+    if lm_probability_submode == LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT:
+        encoded = tokenizer(
+            _build_lm_probability_context_prompt(
+                full_instruction_prompt=instruction_prompt,
+                prompt_prefix_text=prompt_prefix_text,
+            ),
+            add_special_tokens=False,
+            return_attention_mask=False,
+        )
+        return list(encoded["input_ids"])
+    if lm_probability_submode == LM_PROBABILITY_SUBMODE_NO_CONTEXT:
+        encoded = tokenizer(
+            prompt_prefix_text,
+            add_special_tokens=False,
+            return_attention_mask=False,
+        )
+        return list(encoded["input_ids"])
+    raise ValueError(f"Unsupported lm_probability_submode: {lm_probability_submode}")
+
+
 def _generate_region_candidates_from_lm_probability(
     *,
     instruction_prompt: str,
@@ -890,6 +949,7 @@ def _generate_region_candidates_from_lm_probability(
     tokenizer,
     max_new_tokens: int,
     batch_size: int,
+    lm_probability_submode: str,
 ) -> List[Dict[str, Any]]:
     if num_region_candidates <= 0:
         return []
@@ -911,6 +971,7 @@ def _generate_region_candidates_from_lm_probability(
                     "region_rank": region_rank,
                     "region_text": region["region_text"],
                     "generation_method": "lm_probability",
+                    "lm_probability_submode": lm_probability_submode,
                     "meta_prompt": None,
                     "raw_output": None,
                     "candidates": [],
@@ -921,6 +982,7 @@ def _generate_region_candidates_from_lm_probability(
         region_token_length = len(region_token_ids)
         original_first_token_id = int(region_token_ids[0])
         prefix_token_ids = prompt_token_ids[:start_token]
+        prompt_prefix_text = instruction_prompt[: region["start_char"]]
         candidate_pool_size = max(num_region_candidates, num_region_candidates * num_region_candidates)
         if start_token == 0:
             initial_top_token_ids = [original_first_token_id]
@@ -932,21 +994,29 @@ def _generate_region_candidates_from_lm_probability(
                 "start_token=0 using original first token only",
             )
         else:
+            probability_context_prefix_token_ids = _build_probability_context_prefix_token_ids(
+                instruction_prompt=instruction_prompt,
+                prompt_prefix_text=prompt_prefix_text,
+                tokenizer=tokenizer,
+                lm_probability_submode=lm_probability_submode,
+            )
             initial_top_token_ids = _collect_top_token_ids_from_prefix(
-                prefix_token_ids=prefix_token_ids,
+                prefix_token_ids=probability_context_prefix_token_ids,
                 model=model,
                 tokenizer=tokenizer,
                 num_candidate_pool_tokens=candidate_pool_size,
             )
-            clustered_first_token_ids = select_centroid_token_ids(
-                token_ids=initial_top_token_ids,
-                embedding_weight=embedding_weight,
-                num_clusters=num_region_candidates,
-            )
-            selected_first_token_ids = list(clustered_first_token_ids)
+            # clustered_first_token_ids = select_centroid_token_ids(
+            #     token_ids=initial_top_token_ids,
+            #     embedding_weight=embedding_weight,
+            #     num_clusters=num_region_candidates,
+            # )
+            clustered_first_token_ids = []
+            selected_first_token_ids = list(initial_top_token_ids[:num_region_candidates])
             print(
                 "[agent_gradient_eval_debug] LM probability first-token selection:",
                 f"region_rank={region_rank}",
+                f"submode={lm_probability_submode}",
                 f"candidate_pool_size={len(initial_top_token_ids)}",
                 f"selected_first_tokens={json.dumps([_decode_token_text(tokenizer=tokenizer, token_ids=[token_id]) for token_id in selected_first_token_ids], ensure_ascii=False)}",
             )
@@ -1015,6 +1085,7 @@ def _generate_region_candidates_from_lm_probability(
                 "region_rank": region_rank,
                 "region_text": region["region_text"],
                 "generation_method": "lm_probability",
+                "lm_probability_submode": lm_probability_submode,
                 "meta_prompt": None,
                 "raw_output": None,
                 "initial_top_token_ids": initial_top_token_ids,
@@ -2260,6 +2331,7 @@ def _run_lm_probability_candidate_suggestion(
         "[agent_gradient_eval_debug] generating LM probability region candidates:",
         f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
         f"num_region_candidates={args.num_region_candidates}",
+        f"lm_probability_submode={args.lm_probability_submode}",
     )
     region_candidates = _generate_region_candidates_from_lm_probability(
         instruction_prompt=instruction_prompt,
@@ -2269,6 +2341,7 @@ def _run_lm_probability_candidate_suggestion(
         tokenizer=tokenizer,
         max_new_tokens=args.meta_prompt_max_new_tokens,
         batch_size=args.meta_prompt_batch_size,
+        lm_probability_submode=args.lm_probability_submode,
     )
     return _complete_region_candidate_suggestion(
         args=args,

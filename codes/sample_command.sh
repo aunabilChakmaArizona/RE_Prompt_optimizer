@@ -537,12 +537,13 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "llm_cand_sugg_node3_region3s_qwen4" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_node3_region3s_qwen4.out 2>&1 &
 
-## gradient based baseline stable run new mode LLM_CANDIDATE_SUGGESTION
+## gradient based baseline stable run new mode LLM_CANDIDATE_SUGGESTION + FULL_PROMPT_AS_CONTEXT
 
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
-  --device-map "cuda:0" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:1" \
   --prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 10 \
   --dataset-type "fs_tacred" \
@@ -560,8 +561,8 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --meta-prompt-batch-size 1 \
   --validation-batch-size 8 \
   --output-root-dir "../gradients_experiments" \
-  --output-substring "lm_prob_cand_sugg_node10_region3s_qwen4" \
-  > nohup_outs/nohup_gradient_lm_prob_cand_sugg_node10_region3s_qwen4.out 2>&1 &
+  --output-substring "lm_prob_cand_sugg_prefix_context_node10_region3s_qwen4" \
+  > nohup_outs/nohup_gradient_lm_prob_cand_sugg_prefix_context_node10_region3s_qwen4.out 2>&1 &
 
 ## base run for gradient based updates
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" > nohup_outs/nohup_v3_qwen4_group2_mixed.out 2>&1 &
