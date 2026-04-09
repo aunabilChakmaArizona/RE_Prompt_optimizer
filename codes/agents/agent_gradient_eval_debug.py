@@ -28,7 +28,7 @@ from agents.agent_gradient_token_analysis import (
     score_binary_prompts_with_ce_and_perplexity,
 )
 from agents.agent_llm_prompting import run_prompts
-from agents.agent_memory import clear_model_memory
+from agents.agent_memory import clear_cuda_cache, clear_model_memory
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import (
@@ -41,6 +41,7 @@ from agents.agent_prompts import (
 from agents.agent_relation_utils import get_relation_description
 from agents.agent_sample_feedback import sample_feedback_fn
 from agents.agent_scorer import NO_RELATION
+from agents.agent_token_cluster import select_centroid_token_ids
 from agents.agent_utils import (
     extract_json_object,
     extract_tagged_text,
@@ -50,10 +51,12 @@ from agents.agent_utils import (
 
 MODE_DIRECT_CANDIDATE_GENERATION = "DIRECT_CANDIDATE_GENERATION"
 MODE_LLM_CANDIDATE_SUGGESTION = "LLM_CANDIDATE_SUGGESTION"
+MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION = "LM_PROBABILITY_CANDIDATE_SUGGESTION"
 REGION_CANDIDATE_SUGGESTION_NUM_RUNS = 3
 MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
     MODE_LLM_CANDIDATE_SUGGESTION,
+    MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
 ]
 
 
@@ -197,19 +200,28 @@ def _parse_args() -> argparse.Namespace:
         "--num-region-candidates",
         type=int,
         default=5,
-        help="LLM_CANDIDATE_SUGGESTION only. Number of candidate rewrites to generate per region.",
+        help=(
+            "LLM_CANDIDATE_SUGGESTION and LM_PROBABILITY_CANDIDATE_SUGGESTION only. "
+            "Number of candidate rewrites to generate per region."
+        ),
     )
     parser.add_argument(
         "--top-k-prompts",
         type=int,
         default=5,
-        help="LLM_CANDIDATE_SUGGESTION only. Number of lowest-scoring prompts to keep for full validation.",
+        help=(
+            "Candidate-suggestion modes only. Number of lowest-scoring prompts to keep "
+            "for full validation."
+        ),
     )
     parser.add_argument(
         "--selection-perplexity-lambda",
         type=float,
         default=0.2,
-        help="LLM_CANDIDATE_SUGGESTION only. Combined score = cross_entropy + lambda * perplexity.",
+        help=(
+            "Candidate-suggestion modes only. Combined score = cross_entropy + "
+            "lambda * perplexity."
+        ),
     )
     parser.add_argument(
         "--meta-prompt-max-new-tokens",
@@ -791,6 +803,232 @@ def _strip_region_markup(text: str) -> str:
     cleaned = re.sub(r"</?span_\d+>", "", cleaned)
     cleaned = re.sub(r"</?span>", "", cleaned)
     return cleaned.strip()
+
+
+def _model_device(model) -> torch.device:
+    parameter = next(model.parameters(), None)
+    if parameter is None:
+        raise ValueError("Model has no parameters.")
+    return parameter.device
+
+
+def _decode_token_text(
+    *,
+    tokenizer,
+    token_ids: Sequence[int],
+) -> str:
+    return tokenizer.decode(
+        list(token_ids),
+        skip_special_tokens=False,
+        clean_up_tokenization_spaces=False,
+    )
+
+
+def _collect_top_token_ids_from_prefix(
+    *,
+    prefix_token_ids: Sequence[int],
+    model,
+    tokenizer,
+    num_candidate_pool_tokens: int,
+) -> List[int]:
+    if not prefix_token_ids:
+        raise ValueError("prefix_token_ids must not be empty for probability-based token selection.")
+    if num_candidate_pool_tokens <= 0:
+        return []
+
+    device = _model_device(model)
+    input_ids = torch.tensor([list(prefix_token_ids)], dtype=torch.long, device=device)
+    with torch.inference_mode():
+        outputs = model(input_ids=input_ids, use_cache=False) # todo: clear cuda cache
+    next_token_logits = outputs.logits[0, -1, :]
+    vocab_size = int(next_token_logits.size(0))
+    special_token_ids = set(getattr(tokenizer, "all_special_ids", []))
+
+    search_budget = min(vocab_size, max(num_candidate_pool_tokens * 8, num_candidate_pool_tokens))
+    collected_ids: List[int] = []
+    while True:
+        topk_indices = torch.topk(next_token_logits, k=search_budget).indices.tolist()
+        collected_ids = []
+        seen_ids: set[int] = set()
+        for token_id in topk_indices:
+            token_id = int(token_id)
+            if token_id in seen_ids or token_id in special_token_ids:
+                continue
+            token_text = _decode_token_text(tokenizer=tokenizer, token_ids=[token_id])
+            if token_text == "":
+                continue
+            seen_ids.add(token_id)
+            collected_ids.append(token_id)
+            if len(collected_ids) == num_candidate_pool_tokens:
+                break
+        if len(collected_ids) >= num_candidate_pool_tokens or search_budget == vocab_size:
+            break
+        search_budget = min(vocab_size, search_budget * 2)
+    clear_cuda_cache()
+    return collected_ids
+
+
+def _build_probability_region_prompt_token_ids(
+    *,
+    instruction_prompt: str,
+    tokenizer,
+) -> List[int]:
+    encoded = tokenizer(
+        instruction_prompt,
+        add_special_tokens=False,
+        return_attention_mask=False,
+    )
+    return list(encoded["input_ids"])
+
+
+def _generate_region_candidates_from_lm_probability(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    num_region_candidates: int,
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+) -> List[Dict[str, Any]]:
+    if num_region_candidates <= 0:
+        return []
+
+    prompt_token_ids = _build_probability_region_prompt_token_ids(
+        instruction_prompt=instruction_prompt,
+        tokenizer=tokenizer,
+    )
+    embedding_weight = model.get_input_embeddings().weight.detach()
+    region_candidates: List[Dict[str, Any]] = []
+    for region in region_details["selected_regions"]:
+        region_rank = int(region["region_rank"])
+        start_token = int(region["start_token"])
+        end_token = int(region["end_token"])
+        region_token_ids = prompt_token_ids[start_token : end_token + 1]
+        if not region_token_ids:
+            region_candidates.append(
+                {
+                    "region_rank": region_rank,
+                    "region_text": region["region_text"],
+                    "generation_method": "lm_probability",
+                    "meta_prompt": None,
+                    "raw_output": None,
+                    "candidates": [],
+                }
+            )
+            continue
+
+        region_token_length = len(region_token_ids)
+        original_first_token_id = int(region_token_ids[0])
+        prefix_token_ids = prompt_token_ids[:start_token]
+        candidate_pool_size = max(num_region_candidates, num_region_candidates * num_region_candidates)
+        if start_token == 0:
+            initial_top_token_ids = [original_first_token_id]
+            clustered_first_token_ids = [original_first_token_id]
+            selected_first_token_ids = [original_first_token_id] * num_region_candidates
+            print(
+                "[agent_gradient_eval_debug] LM probability first-token selection:",
+                f"region_rank={region_rank}",
+                "start_token=0 using original first token only",
+            )
+        else:
+            initial_top_token_ids = _collect_top_token_ids_from_prefix(
+                prefix_token_ids=prefix_token_ids,
+                model=model,
+                tokenizer=tokenizer,
+                num_candidate_pool_tokens=candidate_pool_size,
+            )
+            clustered_first_token_ids = select_centroid_token_ids(
+                token_ids=initial_top_token_ids,
+                embedding_weight=embedding_weight,
+                num_clusters=num_region_candidates,
+            )
+            selected_first_token_ids = list(clustered_first_token_ids)
+            print(
+                "[agent_gradient_eval_debug] LM probability first-token selection:",
+                f"region_rank={region_rank}",
+                f"candidate_pool_size={len(initial_top_token_ids)}",
+                f"selected_first_tokens={json.dumps([_decode_token_text(tokenizer=tokenizer, token_ids=[token_id]) for token_id in selected_first_token_ids], ensure_ascii=False)}",
+            )
+
+        first_token_texts = [
+            _decode_token_text(tokenizer=tokenizer, token_ids=[token_id])
+            for token_id in selected_first_token_ids
+        ]
+        continuation_prompts = [
+            _decode_token_text(
+                tokenizer=tokenizer,
+                token_ids=prefix_token_ids + [token_id],
+            )
+            for token_id in selected_first_token_ids
+        ]
+        remaining_region_tokens = max(0, region_token_length - 1)
+        if remaining_region_tokens > 0:
+            continuation_outputs = run_prompts(
+                continuation_prompts,
+                model=model,
+                tokenizer=tokenizer,
+                max_new_tokens=min(max_new_tokens, remaining_region_tokens),
+                batch_size=batch_size,
+                use_chat_template=False,
+                add_generation_prompt=False,
+                enable_thinking=False,
+                do_sample=True,
+                do_log=True,
+                log_label=f"agent_gradient_eval_debug_lm_region_candidates_r{region_rank}",
+            )
+        else:
+            continuation_outputs = [""] * len(continuation_prompts)
+
+        candidates: List[str] = []
+        seen_candidates: set[str] = set()
+        raw_generations: List[Dict[str, Any]] = []
+        for generation_index, (token_id, first_token_text, continuation_output) in enumerate(
+            zip(selected_first_token_ids, first_token_texts, continuation_outputs)
+        ):
+            candidate_text = first_token_text + continuation_output
+            normalized_candidate = candidate_text.strip()
+            raw_generations.append(
+                {
+                    "generation_index": generation_index,
+                    "first_token_id": int(token_id),
+                    "first_token_text": first_token_text,
+                    "continuation_output": continuation_output,
+                    "candidate_text": candidate_text,
+                }
+            )
+            print(
+                "[agent_gradient_eval_debug] LM probability candidate span:",
+                f"region_rank={region_rank}",
+                f"generation_index={generation_index}",
+                f"candidate_text={candidate_text!r}",
+            )
+            if not normalized_candidate or normalized_candidate in seen_candidates:
+                continue
+            seen_candidates.add(normalized_candidate)
+            candidates.append(normalized_candidate)
+            if len(candidates) == num_region_candidates:
+                break
+
+        region_candidates.append(
+            {
+                "region_rank": region_rank,
+                "region_text": region["region_text"],
+                "generation_method": "lm_probability",
+                "meta_prompt": None,
+                "raw_output": None,
+                "initial_top_token_ids": initial_top_token_ids,
+                "clustered_first_token_ids": clustered_first_token_ids,
+                "raw_generations": raw_generations,
+                "candidates": candidates,
+            }
+        )
+        print(
+            "[agent_gradient_eval_debug] parsed LM probability region candidates:",
+            f"region_rank={region_rank}",
+            f"candidates={json.dumps(candidates, ensure_ascii=False)}",
+        )
+    return region_candidates
 
 
 def _build_binary_prompts_for_instruction(
@@ -1720,20 +1958,13 @@ def _run_direct_candidate_generation(
     return prompt_editing_payload
 
 
-def _run_llm_candidate_suggestion(
+def _build_region_candidate_prompt_editing_payload(
     *,
-    args: argparse.Namespace,
-    instruction_prompt: str,
-    sampled_pairs: Sequence[Dict[str, Any]],
-    full_eval_pairs: Sequence[Dict[str, Any]],
-    gradient_results: Dict[str, Any],
+    mode: str,
     baseline_validation: Dict[str, Any],
-    baseline_confusion_matrix: Dict[str, int],
-    model,
-    tokenizer,
 ) -> Dict[str, Any]:
-    prompt_editing_payload: Dict[str, Any] = {
-        "mode": MODE_LLM_CANDIDATE_SUGGESTION,
+    return {
+        "mode": mode,
         "baseline_validation": baseline_validation,
         "selected_regions": [],
         "region_candidate_meta_prompts": [],
@@ -1746,36 +1977,22 @@ def _run_llm_candidate_suggestion(
         "generated_prompt_variants": [],
         "retained_top_k_prompts": [],
     }
-    if args.num_generated_prompts <= 0:
-        print("[agent_gradient_eval_debug] prompt variant generation skipped")
-        return prompt_editing_payload
-    if args.num_region_candidates <= 0:
-        raise ValueError("--num-region-candidates must be positive in LLM_CANDIDATE_SUGGESTION.")
-    if args.top_k_prompts <= 0:
-        raise ValueError("--top-k-prompts must be positive in LLM_CANDIDATE_SUGGESTION.")
 
-    region_details = _resolve_region_details(
-        instruction_prompt=instruction_prompt,
-        tokenizer=tokenizer,
-        gradient_results=gradient_results,
-        num_edit_regions=args.num_edit_regions,
-    )
-    print(
-        "[agent_gradient_eval_debug] generating per-region candidates:",
-        f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
-        f"num_region_candidates={args.num_region_candidates}",
-    )
-    region_candidates = _generate_region_candidates(
-        instruction_prompt=instruction_prompt,
-        region_details=region_details,
-        num_region_candidates=args.num_region_candidates,
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=args.meta_prompt_max_new_tokens,
-        batch_size=args.meta_prompt_batch_size,
-        use_chat_template=not args.disable_chat_template,
-    )
 
+def _complete_region_candidate_suggestion(
+    *,
+    args: argparse.Namespace,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    baseline_validation: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    region_details: Dict[str, Any],
+    region_candidates: Sequence[Dict[str, Any]],
+    prompt_editing_payload: Dict[str, Any],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
     combination_payload = _generate_region_candidate_combinations(
         instruction_prompt=instruction_prompt,
         region_details=region_details,
@@ -1922,12 +2139,12 @@ def _run_llm_candidate_suggestion(
     prompt_editing_payload["region_candidate_meta_prompts"] = [
         {
             "region_rank": item["region_rank"],
-            "meta_prompt": item["meta_prompt"],
-            "raw_output": item["raw_output"],
+            "meta_prompt": item.get("meta_prompt"),
+            "raw_output": item.get("raw_output"),
         }
         for item in region_candidates
     ]
-    prompt_editing_payload["region_candidates"] = region_candidates
+    prompt_editing_payload["region_candidates"] = list(region_candidates)
     prompt_editing_payload["combination_meta_prompt"] = combination_payload["meta_prompt"]
     prompt_editing_payload["combination_raw_output"] = combination_payload["raw_output"]
     prompt_editing_payload["candidate_combinations"] = combination_payload["candidate_combinations"]
@@ -1946,6 +2163,126 @@ def _run_llm_candidate_suggestion(
         for prompt_text in retained_prompt_texts
     ]
     return prompt_editing_payload
+
+
+def _run_llm_candidate_suggestion(
+    *,
+    args: argparse.Namespace,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    gradient_results: Dict[str, Any],
+    baseline_validation: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    prompt_editing_payload = _build_region_candidate_prompt_editing_payload(
+        mode=MODE_LLM_CANDIDATE_SUGGESTION,
+        baseline_validation=baseline_validation,
+    )
+    if args.num_generated_prompts <= 0:
+        print("[agent_gradient_eval_debug] prompt variant generation skipped")
+        return prompt_editing_payload
+    if args.num_region_candidates <= 0:
+        raise ValueError("--num-region-candidates must be positive in LLM_CANDIDATE_SUGGESTION.")
+    if args.top_k_prompts <= 0:
+        raise ValueError("--top-k-prompts must be positive in LLM_CANDIDATE_SUGGESTION.")
+
+    region_details = _resolve_region_details(
+        instruction_prompt=instruction_prompt,
+        tokenizer=tokenizer,
+        gradient_results=gradient_results,
+        num_edit_regions=args.num_edit_regions,
+    )
+    print(
+        "[agent_gradient_eval_debug] generating per-region candidates:",
+        f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
+        f"num_region_candidates={args.num_region_candidates}",
+    )
+    region_candidates = _generate_region_candidates(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        num_region_candidates=args.num_region_candidates,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.meta_prompt_max_new_tokens,
+        batch_size=args.meta_prompt_batch_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+    return _complete_region_candidate_suggestion(
+        args=args,
+        instruction_prompt=instruction_prompt,
+        sampled_pairs=sampled_pairs,
+        full_eval_pairs=full_eval_pairs,
+        baseline_validation=baseline_validation,
+        baseline_confusion_matrix=baseline_confusion_matrix,
+        region_details=region_details,
+        region_candidates=region_candidates,
+        prompt_editing_payload=prompt_editing_payload,
+        model=model,
+        tokenizer=tokenizer,
+    )
+
+def _run_lm_probability_candidate_suggestion(
+    *,
+    args: argparse.Namespace,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    gradient_results: Dict[str, Any],
+    baseline_validation: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    prompt_editing_payload = _build_region_candidate_prompt_editing_payload(
+        mode=MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
+        baseline_validation=baseline_validation,
+    )
+    if args.num_generated_prompts <= 0:
+        print("[agent_gradient_eval_debug] prompt variant generation skipped")
+        return prompt_editing_payload
+    if args.num_region_candidates <= 0:
+        raise ValueError(
+            "--num-region-candidates must be positive in LM_PROBABILITY_CANDIDATE_SUGGESTION."
+        )
+    if args.top_k_prompts <= 0:
+        raise ValueError("--top-k-prompts must be positive in LM_PROBABILITY_CANDIDATE_SUGGESTION.")
+
+    region_details = _resolve_region_details(
+        instruction_prompt=instruction_prompt,
+        tokenizer=tokenizer,
+        gradient_results=gradient_results,
+        num_edit_regions=args.num_edit_regions,
+    )
+    print(
+        "[agent_gradient_eval_debug] generating LM probability region candidates:",
+        f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
+        f"num_region_candidates={args.num_region_candidates}",
+    )
+    region_candidates = _generate_region_candidates_from_lm_probability(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        num_region_candidates=args.num_region_candidates,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.meta_prompt_max_new_tokens,
+        batch_size=args.meta_prompt_batch_size,
+    )
+    return _complete_region_candidate_suggestion(
+        args=args,
+        instruction_prompt=instruction_prompt,
+        sampled_pairs=sampled_pairs,
+        full_eval_pairs=full_eval_pairs,
+        baseline_validation=baseline_validation,
+        baseline_confusion_matrix=baseline_confusion_matrix,
+        region_details=region_details,
+        region_candidates=region_candidates,
+        prompt_editing_payload=prompt_editing_payload,
+        model=model,
+        tokenizer=tokenizer,
+    )
 
 
 def main() -> None:
@@ -2155,8 +2492,20 @@ def main() -> None:
             model=model,
             tokenizer=tokenizer,
         )
-    else:
+    elif args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
         prompt_editing_payload = _run_llm_candidate_suggestion(
+            args=args,
+            instruction_prompt=instruction_prompt,
+            sampled_pairs=sampled_pairs,
+            full_eval_pairs=full_eval_pairs,
+            gradient_results=gradient_results,
+            baseline_validation=baseline_validation,
+            baseline_confusion_matrix=baseline_confusion_matrix,
+            model=model,
+            tokenizer=tokenizer,
+        )
+    else:
+        prompt_editing_payload = _run_lm_probability_candidate_suggestion(
             args=args,
             instruction_prompt=instruction_prompt,
             sampled_pairs=sampled_pairs,
@@ -2218,7 +2567,10 @@ def main() -> None:
         run_dir / "sampled_data_and_predictions.json",
         sampled_data_and_predictions_payload,
     )
-    if args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
+    if args.mode in {
+        MODE_LLM_CANDIDATE_SUGGESTION,
+        MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
+    }:
         _save_json(
             run_dir / "combination_generated_prompts.json",
             _build_combination_generated_prompts_payload(
@@ -2235,7 +2587,10 @@ def main() -> None:
     print(f"saved full payload to {run_dir / 'all_data.json'}")
     print(f"saved summary to {run_dir / 'summary.json'}")
     print(f"saved sampled data and predictions to {run_dir / 'sampled_data_and_predictions.json'}")
-    if args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
+    if args.mode in {
+        MODE_LLM_CANDIDATE_SUGGESTION,
+        MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
+    }:
         print(f"saved combination prompts to {run_dir / 'combination_generated_prompts.json'}")
     print(f"saved eval outputs to {eval_outputs_dir}")
 
