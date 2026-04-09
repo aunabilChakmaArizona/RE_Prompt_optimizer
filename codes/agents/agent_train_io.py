@@ -70,6 +70,58 @@ def write_args(run_dir: str, args: object) -> None:
         json.dump(full_args, handle, indent=2)
 
 
+def _resolve_population_path(source_path: str) -> str:
+    population_path = os.path.abspath(source_path)
+    if os.path.isdir(population_path):
+        population_path = os.path.join(population_path, "population.json")
+    if os.path.basename(population_path) != "population.json":
+        raise ValueError(
+            "--initial-prompt-source-path must point to a run directory or population.json"
+        )
+    if not os.path.isfile(population_path):
+        raise FileNotFoundError(
+            f"Could not find population.json at '{population_path}'"
+        )
+    return population_path
+
+
+def load_initial_prompt_node(
+    source_path: str,
+    prompt_node_id: int | None,
+    expected_inference_mode: str,
+) -> Tuple[Dict[str, object], str]:
+    population_path = _resolve_population_path(source_path)
+    with open(population_path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    population = payload.get("population", [])
+    selected_node_id = (
+        prompt_node_id if prompt_node_id is not None else payload.get("best_node_id")
+    )
+    selected_node = None
+    for node in population:
+        if node.get("node_id") == selected_node_id:
+            selected_node = node
+            break
+
+    if selected_node is None and prompt_node_id is None:
+        selected_node = payload.get("best_node")
+
+    if selected_node is None:
+        raise KeyError(
+            f"Could not find node_id={selected_node_id} in '{population_path}'"
+        )
+
+    node_inference_mode = selected_node.get("inference_mode")
+    if node_inference_mode != expected_inference_mode:
+        raise ValueError(
+            "Initial prompt inference_mode mismatch: "
+            f"source={node_inference_mode!r}, requested={expected_inference_mode!r}"
+        )
+
+    return selected_node, population_path
+
+
 def serialize_feedback_sample(sample: FeedbackSample) -> Dict[str, object]:
     return {
         "id_1shot": sample.id_1shot,

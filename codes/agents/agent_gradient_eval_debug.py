@@ -907,7 +907,7 @@ def _build_lm_probability_context_prompt(
         "Original Prompt:\n"
         f"{full_instruction_prompt}\n\n"
         "Task:\n"
-        "Write a natural revised version of the original prompt while preserving meaning, structure, and tone.\n\n"
+        "Write a natural revised version of the original prompt while preserving meaning, structure, and tone. Prefer paraphrase or other clear, robust, and effective wording.\n\n"
         "Revised prompt:\n"
         f"{prompt_prefix_text}"
     )

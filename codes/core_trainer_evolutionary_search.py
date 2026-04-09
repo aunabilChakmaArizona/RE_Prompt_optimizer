@@ -15,6 +15,7 @@ from agents.agent_prompts import (
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
     create_run_dir,
+    load_initial_prompt_node,
     restore_logging,
     save_population,
     save_summary,
@@ -87,11 +88,28 @@ def main() -> None:
             ]
         mutation_prompt = mutation_prompts[0]
 
+        initial_prompt_node = None
+        if args.initial_prompt_source_path:
+            initial_prompt_node, initial_prompt_population_path = load_initial_prompt_node(
+                args.initial_prompt_source_path,
+                args.initial_prompt_node_id,
+                args.inference_mode,
+            )
+            print(
+                "[core_trainer] initial prompt source:",
+                initial_prompt_population_path,
+            )
+            print(
+                "[core_trainer] initial prompt node_id:",
+                initial_prompt_node.get("node_id"),
+            )
+
         root = build_root_node(
             feedback_prompt=feedback_prompt,
             mutation_prompt=mutation_prompt,
             inference_mode=args.inference_mode,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+            initial_prompt_node=initial_prompt_node,
         )
 
         search = EvolutionarySearch(
@@ -117,6 +135,7 @@ def main() -> None:
             evaluate_fn=evaluate,
             selection_mode=args.selection_mode,
             update_mode=args.update_mode,
+            parent_selection_mode=args.parent_selection_mode,
             overall_start_time=overall_start,
             on_iteration_end=clear_iteration_memory,
         )

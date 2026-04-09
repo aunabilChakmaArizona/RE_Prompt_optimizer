@@ -17,6 +17,13 @@ MutatePromptFn = Callable[..., Optional[tuple[str, str, str, str, str, str]]]
 EvaluateFn = Callable[..., float]
 IterationHook = Callable[[int, GraphNode, GraphNode], None]
 
+PARENT_SELECTION_MODE_SCORE_WEIGHTED = "score_weighted"
+PARENT_SELECTION_MODE_INITIAL_PROMPT_ONLY = "initial_prompt_only"
+PARENT_SELECTION_MODE_CHOICES = [
+    PARENT_SELECTION_MODE_SCORE_WEIGHTED,
+    PARENT_SELECTION_MODE_INITIAL_PROMPT_ONLY,
+]
+
 
 class EvolutionarySearch:
     def __init__(
@@ -83,7 +90,7 @@ class EvolutionarySearch:
             return [1.0 for _ in scores]
         return weights
 
-    def sample_parent(self) -> GraphNode:
+    def _score_weighted_parent(self) -> GraphNode:
         alive_nodes = [node for node in self.population if not node.is_dead]
         if not alive_nodes:
             raise RuntimeError("No active nodes available for mutation")
@@ -97,6 +104,21 @@ class EvolutionarySearch:
         weights = self._softmax_weights(scores)
         return self.rng.choices(alive_nodes, weights=weights, k=1)[0]
 
+    def sample_parent(
+        self,
+        parent_selection_mode: str = PARENT_SELECTION_MODE_SCORE_WEIGHTED,
+    ) -> GraphNode:
+        if parent_selection_mode == PARENT_SELECTION_MODE_INITIAL_PROMPT_ONLY:
+            if self.root.is_dead:
+                raise RuntimeError("Initial prompt is dead; no parent available for mutation")
+            return self.root
+        if parent_selection_mode == PARENT_SELECTION_MODE_SCORE_WEIGHTED:
+            return self._score_weighted_parent()
+        raise ValueError(
+            f"Unsupported parent_selection_mode={parent_selection_mode!r}. "
+            f"Expected one of {PARENT_SELECTION_MODE_CHOICES}."
+        )
+
     def best_node(self) -> GraphNode:
         return max(self.population, key=score_node_or_neg_inf)
 
@@ -109,6 +131,7 @@ class EvolutionarySearch:
         evaluate_fn: EvaluateFn,
         selection_mode: str = "mixed",
         update_mode: str = "feedback",
+        parent_selection_mode: str = PARENT_SELECTION_MODE_SCORE_WEIGHTED,
         overall_start_time: Optional[float] = None,
         on_iteration_end: Optional[IterationHook] = None,
     ) -> tuple[GraphNode, List[GraphNode]]:
@@ -139,10 +162,16 @@ class EvolutionarySearch:
                     f"[agent_evolutionary_search] iteration {iteration + 1}/{self.max_iterations} start "
                     f"(overall {overall_elapsed:.2f}s)"
                 )
-            if not any(not node.is_dead for node in self.population):
+            if parent_selection_mode == PARENT_SELECTION_MODE_INITIAL_PROMPT_ONLY:
+                if self.root.is_dead:
+                    print(
+                        "[agent_evolutionary_search] initial prompt is dead; stopping"
+                    )
+                    break
+            elif not any(not node.is_dead for node in self.population):
                 print("[agent_evolutionary_search] no active nodes left; stopping")
                 break
-            parent = self.sample_parent()
+            parent = self.sample_parent(parent_selection_mode=parent_selection_mode)
             feedback_text = ""
             if update_mode == "feedback": #todo: this is redundant to run during traces mutation
                 _log_step("[agent_evolutionary_search] sample feedback")

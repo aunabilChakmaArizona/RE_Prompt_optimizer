@@ -411,9 +411,12 @@ def score_binary_prompts_with_ce_and_perplexity(
             )
             cross_entropy_losses.extend(float(loss.item()) for loss in batch_losses)
             perplexities.extend(float(torch.exp(loss).item()) for loss in batch_losses)
+
+            clear_cuda_cache()
     finally:
         tokenizer.padding_side = original_padding_side
-
+    clear_cuda_cache()
+    
     mean_cross_entropy = sum(cross_entropy_losses) / len(cross_entropy_losses)
     mean_perplexity = sum(perplexities) / len(perplexities)
     return {

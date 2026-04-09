@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from agents.agent_data_loader import load_split_episodes, load_train_samples
 from agents.agent_evaluate import evaluate_fn as _evaluate_fn
@@ -233,6 +233,7 @@ def build_root_node(
     mutation_prompt: str,
     inference_mode: str = INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     example_generation_prompt: str = EXAMPLE_GENERATION_PROMPT_V1,
+    initial_prompt_node: Dict[str, Any] | None = None,
 ) -> GraphNode:
     if inference_mode == INFERENCE_MODE_NON_SEPARATE:
         inference_prompt = INFERENCE_PROMPT_V1
@@ -254,6 +255,27 @@ def build_root_node(
         input_prompt = INFERENCE_INPUT_PROMPT_V1
     else:
         raise ValueError(f"Unsupported inference_mode: {inference_mode}")
+
+    if initial_prompt_node is not None:
+        if inference_mode == INFERENCE_MODE_NON_SEPARATE:
+            inference_prompt = initial_prompt_node.get("inference_prompt") or inference_prompt
+        else:
+            instruction_prompt = (
+                initial_prompt_node.get("inference_instruction_prompt")
+                or initial_prompt_node.get("inference_prompt")
+                or instruction_prompt
+            )
+            inference_prompt = instruction_prompt
+            answer_instruction_prompt = (
+                initial_prompt_node.get("inference_answer_instruction_prompt")
+                or answer_instruction_prompt
+            )
+            example_prompt = (
+                initial_prompt_node.get("inference_example_prompt") or example_prompt
+            )
+            input_prompt = (
+                initial_prompt_node.get("inference_input_prompt") or input_prompt
+            )
 
     return GraphNode(
         inference_prompt=inference_prompt,

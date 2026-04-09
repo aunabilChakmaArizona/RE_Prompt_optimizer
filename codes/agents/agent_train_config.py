@@ -9,6 +9,7 @@ from agents.agent_prompts import (
     INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     MUTATION_PROMPT_GROUP_MAP,
 )
+from agents.agent_evolutionary_search import PARENT_SELECTION_MODE_CHOICES
 from agents.agent_cluster_search import CLUSTER_SELECTION_MODE_CHOICES
 
 
@@ -45,6 +46,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--feedback-sample-size", type=int, default=100)
     parser.add_argument("--num-shots", type=int, default=1, help="Number of examples in prompt")
     parser.add_argument(
+        "--initial-prompt-source-path",
+        default=None,
+        help=(
+            "Optional previous run directory or population.json path used to seed the "
+            "initial prompt before evolutionary search starts."
+        ),
+    )
+    parser.add_argument(
+        "--initial-prompt-node-id",
+        type=int,
+        default=None,
+        help=(
+            "Optional node_id inside the source population.json. If omitted, the "
+            "best node from that run is used."
+        ),
+    )
+    parser.add_argument(
         "--update-mode",
         type=str,
         default="feedback",
@@ -52,6 +70,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prompt update mode",
     )
     parser.add_argument("--selection-mode", type=str, default="mixed")
+    parser.add_argument(
+        "--parent-selection-mode",
+        type=str,
+        default="score_weighted",
+        choices=list(PARENT_SELECTION_MODE_CHOICES),
+        help=(
+            "Parent selection policy for mutation: score_weighted samples from the "
+            "active population using validation scores; initial_prompt_only always "
+            "mutates the initial/root prompt."
+        ),
+    )
     parser.add_argument("--population-sampling-temperature", type=float, default=1.0)
     parser.add_argument(
         "--do-sample",
