@@ -619,7 +619,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
   --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
-  --device-map "cuda:3" \
+  --device-map "cuda:1" \
   --prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 0 \
   --dataset-type "fs_tacred" \

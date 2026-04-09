@@ -881,6 +881,7 @@ def _collect_top_token_ids_from_prefix(
         if len(collected_ids) >= num_candidate_pool_tokens or search_budget == vocab_size:
             break
         search_budget = min(vocab_size, search_budget * 2)
+    del input_ids, outputs, next_token_logits
     clear_cuda_cache()
     return collected_ids
 
@@ -958,7 +959,6 @@ def _generate_region_candidates_from_lm_probability(
         instruction_prompt=instruction_prompt,
         tokenizer=tokenizer,
     )
-    embedding_weight = model.get_input_embeddings().weight.detach()
     region_candidates: List[Dict[str, Any]] = []
     for region in region_details["selected_regions"]:
         region_rank = int(region["region_rank"])
