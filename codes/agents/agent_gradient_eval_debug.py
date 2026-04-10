@@ -8,6 +8,7 @@ import json
 import random
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
@@ -442,6 +443,26 @@ def _extract_prf_from_prompt_info(prompt_info: Dict[str, Any]) -> Dict[str, floa
         "recall": float(val_score.get("recall_mean", 0.0) * 100.0),
         "f1": float(val_score.get("f1_mean", 0.0) * 100.0),
     }
+
+
+def _format_prf_for_log(prf: Dict[str, float]) -> str:
+    return (
+        f"precision={prf['precision']:.2f}, "
+        f"recall={prf['recall']:.2f}, "
+        f"f1={prf['f1']:.2f}"
+    )
+
+
+def _format_log_context(log_context: Dict[str, Any] | None) -> str:
+    if not log_context:
+        return ""
+    parts = [
+        f"{key}={value}"
+        for key, value in log_context.items()
+        if value is not None
+    ]
+    return " ".join(parts)
+
 
 def _build_binary_pairs_from_feedback_samples(
     *,
@@ -1809,13 +1830,16 @@ def _evaluate_prompt_variant(
     revised_prompt: str,
     sampled_pairs: Sequence[Dict[str, Any]],
     full_eval_pairs: Sequence[Dict[str, Any]],
+    full_eval_split: str,
     baseline_validation: Dict[str, Any],
     baseline_confusion_matrix: Dict[str, int],
     model,
     tokenizer,
     validation_batch_size: int,
     use_chat_template: bool,
+    log_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    eval_start = time.perf_counter()
     prompts, target_labels = _build_binary_prompts_for_instruction(
         instruction_prompt=revised_prompt,
         binary_pairs=sampled_pairs,
@@ -1840,6 +1864,23 @@ def _evaluate_prompt_variant(
         baseline_summary=baseline_validation,
         candidate_summary=validation_summary,
     )
+    validation_prf = _build_prf_scores(
+        predicted_labels=score_payload["predicted_labels"],
+        target_labels=score_payload["target_labels"],
+    )
+    validation_elapsed = time.perf_counter() - eval_start
+    context_text = _format_log_context(log_context)
+    context_prefix = f"{context_text} " if context_text else ""
+    print(
+        f"[agent_gradient_eval_debug] prompt validation: {context_prefix}"
+        f"done in {validation_elapsed:.2f}s, "
+        f"{_format_prf_for_log(validation_prf)}, "
+        f"overall_accuracy={validation_summary['overall']['accuracy']:.4f}, "
+        f"fixes_from_mistakes={validation_summary['fixes_from_mistakes']}, "
+        f"regressions_from_correct={validation_summary['regressions_from_correct']}"
+    )
+
+    full_eval_start = time.perf_counter()
     full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
         instruction_prompt=revised_prompt,
         binary_pairs=full_eval_pairs,
@@ -1857,14 +1898,18 @@ def _evaluate_prompt_variant(
         binary_pairs=full_eval_pairs,
         prf_mode="episode",
     )
+    full_eval_elapsed = time.perf_counter() - full_eval_start
+    print(
+        f"[agent_gradient_eval_debug] prompt full evaluation: {context_prefix}"
+        f"split={full_eval_split} done in {full_eval_elapsed:.2f}s, "
+        f"{_format_prf_for_log(full_evaluation['prf'])}"
+    )
+
     validation_payload = {
         "predicted_labels": score_payload["predicted_labels"],
         "target_labels": score_payload["target_labels"],
         "summary": validation_summary,
-        "prf": _build_prf_scores(
-            predicted_labels=score_payload["predicted_labels"],
-            target_labels=score_payload["target_labels"],
-        ),
+        "prf": validation_prf,
         "confusion_matrix": {
             "original": baseline_confusion_matrix,
             "updated": updated_confusion_matrix,
@@ -2006,12 +2051,16 @@ def _run_direct_candidate_generation(
                 revised_prompt=revised_prompt,
                 sampled_pairs=sampled_pairs,
                 full_eval_pairs=full_eval_pairs,
+                full_eval_split=args.full_eval_split,
                 baseline_validation=baseline_validation,
                 baseline_confusion_matrix=baseline_confusion_matrix,
                 model=model,
                 tokenizer=tokenizer,
                 validation_batch_size=args.validation_batch_size,
                 use_chat_template=not args.disable_chat_template,
+                log_context={
+                    "generation_index": variant.get("generation_index"),
+                },
             )
             prompt_result_cache[revised_prompt] = copy.deepcopy(cached_result)
         validated_variants.append(
@@ -2193,12 +2242,17 @@ def _complete_region_candidate_suggestion(
                 revised_prompt=revised_prompt,
                 sampled_pairs=sampled_pairs,
                 full_eval_pairs=full_eval_pairs,
+                full_eval_split=args.full_eval_split,
                 baseline_validation=baseline_validation,
                 baseline_confusion_matrix=baseline_confusion_matrix,
                 model=model,
                 tokenizer=tokenizer,
                 validation_batch_size=args.validation_batch_size,
                 use_chat_template=not args.disable_chat_template,
+                log_context={
+                    "generation_index": variant.get("generation_index"),
+                    "combination_key": variant.get("combination_key"),
+                },
             )
             evaluation_cache[revised_prompt] = copy.deepcopy(evaluation)
         variant["validation"] = evaluation["validation"]
@@ -2547,6 +2601,7 @@ def main() -> None:
     )
     print(
         "[agent_gradient_eval_debug] baseline validation:",
+        _format_prf_for_log(baseline_prf),
         f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
         f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",

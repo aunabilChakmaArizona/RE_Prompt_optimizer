@@ -614,7 +614,6 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "lm_prob_cand_sugg_prefix_context_node7_region3s_qwen4" \
   > nohup_outs/nohup_gradient_lm_prob_cand_sugg_prefix_context_node7_region3s_qwen4.out 2>&1 &
 
-# to_run
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
@@ -644,7 +643,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
   --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
-  --device-map "cuda:3" \
+  --device-map "cuda:1" \
   --prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 3 \
   --dataset-type "fs_tacred" \
@@ -669,27 +668,84 @@ nohup python -u agents/agent_gradient_eval_debug.py \
 ## base run for gradient based updates
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" > nohup_outs/nohup_v3_qwen4_group2_mixed.out 2>&1 &
 
-# to_run
-nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" \ 
---initial-prompt-source-path "trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \ 
---initial-prompt-node-id 10 > nohup_outs/nohup_v3_qwen4_group2_mixed_node10_initial_prompt_only.out 2>&1 &
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" --initial-prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only"  --initial-prompt-node-id 10 > nohup_outs/nohup_v3_qwen4_group2_mixed_node10_initial_prompt_only.out 2>&1 &
 
-nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" \ 
---initial-prompt-source-path "trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \ 
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" \
+--initial-prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
 --initial-prompt-node-id 9 > nohup_outs/nohup_v3_qwen4_group2_mixed_node9_initial_prompt_only.out 2>&1 &
 
-nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" \ 
---initial-prompt-source-path "trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \ 
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 10 --mutation-group-id "group_2" \
+--initial-prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
 --initial-prompt-node-id 7 > nohup_outs/nohup_v3_qwen4_group2_mixed_node7_initial_prompt_only.out 2>&1 &
 
-nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" \ 
---initial-prompt-source-path "trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \ 
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 10 --mutation-group-id "group_2" \
+--initial-prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
 --initial-prompt-node-id 0 > nohup_outs/nohup_v3_qwen4_group2_mixed_node0_initial_prompt_only.out 2>&1 &
 
-nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:3" --max-iterations 10 --mutation-group-id "group_2" \ 
---initial-prompt-source-path "trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \ 
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 10 --mutation-group-id "group_2" \
+--initial-prompt-source-path "../trainings/20260405_202156_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
 --initial-prompt-node-id 3 > nohup_outs/nohup_v3_qwen4_group2_mixed_node3_initial_prompt_only.out 2>&1 &
 
+
+
+
+## comparison
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 13 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 4 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --num-generated-prompts 20 \
+  --top-k-prompts 10 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_20260303_002034_node13_region3s_qwen4" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_20260303_002034_node13_region3s_qwen4.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 10 --mutation-group-id "group_2" \
+--initial-prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
+--initial-prompt-node-id 13 > nohup_outs/nohup_v3_qwen4_group2_mixed_20260303_002034_node13_initial_prompt_only.out 2>&1 &
+
+trainings/20260301_030139_Qwen-Qwen3-4B/
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 4 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --num-generated-prompts 20 \
+  --top-k-prompts 10 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_20260301_030139_node11_region3s_qwen4" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_20260301_030139_node11_region3s_qwen4.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" --max-iterations 10 --mutation-group-id "group_2" \
+--initial-prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
+--initial-prompt-node-id 11 > nohup_outs/nohup_v3_qwen4_group2_mixed_20260301_030139_node11_initial_prompt_only.out 2>&1 &
 
 ##################################################
 # tags custom
