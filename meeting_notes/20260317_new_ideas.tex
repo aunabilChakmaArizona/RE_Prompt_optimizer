@@ -1,0 +1,47 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[
+  paperwidth=8.5in,
+  paperheight=11in,
+  margin=0.5in
+]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+
+\newcommand{\tacred}{FS-TACRED}
+\newcommand{\qwensmall}{Qwen3-4B}
+\newcommand{\gemmasmall}{Gemma3-4B}
+
+\begin{document}
+
+\paragraph{Idea of a new approach for prompt optimization}
+\begin{itemize}
+    \item Optimize a {set of diverse prompts} instead of a single prompt
+    \item Organize prompts into {clusters} capturing different aspects of the task, by splitting errors/feedback (with some overlap) across clusters.
+    \item Perform {local optimization} within clusters (error analysis, mutation, crossover)
+    \item Allow inter-cluster crossover at the end.
+    \item Moreover, use {global error analysis} to guide overall improvement
+    \item Combine outputs from multiple final prompts to make decision. Here are some ideas to optimize the inference cost:
+    \begin{itemize}
+        \item Use only a {subset of the prompts} to reduce inference cost.
+        \item Start with the {best prompt}, and iteratively add others until we are confident in the prediction.
+        \item Use a {router or classifier} to map inputs to the most suitable prompt(s).
+    \end{itemize}
+\end{itemize}
+
+
+\paragraph{Other updates}
+I evaluated several optimized prompts (from earlier experiments) on the FS-TACRED test set, 
+and they show improvement over the baseline prompt. 
+However, prompts optimized without feedback show a drop in performance,
+because they were optimized directly on the validation set (overfit), whereas other approaches obtain feedback from the training set.
+
+% \bibliographystyle{plain}  
+% \bibliography{custom}    
+
+\end{document}

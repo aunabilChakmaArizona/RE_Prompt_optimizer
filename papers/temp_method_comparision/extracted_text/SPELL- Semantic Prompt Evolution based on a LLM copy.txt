@@ -1,0 +1,578 @@
+arXiv:2310.01260v1 [cs.CL] 2 Oct 2023
+SPELL: Semantic Prompt Evolution based on a LLM
+Discussion and comparison with contemporaneous works in Appendix B
+Yujian Betterest Li†♢∗ Kai Wu†
+†School of Artificial Intelligence, Xidian University
+♢Institute of Freedom and Happiness, Dream Place
+Abstract
+Prompt engineering is a new paradigm for
+enhancing the performance of trained neural
+network models. For optimizing text-style
+prompts, existing methods usually individually
+operate small portions of a text step by step,
+which either breaks the fluency or could not
+globally adjust a prompt. Since large language
+models (LLMs) have powerful ability of gen-
+erating coherent texts token by token, can we
+utilize LLMs for improving prompts? Based
+on this motivation, in this paper, considering
+a trained LLM as a text generator, we attempt
+to design a black-box evolution algorithm for
+automatically optimizing texts, namely SPELL
+(Semantic Prompt Evolution based on a LLM).
+The proposed method is evaluated with differ-
+ent LLMs and evolution parameters in differ-
+ent text tasks. Experimental results show that
+SPELL could rapidly improve the prompts in-
+deed. We further explore the evolution process
+and discuss on the limitations, potential possi-
+bilities and future work.
+Figure 1: Overview of SPELL (Semantic Prompt
+Evolution based on a LLM).
+1 Introduction
+Prompts (Liu et al., 2023) are additional contents
+which would be integrated with the original input
+data to enhance the performance of a trained target
+model. For example, in a text classification task, a
+prompt, "[input text]\nDivide the above text into 2
+classes: positive and negative.\nClass:[MASK]",
+may strengthen the performance of a language
+model because the prompt reduces the probabilities
+of many unrelated tokens and hints what the model
+∗ Correspondence: bebetterest@outlook.com
+Figure 2: A reproduction example including M Pr and
+the response from the LLM.
+should focus on. Good prompt engineering meth-
+ods are able to enhance the ability of a target model
+with limited and efficient optimization. Besides,
+prompts are flexible. They could be continuous (Li
+and Liang, 2021; Qin and Eisner, 2021), possibly
+work in hidden layers (Sun et al., 2022b), and have
+already been applied to many modalities, such as
+text (Lester et al., 2021; Liu et al., 2022), vision
+(Jia et al., 2022; Sohn et al., 2023), and graph (Sun
+et al., 2022a; Yi et al., 2023). In this paper, we only
+focus on discrete text-style prompts applied at the
+input of a language model for text tasks.
+There are many methods to optimize text-style
+prompts. Gradient-based methods (Wallace et al.,
+2019; Shin et al., 2020) are the most intuitive one.
+They usually relax the discrete embeddings for
+optimization and need large computation because
+of the process of backward through the trained
+model. Nowadays, many target models are con-
+sidered as black boxes since only inference APIs
+are provided for the users. Hence, many black-box
+methods, based on evolution (Sun et al., 2022c;
+Sun et al., 2022b), reinforcement learning (Deng
+et al., 2022; Zhang et al., 2023; Diao et al., 2023)
+or search strategies (Prasad et al., 2023), improve
+the prompts without the information of gradients
+and parameters inside the target model. In particu-
+lar, evolution-based methods maintain a population
+consists of several prompts as individuals and op-
+timize the population by biological mechanisms
+such as reproduction and selection. However, these
+methods individually operate small portions of text
+step by step, leading to lack of global adjustment
+and serious damage on the fluency. The prompts op-
+timized by these methods usually consist of various
+strange characters, such as "an-lione_-lo-:)eak".
+In recent years, large language models (LLMs)
+(Li et al., 2021; Zhao et al., 2023) are the most
+popular star among various new AI applications.
+Optimized on language modeling, they could get
+universal generalization ability. With appropriate
+instructions, they could acquire amazing perfor-
+mance on language understanding, reasoning and
+text generation. Especially, the generated texts are
+coherent enough.
+Therefore, we attempt to propose SPELL
+(Semantic Prompt Evolution based on a LLM),
+an evolution algorithm to optimize prompts. Since
+the proposed method considers a LLM as a gen-
+erator, SPELL would utilize the global feature
+of a prompt and the improved prompts are co-
+herent. Through experiments, we evaluate that
+SPELL could rapidly improve performance keep-
+ing prompts fluent. Besides, we discover the evo-
+lution process and the impacts of different LLMs
+or evolution strategies. The limitations, challenges
+and possible directions are discussed on in the end.
+2 Methodology
+As shown in Figure 1, SPELL maintains a popula-
+tion P OPt of NP OP prompt individuals initialized
+as Iini. By two biological mechanisms, reproduc-
+tion and selection, the population evolves as
+OF F St = reproduction(P OPt)
+P OPt+1 = selection(OF F St ∪ P OPt)
+where reproduction generates the offspring
+OF F St from P OPt and the next population
+P OPt+1 consists of individuals selected from the
+union of OF F St and P OPt. As evolving for T
+times, the population is gradually optimized by gen-
+erating better individuals and selecting the potential
+ones. In the evolution process, how to inherit out-
+standing feature and make effective explorations
+are the keys. In the following subsections, we intro-
+duce different components of SPELL and explain
+how they work in detail.
+2.1 Problem Formulation
+In this paper, we focus on the text tasks translated
+to classification. For example, sentiment analy-
+sis is to classify the emotion contained in a given
+text. The text X for a target language model M is
+constructed as
+X= concat([input], \n, [prompt], \n, [head])
+where concat stands for concatenate and [input]
+for the input example. \n is considered as an inter-
+val. [prompt] is the prompt to enhance M . [head]
+is set as "class:" to guide M to make the predic-
+tion. Next, by language modeling, M makes the
+prediction as
+y = arg min
+li∈L
+PM (li|x1, x2...xNX )
+where L is the label space. To simplify the pre-
+diction process, we choose one word standing for
+each label, such as "positive" and "negative" in sen-
+timent analysis. It is worth mentioning that we pay
+attention to optimizing [prompt] keeping M fixed.
+2.2 Reproduction
+Reproduction is the process of generating new-
+borns. To keep useful feature from the previous
+generation, we select NP individuals IP,t from
+P OPt as parents for each child, which is intro-
+duced in Section 2.3. Besides, the newborn indi-
+viduals generated by a LLM G naturally include
+random variations as explorations. We construct
+the core meta prompt for reproduction M Pr as
+M Pr = concat([pre], \n, [exs], \n, [post])
+where
+          
+[pre] = concat([itsk], [iprompt], [irep])
+[exs] = concat([pro1], \n, [pro2]...[proNP ])
+[post] = concat([if inal], [iadditional])
+[proi] = concat([IP,t,i], [f iti]), i ∈ [1, NP ]
+[pre] describes the information on the task ([itsk]),
+defines what a prompt is for ([iprompt]) and leads to
+reproduction ([irep]). [exs] shows selected parents
+for reference ([pro]). [post] emphasizes generation
+requests ([if inal]) and points out other additional
+instructions ([iadditional]). Besides, [f iti] is the fit-
+ness/score for the corresponding individual [IP,t,i].
+By default, [iprompt] is set as "A prompt is to guide
+a language model to better solve the task. Each
+prompt is attached with a score. The better the
+prompt is, the higher the score is."; [irep] is "I want
+you to generate only one new and better prompt for
+this task. For example, you can try word replace-
+ments, active/positive voice conversions, adding
+words or delete words."; [if inal] stands for "Now,
+generate only one new and better prompt based
+on all the information above, especially the given
+prompts. For example, you can try word replace-
+ments, active/positive voice conversions, adding
+words or delete words." for detailed generation re-
+quests; [iadditional] is introduced later and [itask] is
+listed in Table 4. Given a meta prompt M Pr, an in-
+dividual Io,t,i of the offspring OF F St is obtained
+by
+IN,t,i= EXT (G(M Pr))
+where EXT extracts the new prompt by the rule
+included in [iadditional]. Specifically, in this pa-
+per, [iadditional] is set as "Let’s think step by step
+briefly. In the end, output one generated prompt
+inside curly brackets {}, such as {Please help me
+to classify.}.", which means EXT would take out
+the content inside a pair of curly brackets. In par-
+ticular, the optimization is prompt-wise global and
+semantic because G generates texts by language
+modeling. After that, we obtain the next population
+P OPt+1 by selecting individuals from P OPt and
+OF F St.
+2.3 Selection
+Selection is to choose some individuals being par-
+ents or structuring the new population. Selection
+strategies usually pay attention to balance survival
+of the fittest and the luckiest. In SPELL, the se-
+lection is based on roulette. First, we calculate
+the selection probability PS,i for an individual Ii
+among a candidate set CAN as
+PS,i=
+ef itness(Ii)
+j∈CAN (ef itness(Ij ))
+where f itness is the metric function which de-
+scribes how a individual performs in the target task.
+Better the individual is, higher the corresponding
+selection probability is, which is helpful for con-
+vergence. Then, NS selected individuals IS are
+sampled from CAN as
+IS = sample(CAN, NS , PS )
+In this way, poor individual would have a chance
+to be selected, which enriches the diversity.
+3 Experiments
+Setups We experiment on three text tasks from
+GLUE (Wang et al., 2018): SST-2 for sentiment
+prediction, RTE for textual entailment recognition,
+and AG’s News for news classification. Follow-
+ing Sun et al., 2022d, our experiments are in the
+few-shot setting. Only k samples for each class are
+selected as k-shot training data Dtrain. The orig-
+inal development data is the test data Dtest, and
+for datasets without development data, the original
+test data is used. All datasets and the trained tar-
+get model are implemented by huggingface1 and
+all LLM APIs are available on qianfan platform2
+.
+In addition, by default, the trained target model
+is RoBERTa-large3 (Liu et al., 2019) while the
+LLM for reproduction is Llama-2-Chat-7b (Tou-
+vron et al., 2023); for each round, 5 new individuals
+are generated based on 1 parent and and another
+5 newborns based on 2 parents; elite preservation
+is implemented for keeping the best individual;
+NP OP =Ns=20, T =500, k=16, the seed is set to
+42, f itness is the classification accuracy and the
+maximum f itness of individuals in a population
+is considered as the performance of the population.
+Method SST-2(%) RTE(%) AG’s News(%)
+Zero-shot 70.6 45.5 54.3
+Fine-tuning 81.4 54.4 86.2
+LM-BFF 92.3 66.6 87.1
+DART 93.5 59.0 86.8
+BBT 88.2 49.1 81.2
+RLPrompt 90.5 52.2 76.2
+PROMPTBOOSTING 87.6 60.0 85.2
+TEMPERA 91.9 60.3 85.5
+SPELL 89.2 50.9 70.0
+Table 1: Performance of different methods in Dtest.
+Zero-shot utilizes the initial prompt for prediction. Fine-
+tuning, LM-BFF (Gao et al., 2021) and DART (Zhang
+et al., 2022) are white-box methods while BBT (Sun
+et al., 2022c), RLPrompt (Deng et al., 2022), PROMPT-
+BOOSTING (Hou et al., 2023), TEMPERA (Zhang
+et al., 2023), and SPELL (ours) are black-box methods.
+Overall View We compare SPELL with state-of-
+the-art methods and feasible black-box works. As
+shown in Table 1, as a black-box method, SPELL
+could improve the accuracy and shows the potential
+of prompt optimization problems.
+Optimization Process The optimization process
+is described in Figure 3. Due to the few-shot setting,
+1https://huggingface.co
+2https://cloud.baidu.com/product/
+wenxinworkshop
+3https://huggingface.co/roberta-large
+Influence of Different LLMs As shown in Table
+2, we evaluate SPELL with different LLMs. With-
+out any especial adaptation, not every LLM could
+be utilized in SPELL. For example, BLOOMZ is
+not available because it can not reply following
+the hinted format. In addition, ERBIE-Bot per-
+forms the best while the test accuracy of Llama2-
+Chat-13B is higher than that of Llama2-Chat-7B.
+It seems that larger and better LLMs would have
+better performance. Thus, the LLM for generation
+is essential for SPELL.
+Configuration Train(%) Test(%)
+Base 100.0 89.2
+f itness=loss 71.9 69.4
+NP OP =2 100.0 88.9
+NP OP =50 100.0 87.0
+k=32 95.3 86.2
+k=64 92.2 90.7
+Figure 3: Accuracy vs. round with different seeds.
+Three seeds (41, 42 and 43) are considered. The top one
+is evaluated in Dtrain while the bottom one in Dtest.
+there exists a performance gap between Dtrain and
+Dtest. SPELL optimizes with fewer rounds than
+many black-box methods, such as BBT and RL-
+PROMPT (more than 3k rounds for prompts of
+only 5 tokens). In addition, it is worth noting that,
+due to the randomness of evolution process and text
+generation, SPELL is unstable with obvious fluc-
+tuations. In addition, the individual generation pro-
+cess is semantically causal and newborn prompts
+are coherent since it is spelled by the LLM token
+by token according to language modeling. For ex-
+ample, in SST-2, given the initial prompt "Classify
+the following sentence.", LLM would globally im-
+prove it to a new fluent one "Can you determine
+the sentiment of this sentence for me?" with clear
+reasons "...more concise and direct...emphasizes
+the task...more polite and conversational". A repro-
+duction example is shown in Figure 2.
+LLM Size(B) Train(%) Test(%)
+Llama2-Chat 7 100.0 89.2
+Llama2-Chat 13 96.9 90.0
+BLOOMZ 7 n/a n/a
+ERNIE-Bot n/a 100.0 90.7
+Table 2: Performance on various LLMs in SST-2. Two
+Llama2 (Touvron et al., 2023) models with different size
+are evaluated. BLOOMZ (Muennighoff et al., 2022)
+fails to generate individuals following instructions. The
+size of ERNIE-Bot (Baidu, 2023) is not available.
+Table 3: Results of ablation studies in SST-2.
+Base means the default settings (f itness=accuracy;
+NP OP =20; k=16). loss refers to the cross-entropy loss.
+Ablation Studies As shown in Table 3, we at-
+tempt to find out the impact of some meaningful
+factors. Even though previous methods usually
+utilize loss for optimization, we find that SPELL
+could not work well when f itness is set as loss.
+It may demonstrate that a pure LLM could not ef-
+fectively exploit the information contained in loss.
+Instead, our method could improve the population
+simply based on the accuracy. In addition, for the
+balance of exploration and greediness, the size of
+the population NP OP should be neither too small
+or large. Besides, larger Dtrain trends to obtain
+higher accuracy for better estimation.
+4 Conclusion and Discussion
+In this paper, we propose SPELL, a semantic
+prompt evolution method considering a LLM as
+a prompt generator. We demonstrate that the pro-
+posed method could globally optimize prompts
+quickly, the reproduction process is reasonable and
+new spelled prompts are coherent. Besides, we
+do some ablation studies for further investigation.
+Even if our method seems unstable, it shows huge
+latent capacity. Future work may focus on adjusting
+a LLM to be more adaptive for semantic prompt
+optimization, such as meta prompt optimization
+and parameter effective parameter-efficient align-
+ment, stabilizing the optimization, and expanding
+semantic evolution beyond text optimization.
+References
+Baidu. 2023. Ernie bot: Baidu’s knowledge-enhanced
+large language model built on full ai stack technol-
+ogy. http://research.baidu.com/Blog/
+index-view?id=183.
+Mingkai Deng, Jianyu Wang, Cheng-Ping Hsieh, Yi-
+han Wang, Han Guo, Tianmin Shu, Meng Song, Eric
+Xing, and Zhiting Hu. 2022. RLPrompt: Optimizing
+discrete text prompts with reinforcement learning.
+In Proceedings of the 2022 Conference on Empiri-
+cal Methods in Natural Language Processing, pages
+3369–3391, Abu Dhabi, United Arab Emirates. As-
+sociation for Computational Linguistics.
+Shizhe Diao, Zhichao Huang, Ruijia Xu, Xuechun Li,
+LIN Yong, Xiao Zhou, and Tong Zhang. 2023. Black-
+box prompt learning for pre-trained language models.
+Transactions on Machine Learning Research.
+Tianyu Gao, Adam Fisch, and Danqi Chen. 2021.
+Making pre-trained language models better few-shot
+learners. In Proceedings of the 59th Annual Meet-
+ing of the Association for Computational Linguistics
+and the 11th International Joint Conference on Natu-
+ral Language Processing (Volume 1: Long Papers),
+pages 3816–3830, Online. Association for Computa-
+tional Linguistics.
+Qingyan Guo, Rui Wang, Junliang Guo, Bei Li, Kaitao
+Song, Xu Tan, Guoqing Liu, Jiang Bian, and Yu-
+jiu Yang. 2023. Connecting large language models
+with evolutionary algorithms yields powerful prompt
+optimizers. arXiv preprint arXiv:2309.08532.
+Bairu Hou, Joe O’Connor, Jacob Andreas, Shiyu Chang,
+and Yang Zhang. 2023. PromptBoosting: Black-
+box text classification with ten forward passes. In
+Proceedings of the 40th International Conference
+on Machine Learning, volume 202 of Proceedings
+of Machine Learning Research, pages 13309–13324.
+PMLR.
+Menglin Jia, Luming Tang, Bor-Chun Chen, Claire
+Cardie, Serge Belongie, Bharath Hariharan, and Ser-
+Nam Lim. 2022. Visual prompt tuning. In Euro-
+pean Conference on Computer Vision, pages 709–
+727. Springer.
+Brian Lester, Rami Al-Rfou, and Noah Constant. 2021.
+The power of scale for parameter-efficient prompt
+tuning. In Proceedings of the 2021 Conference on
+Empirical Methods in Natural Language Processing,
+pages 3045–3059, Online and Punta Cana, Domini-
+can Republic. Association for Computational Lin-
+guistics.
+Junyi Li, Tianyi Tang, Wayne Xin Zhao, and Ji-Rong
+Wen. 2021. Pretrained language model for text gener-
+ation: A survey. In Proceedings of the Thirtieth Inter-
+national Joint Conference on Artificial Intelligence,
+IJCAI-21, pages 4492–4499. International Joint Con-
+ferences on Artificial Intelligence Organization. Sur-
+vey Track.
+Xiang Lisa Li and Percy Liang. 2021. Prefix-tuning:
+Optimizing continuous prompts for generation. In
+Proceedings of the 59th Annual Meeting of the Asso-
+ciation for Computational Linguistics and the 11th
+International Joint Conference on Natural Language
+Processing (Volume 1: Long Papers), pages 4582–
+4597, Online. Association for Computational Lin-
+guistics.
+Pengfei Liu, Weizhe Yuan, Jinlan Fu, Zhengbao Jiang,
+Hiroaki Hayashi, and Graham Neubig. 2023. Pre-
+train, prompt, and predict: A systematic survey of
+prompting methods in natural language processing.
+ACM Computing Surveys, 55(9):1–35.
+Xiao Liu, Kaixuan Ji, Yicheng Fu, Weng Tam, Zhengx-
+iao Du, Zhilin Yang, and Jie Tang. 2022. P-tuning:
+Prompt tuning can be comparable to fine-tuning
+across scales and tasks. In Proceedings of the 60th
+Annual Meeting of the Association for Computational
+Linguistics (Volume 2: Short Papers), pages 61–68,
+Dublin, Ireland. Association for Computational Lin-
+guistics.
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Man-
+dar Joshi, Danqi Chen, Omer Levy, Mike Lewis,
+Luke Zettlemoyer, and Veselin Stoyanov. 2019.
+Roberta: A robustly optimized bert pretraining ap-
+proach. arXiv preprint arXiv:1907.11692.
+Niklas Muennighoff, Thomas Wang, Lintang Sutawika,
+Adam Roberts, Stella Biderman, Teven Le Scao,
+M Saiful Bari, Sheng Shen, Zheng-Xin Yong, Hailey
+Schoelkopf, et al. 2022. Crosslingual generaliza-
+tion through multitask finetuning. arXiv preprint
+arXiv:2211.01786.
+Archiki Prasad, Peter Hase, Xiang Zhou, and Mohit
+Bansal. 2023. GrIPS: Gradient-free, edit-based in-
+struction search for prompting large language models.
+In Proceedings of the 17th Conference of the Euro-
+pean Chapter of the Association for Computational
+Linguistics, pages 3845–3864, Dubrovnik, Croatia.
+Association for Computational Linguistics.
+Guanghui Qin and Jason Eisner. 2021. Learning how
+to ask: Querying LMs with mixtures of soft prompts.
+In Proceedings of the 2021 Conference of the North
+American Chapter of the Association for Computa-
+tional Linguistics: Human Language Technologies,
+pages 5203–5212, Online. Association for Computa-
+tional Linguistics.
+Taylor Shin, Yasaman Razeghi, Robert L. Logan IV, Eric
+Wallace, and Sameer Singh. 2020. AutoPrompt: Elic-
+iting Knowledge from Language Models with Auto-
+matically Generated Prompts. In Proceedings of the
+2020 Conference on Empirical Methods in Natural
+Language Processing (EMNLP), pages 4222–4235,
+Online. Association for Computational Linguistics.
+Kihyuk Sohn, Huiwen Chang, José Lezama, Luisa Pola-
+nia, Han Zhang, Yuan Hao, Irfan Essa, and Lu Jiang.
+2023. Visual prompt tuning for generative transfer
+learning. In Proceedings of the IEEE/CVF Confer-
+ence on Computer Vision and Pattern Recognition
+(CVPR), pages 19840–19851.
+Mingchen Sun, Kaixiong Zhou, Xin He, Ying Wang,
+and Xin Wang. 2022a. Gppt: Graph pre-training
+and prompt tuning to generalize graph neural net-
+works. In Proceedings of the 28th ACM SIGKDD
+Conference on Knowledge Discovery and Data Min-
+ing, KDD ’22, page 1717–1727, New York, NY, USA.
+Association for Computing Machinery.
+Tianxiang Sun, Zhengfu He, Hong Qian, Yunhua Zhou,
+Xuanjing Huang, and Xipeng Qiu. 2022b. BBTv2:
+Towards a gradient-free future with large language
+models. In Proceedings of the 2022 Conference on
+Empirical Methods in Natural Language Processing,
+pages 3916–3930, Abu Dhabi, United Arab Emirates.
+Association for Computational Linguistics.
+Tianxiang Sun, Yunfan Shao, Hong Qian, Xuanjing
+Huang, and Xipeng Qiu. 2022c. Black-box tuning for
+language-model-as-a-service. In Proceedings of the
+39th International Conference on Machine Learning,
+volume 162 of Proceedings of Machine Learning
+Research, pages 20841–20855. PMLR.
+Tianxiang Sun, Yunfan Shao, Hong Qian, Xuanjing
+Huang, and Xipeng Qiu. 2022d. Black-box tuning for
+language-model-as-a-service. In International Con-
+ference on Machine Learning, pages 20841–20855.
+PMLR.
+Hugo Touvron, Louis Martin, Kevin Stone, Peter Al-
+bert, Amjad Almahairi, Yasmine Babaei, Nikolay
+Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti
+Bhosale, et al. 2023. Llama 2: Open founda-
+tion and fine-tuned chat models. arXiv preprint
+arXiv:2307.09288.
+Eric Wallace, Shi Feng, Nikhil Kandpal, Matt Gard-
+ner, and Sameer Singh. 2019. Universal adversarial
+triggers for attacking and analyzing NLP. In Proceed-
+ings of the 2019 Conference on Empirical Methods
+in Natural Language Processing and the 9th Inter-
+national Joint Conference on Natural Language Pro-
+cessing (EMNLP-IJCNLP), pages 2153–2162, Hong
+Kong, China. Association for Computational Linguis-
+tics.
+Alex Wang, Amanpreet Singh, Julian Michael, Felix
+Hill, Omer Levy, and Samuel R Bowman. 2018.
+Glue: A multi-task benchmark and analysis platform
+for natural language understanding. arXiv preprint
+arXiv:1804.07461.
+Chengrun Yang, Xuezhi Wang, Yifeng Lu, Hanxiao Liu,
+Quoc V Le, Denny Zhou, and Xinyun Chen. 2023.
+Large language models as optimizers. arXiv preprint
+arXiv:2309.03409.
+Zixuan Yi, Iadh Ounis, and Craig Macdonald. 2023.
+Contrastive graph prompt-tuning for cross-domain
+recommendation. ACM Transactions on Information
+Systems.
+Ningyu Zhang, Luoqiu Li, Xiang Chen, Shumin Deng,
+Zhen Bi, Chuanqi Tan, Fei Huang, and Huajun Chen.
+2022. Differentiable prompt makes pre-trained lan-
+guage models better few-shot learners. In Interna-
+tional Conference on Learning Representations.
+Tianjun Zhang, Xuezhi Wang, Denny Zhou, Dale Schu-
+urmans, and Joseph E. Gonzalez. 2023. TEMPERA:
+Test-time prompt editing via reinforcement learning.
+In The Eleventh International Conference on Learn-
+ing Representations.
+Wayne Xin Zhao, Kun Zhou, Junyi Li, Tianyi Tang,
+Xiaolei Wang, Yupeng Hou, Yingqian Min, Beichen
+Zhang, Junjie Zhang, Zican Dong, et al. 2023. A
+survey of large language models. arXiv preprint
+arXiv:2303.18223.
+A Other Settings
+Task itask
+SST-2 "The task is to classify the sentiment of a sen-
+tence from movie reviews. Here are 2 classes
+({negative}/{positive})."
+RTE "The task is to classify the relationship between
+sentence1 and sentence2. Here are 2 classes
+({yes}/{no}). {yes} means the relationship is
+entailment, the meaning of one sentence is en-
+tailed (can be inferred) from the other sentence,
+otherwise {no}."
+Task Iini
+SST-2 "Classify the following sentence."
+RTE "Classify whether the relationship between the
+following sentence1 and sentence2 is entail-
+ment."
+Table 4: A list of itask and Iini in the experiments.
+B On the Contemporaneous Works
+We discuss on two recent and similar contempo-
+raneous works which utilize a LLM as a prompt
+generator/optimizer as well. It is worth noticing
+that OPRO and EVOPROMPT perform rather
+well while SPELL (ours) does not. Moreover,
+there’s overlap between the datasets on which
+EVOPROMPT is evaluated and those of ours.
+Considering the difference of the target model,
+we think the reason may be that the accuracy
+is originally higer when the target model is a
+LLM, and that the improved prompts gener-
+ated by a LLM could not be well "understood"
+by a relatively small language model. In addition,
+the comparisons of OPRO and EVOPROMPT with
+SPELL (ours) are illustrated in detail as follows:
+OPRO (Yang et al., 2023) The target model of
+OPRO is a LLM while that of SPELL is a much
+smaller language model. Besides, we think the key
+difference is that OPRO constructs a prompt-score
+trajectory of prompts to update the prompts while
+SPELL (ours) introduces selection and reproduc-
+tion with randomness from evolution algorithm for
+prompt improvement.
+EVOPROMPT (Guo et al., 2023) EVO-
+PROMPT and SPELL are really similar. EVO-
+PROMPT includes evolution algorithm as well and
+further apply differential evolution with a LLM.
+EVOPROMPT separately designs the crossover
+and mutation operators while SPELL (ours) con-
+sists of one general operator for reproduction. Be-
+sides, the target model of EVOPROMPT is a LLM.

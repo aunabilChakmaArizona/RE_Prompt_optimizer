@@ -1,0 +1,38 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[
+  paperwidth=8.5in,
+  paperheight=11in,
+  margin=0.5in
+]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+
+\newcommand{\tacred}{FS-TACRED}
+\newcommand{\qwensmall}{Qwen3-4B}
+\newcommand{\gemmasmall}{Gemma3-4B}
+
+\begin{document}
+
+Here is the short overview of the experiment that I explored this week:\\
+
+The goal is to use both "natural language based gradient descent" and "pure gradients based" prompt  optimization in the pipeline.
+The idea is to optimize the prompt using the former one at first since it can optimize quickly (i.e. using few iterations it can reach near optimal region), 
+then apply pure gradient based optimization (smaller and slower improvements but more likely to improve at the near optimal region).
+
+\paragraph{Gradient based optimization.} We first locate some regions (a series of tokens, usually length of 1) where the gradients are highest.
+Then generate some candidate replacements of those regions by two ways: 1) prompting LLM to suggest simplest replacements 2) use LM probability to generate candidates for those region.
+After we get all the candidates, we place it into the prompt and validate the prompt.
+
+I am still running the experiments. Hopefully, in the meeting, I can show the preliminary results and discuss the method in more details.
+
+
+% \bibliographystyle{plain}  
+% \bibliography{custom}    
+
+\end{document}

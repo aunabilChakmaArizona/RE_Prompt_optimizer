@@ -1,0 +1,66 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[
+  paperwidth=8.5in,
+  paperheight=11in,
+  margin=0.5in
+]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+
+\newcommand{\tacred}{FS-TACRED}
+\newcommand{\qwensmall}{Qwen3-4B}
+\newcommand{\gemmasmall}{Gemma3-4B}
+
+\begin{document}
+
+\paragraph{Algorithm of the new approach on top of the Error Taxonomy}
+\begin{enumerate}
+    \item Run initial prompt on validation set and collect errors.
+    \item Build error taxonomy and group errors into categories.
+    \item Select important categories based on frequency and coverage.
+    \item Split categories into multiple overlapping clusters.
+    \item For each cluster (having a category set):
+    \begin{itemize}
+        \item Generate few prompts by updating the initial prompt and keep the best one.
+    \end{itemize}
+    \item Select top prompts (each prompt comes from different clusters) based on their evaluation score and use them for inference.
+\end{enumerate}
+
+\paragraph{Experiment Settings of Baseline (Error Taxonomy):}
+\begin{itemize}
+    \item Select top 7 categories or enough to reach 70\% coverage of error counts.
+    \item Generate 15 prompts.
+    \item Select best 3 prompts for inference.
+\end{itemize}
+
+\paragraph{Experiment Settings of Clustered Approach:}
+\begin{itemize}
+    \item Use same selected categories by the baseline above.
+    \item Divide the categories into 5 overlapping clusters.
+    \item Generate 3 prompts per cluster (total = 15).
+    \item Keep best 1 prompt per cluster.
+    \item Select best 3 cluster prompts for inference.
+\end{itemize}
+
+\paragraph{Additional Details:}
+\begin{itemize}
+    \item Both methods generate 15 prompts (fair comparison).
+    \item Each experiment is run 3 times and averaged the metrics.
+    \item Also tested with broader setting: top 10 categories or up to 90\% coverage.
+    \item Model usage: Qwen3-14B for error category generation and Qwen3-4B for inference.
+\end{itemize}
+
+\paragraph{Results} The clustered approach shows a small improvement based on the avg. of 3 runs.
+For the default setting, F1 improves from 31.9 to 33.28.
+For the broader setting (more errors used), F1 improves from 28.1 to 28.21.
+
+% \bibliographystyle{plain}  
+% \bibliography{custom}    
+
+\end{document}

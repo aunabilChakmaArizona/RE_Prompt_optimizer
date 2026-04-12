@@ -1,0 +1,201 @@
+Prompt offspring generation summary for all PDFs in this folder
+
+1. Better Zero-Shot Reasoning with Self-Adaptive Prompting (COSP)
+
+Simple overview
+This paper is not really evolving instruction text from parent prompts. Instead, it first asks the model to solve many questions with zero-shot CoT, collects those generated question-rationale-answer triples, and then selects the best self-generated demonstrations. The "new prompt" is made by prepending a selected set of these demonstrations to each test question. So the offspring is a new prompted context built from good self-generated demos, not a rewritten instruction.
+
+Simple pseudocode
+1. Run zero-shot CoT on each question multiple times.
+2. Keep candidate demos that support the majority answer.
+3. Score demos by low answer entropy, low repetition, and diversity.
+4. Greedily pick K demos.
+5. Build a new prompt = selected demos + current question.
+6. Run the model again with this new prompt.
+
+
+2. Error Taxonomy-Guided Prompt Optimization (ETGPO)
+
+Simple overview
+This paper does not generate many offspring prompts from parent prompts. It runs the base prompt on validation problems, collects failures, groups them into an error taxonomy, then asks an optimizer LLM to write targeted guidance for the most common error categories. The new prompt is basically the old prompt plus a generated preamble plus generated guidance blocks. So offspring creation is "append error-fixing guidance" rather than mutate/crossover a population.
+
+Simple pseudocode
+1. Run base prompt on validation set multiple times.
+2. Collect failed traces.
+3. Cluster failures into error categories with an LLM.
+4. Pick the top error categories.
+5. Ask the LLM to write guidance for each category.
+6. New prompt = old prompt + preamble + guidance texts.
+
+
+3. EvoPrompt
+
+Simple overview
+This is a true evolutionary method. It keeps a population of prompts, selects parents based on fitness, and uses the LLM itself to perform crossover and mutation. In the GA version, the LLM first combines two parent prompts, then mutates the merged result. In the DE version, it first finds the differing parts between prompts, mutates those differing parts, injects them into a strong prompt, and then does crossover with a base prompt.
+
+Simple pseudocode
+1. Start with a population of prompts.
+2. Score each prompt on a dev set.
+3. Select parent prompts, usually favoring higher-scoring ones.
+4. If GA:
+   - LLM crossover(parent1, parent2)
+   - LLM mutate(offspring)
+5. If DE:
+   - find differing parts between parent prompts
+   - mutate those parts
+   - merge them into a strong prompt
+   - crossover with a base prompt
+6. Score offspring.
+7. Keep the best prompts for the next generation.
+
+
+4. GEPA
+
+Simple overview
+GEPA creates offspring by reflectively mutating one prompt inside a larger multi-module system. It selects a promising candidate system, chooses one module prompt to update, gathers rollout traces and feedback, and asks an LLM to reflect on what went wrong or right. The offspring prompt is a rewritten version of that module prompt based on these reflections. The paper also mentions optional crossover/merge between candidates, but the main offspring generator is reflection-guided mutation.
+
+Simple pseudocode
+1. Pick a promising candidate system from the pool.
+2. Choose one module prompt to improve.
+3. Run the system on a minibatch and collect traces and feedback.
+4. Ask the LLM to reflect on the traces.
+5. Rewrite that module prompt using the reflection.
+6. Create offspring system by replacing only that module prompt.
+7. Keep the offspring if it improves minibatch performance.
+
+
+5. MIPRO
+
+Simple overview
+MIPRO is not mainly a parent-to-child mutation method. It first bootstraps candidate few-shot demo sets from successful traces, then uses a proposer LLM to generate candidate instructions for each module using dataset summaries, program summaries, previous instructions, demos, and prompt tips. After that, Bayesian optimization searches over combinations of these instruction candidates and demo candidates. So the "offspring" is usually a new combination of proposed instruction candidates plus bootstrapped demos, not a direct mutation of a parent prompt.
+
+Simple pseudocode
+1. Bootstrap successful few-shot demos from model traces.
+2. Summarize dataset and program.
+3. Ask proposer LLM to generate instruction candidates.
+4. Build candidate prompt sets = instruction choices + demo choices.
+5. Use Bayesian optimization to try different combinations.
+6. Evaluate each combination on minibatches.
+7. Return the best full combination.
+
+
+6. OPRO
+
+Simple overview
+OPRO does not explicitly do crossover or mutation. It shows the optimizer LLM a history of previously tried prompts and their scores, plus task exemplars and meta-instructions such as "generate a different instruction with higher score." The LLM then proposes new prompts by pattern-matching over the trajectory of past good prompts. So offspring generation is trajectory-conditioned proposal, not operator-based evolution.
+
+Simple pseudocode
+1. Keep a history of prompts and scores.
+2. Build a meta-prompt with:
+   - task description and exemplars
+   - past prompts and scores
+   - instruction to generate a better, different prompt
+3. Sample several new prompts from the optimizer LLM.
+4. Evaluate them.
+5. Add them to history.
+6. Repeat.
+
+
+7. PDO
+
+Simple overview
+PDO keeps a candidate pool and uses pairwise prompt duels to decide which prompts are stronger. Every few rounds, it takes the current top prompt and mutates it to create new prompts. The paper leaves the mutation tool flexible: template edits, text-gradient-style edits, or LLM rewrites. In the appendix, the practical version uses prompt tips to make local edits such as changing tone, wording, or adding synthetic few-shot examples. So offspring comes from local mutation of the current champion.
+
+Simple pseudocode
+1. Start with an initial prompt pool.
+2. Use pairwise duels to estimate which prompts are strongest.
+3. Periodically pick the top prompt.
+4. Mutate it with local edits or LLM rewrite tips.
+5. Add the mutated prompt to the pool.
+6. Optionally prune weak prompts.
+7. Repeat until the best prompt stabilizes.
+
+
+8. ReflectivePrompt
+
+Simple overview
+This is an evolutionary prompt optimizer built around reflection. It starts from one input prompt, creates an initial population by rephrasing it, then selects parent pairs with roulette-wheel selection. Before creating children, it asks the LLM for short-term and long-term reflective hints about how prompts should be improved. Those hints guide crossover and elitist mutation. A key detail is that the model itself decides what kind of edit to make, such as replacing words, changing phrasing, adding words, or deleting words.
+
+Simple pseudocode
+1. Rephrase the initial prompt to create a population.
+2. Score all prompts.
+3. Select parent pairs with probability based on fitness.
+4. Generate short-term reflection from current parents.
+5. Generate long-term reflection from accumulated history.
+6. Use those reflections to guide crossover.
+7. Mutate offspring, letting the LLM choose the edit style.
+8. Keep strong prompts and preserve elites.
+
+
+9. ReEvo
+
+Simple overview
+This paper is not directly about prompt optimization; it evolves heuristic code/functions. But the offspring logic is very clear: select two parent heuristics, ask a reflector LLM to compare them and produce short-term hints, then ask a generator LLM to create an offspring heuristic using both parents plus the hints. Separately, it maintains long-term reflections and uses them to mutate the current elite heuristic by sampling several improved variants. So offspring is created by reflection-guided crossover and elite mutation.
+
+Simple pseudocode
+1. Select two successful parent heuristics.
+2. Reflect on their differences and relative strengths.
+3. Generate one crossover offspring using both parents + reflection.
+4. Update long-term reflection memory.
+5. Take the current best heuristic.
+6. Mutate it using long-term reflection hints.
+7. Evaluate children and keep the better ones.
+
+
+10. SPELL
+
+Simple overview
+SPELL is a cleaner population-based prompt evolution method. For each child, it selects several parent prompts with roulette selection, shows those parents and their scores to an LLM, and asks it to generate one new and better prompt. The meta-prompt explicitly suggests edits like replacing words, changing voice, adding words, or deleting words. Unlike EvoPrompt, it does not separate crossover and mutation into distinct stages; the LLM performs one semantic global rewrite that mixes inheritance and variation together.
+
+Simple pseudocode
+1. Keep a population of prompts.
+2. Score prompts on the task.
+3. Select parent prompts with roulette selection.
+4. Build a meta-prompt containing:
+   - task description
+   - parent prompts
+   - parent scores
+   - instruction to generate one better prompt
+5. Ask the LLM for one new prompt.
+6. Add offspring to candidate set.
+7. Select the next population from parents + offspring.
+
+
+11. Self-supervised Prompt Optimization (SPO)
+
+Simple overview
+SPO is not population-based evolution. It keeps the current best prompt, runs it on a few sampled questions, and uses the outputs themselves as optimization guidance. Then an optimization LLM reads the current prompt, the task requirements, and sample outputs, and writes one improved prompt. A judge LLM compares outputs from the old and new prompts; if the new one is better, it becomes the new parent for the next round.
+
+Simple pseudocode
+1. Start with an initial prompt.
+2. Run it on a few sampled questions.
+3. Give the prompt + outputs to an optimizer LLM.
+4. Ask for one improved prompt.
+5. Run the improved prompt.
+6. Compare old outputs vs new outputs with a judge LLM.
+7. If new prompt wins, replace the current best prompt.
+8. Repeat.
+
+
+12. Teach Better or Show Smarter? On Instructions and Exemplars in Automatic Prompt Optimization
+
+Simple overview
+This paper mainly argues that exemplar optimization matters a lot. For offspring generation, the important part is their mutation-based exemplar optimizer. After getting a good instruction, they collect model-generated correct input-output traces and treat them as exemplar candidates. They start with random exemplar sets, then in later generations mutate the best exemplar combination by swapping one exemplar out for another candidate example. So the "offspring prompt" is usually the same instruction plus a newly mutated set of exemplars.
+
+Simple pseudocode
+1. Pick an instruction, either seed or optimized.
+2. Collect correct model-generated traces as exemplar candidates.
+3. Initialize several exemplar sets randomly.
+4. Evaluate each exemplar set with the instruction.
+5. Keep the best exemplar set.
+6. Create offspring sets by swapping one exemplar in/out.
+7. Re-evaluate and keep the best mutated set.
+8. Final prompt = chosen instruction + chosen exemplars.
+
+
+Short takeaways across papers
+
+- OPRO, SPO, ETGPO, and MIPRO are not classic genetic evolution. They create new prompts by history-based proposal, self-critique/output-guided rewriting, appending guidance, or searching over candidate instruction/demo combinations.
+- EvoPrompt, SPELL, ReflectivePrompt, and partly GEPA are the clearest true prompt-evolution papers.
+- ReEvo is the clearest reflection-guided evolutionary template, but it evolves heuristics rather than prompt text directly.
+- Teach Better and COSP mostly evolve the prompt context/examples, not just the instruction sentence.

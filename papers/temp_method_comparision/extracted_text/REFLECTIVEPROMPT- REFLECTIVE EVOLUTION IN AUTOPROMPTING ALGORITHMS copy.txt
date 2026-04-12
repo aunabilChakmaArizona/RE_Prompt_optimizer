@@ -1,0 +1,334 @@
+REFLECTIVEPROMPT: REFLECTIVE EVOLUTION IN
+AUTOPROMPTING ALGORITHMS
+Viktor N. Zhuravlev Artur R. Khairullin Ernest A. Dyagin Alena N. Sitkina Nikita I. Kulin
+Computer Technologies Laboratory
+ITMO University
+Saint-Petersburg, Russia
+334857@niuitmo.ru 242106@niuitmo.ru 368983@niuitmo.ru
+arXiv:2508.18870v1 [cs.CL] 26 Aug 2025
+August 27, 2025
+ABSTRACT
+Autoprompting is the process of automatically selecting optimized prompts for language models,
+which has been gaining popularity with the rapid advancement of prompt engineering, driven by
+extensive research in the field of large language models (LLMs). This paper presents Reflective-
+Prompt1 — a novel autoprompting method based on evolutionary algorithms that employs a reflective
+evolution approach for more precise and comprehensive search of optimal prompts. ReflectivePrompt
+utilizes short-term and long-term reflection operations before crossover and elitist mutation to en-
+hance the quality of the modifications they introduce. This method allows for the accumulation of
+knowledge obtained throughout the evolution process and updates it at each epoch based on the
+current population. ReflectivePrompt was tested on 33 datasets for classification and text generation
+tasks using open-access large language models: t-lite-instruct-0.1 and gemma3-27b-it. The method
+demonstrates, on average, a significant improvement (e.g., 28% on BBH compared to EvoPrompt) in
+metrics relative to current state-of-the-art approaches, thereby establishing itself as one of the most
+effective solutions in evolutionary algorithm-based autoprompting.
+Keywords AutoPrompting· LLM· NLP· Reflective Evolution· prompt
+1 Introduction
+Large Language Models (LLMs) have demonstrated significant results in solving Natural Language Processing (NLP)
+tasks [34, 11]. Prompting and prompt engineering are universal methods for improving the performance of LLMs
+that do not require access to model weights and gradients during training. Instead, they enhance the efficiency of
+LLM inference by providing carefully crafted and well-structured instructions (prompts) as input to the model [18].
+Currently, there are many different prompting techniques, such as Few-Shot [2], Role-Based [33], Chain-of-Thought
+[35], Plan-and-Solve [32], and others. What all these techniques have in common is that they can be time-consuming to
+manually create, iterate, and optimize, often requiring expert knowledge and experience. The reason for this is that
+models are highly sensitive to input data, necessitating careful and precise application of these techniques [14].
+Autoprompting addresses this issue by automating the generation and selection of prompts [28]. It is based on
+various optimization methods and principles, including reinforcement learning, evolutionary, gradient-based, and
+gradient-free approaches, among others [28, 13, 8, 22]. In particular, prompt optimization can be either discrete or
+continuous [26]. Continuous optimization involves representing the prompt as a numerical tensor, while discrete
+optimization treats the prompt as a sequence of tokens. The latter approach offers several advantages: it does not require
+derivative computations, meaning there is no need to access the model’s internal parameters and gradients. This allows
+working with black-box models and avoids additional computational overhead [19]. Additionally, it preserves prompt
+1Code available as a part of CoolPrompt framework library: https://github.com/CTLab-ITMO/CoolPrompt/
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+interpretability, enabling humans to analyze and edit them [19], and allows optimization for any metric (including
+non-differentiable ones) [8, 15, 21, 6].
+However, this approach also has challenges: the optimization space for prompts is vast, and prompts generated through
+search methods may lack diversity [8]. Nevertheless, there are numerous heuristic optimization algorithms that employ
+stochastic strategies, making the optimization process less sensitive to local optima. Evolutionary algorithms are one
+such example [4].
+In this work, we analyzed the Reflective Evolution algorithm [36] and integrated it to address the problem of automatic
+prompt generation. The resulting solution, called ReflectivePrompt, was tested on 33 datasets to demonstrate its
+effectiveness compared to existing methods.
+1.1 Evolutionary algorithms
+Evolutionary algorithms are a family of optimization methods based on the principles of biological evolution: natural
+selection, mutation, crossover, and inheritance. These algorithms operate with populations of solutions, gradually
+improving them according to a given fitness function [18]. Among such algorithms, the genetic algorithm [9] can be
+distinguished, which works with gene sequences (in our case, sequences of phrases in prompts). Within this algorithm,
+starting with an initial population of individuals, selection, crossover of selected individuals (creating offspring based on
+a combination of parental information), mutation of the offspring (random modification of certain parts), and population
+update based on offspring evaluations are performed iteratively.
+This approach is highly flexible when applied to problems from various domains. The usage of evolutionary operators
+(crossover, mutation) and population-based search reduces the risk of getting stuck in local optima, maintaining a
+balance between exploring new solutions and exploiting existing ones, thereby leading to a high diversity of individuals
+in the final population while ensuring their quality according to the objective function remains high [8, 15, 21, 6].
+1.2 Related works
+One solution employing genetic algorithms is EvoPrompt [8]. The improvement of the candidate prompt population
+occurs iteratively through selection, evolution (generation of new candidates using evolutionary operators), and
+population updates based on the evaluation of new candidates. The implementation of evolutionary operators (mutation
+and crossover) is achieved through queries to an LLM, enabling the utilization of its expertise in solving NLP tasks
+while maintaining prompt readability. During new candidate generation, two parents are first selected from the previous
+population using roulette-wheel selection (selection phase) [16], followed by the application of crossover and subsequent
+mutation of the resulting offspring. The study also presents a differential evolution algorithm [23], which involves
+mutating different segments of two donor prompts from the same population, combining them with a mutating candidate,
+and performing crossover with the current best prompt. The authors’ position EvoPrompt as a general framework for
+integrating LLMs into evolutionary algorithms, with experimental results demonstrating that differential evolution
+exhibits superior performance on more complex tasks.
+SPELL [15] employs a genetic algorithm operating iteratively through repeated reproduction and selection steps, where
+selection is performed via roulette-wheel while reproduction involves generating offspring based on a list of parent
+prompts and their corresponding scores. Notably, although reproduction is also conducted through LLM queries, this
+solution lacks explicit separation between crossover and mutation. Instead, it utilizes a predefined prompt instructing
+modifications to the parent prompt set (replacing, adding, or deleting words, altering tone) to generate offspring.
+An alternative approach implemented in Plum [21] is based on metaheuristics. Unlike EvoPrompt’s prompt mu-
+tation methodology, Plum explicitly defines a set of prompt modification operations: adding, deleting, rephrasing
+words/phrases, or swapping their positions, thereby generating multiple neighboring prompts. The solution architecture
+comprises: a well-defined set of neighboring prompts for each prompt, a metaheuristic algorithm with its inherent
+hyperparameters, and auxiliary functions (including crossover). The study examines six algorithms: hill climbing
+[10], simulated annealing [25], genetic algorithm (two variants - with mutation and crossover, and mutation-only) [9],
+tabu search [5], and harmony search [31]. Each algorithm performs candidate mutation through the application of
+predefined modification operations, enabling exploration within the discrete prompt space. It should be noted that only
+the rephrasing operation is executed via LLM queries, while other operations are performed manually. As described by
+the authors, experimental results demonstrate this approach’s capability to identify novel structural prompt modifications
+that enhance performance.
+In Promptbreeder [6] paper, the authors propose an extended genetic algorithm mutation approach incorporating
+predefined mutation prompts and "thinking styles" (concise descriptions of cognitive strategies, e.g., "Let’s think step by
+step"), in addition to utilizing Chain-of-Thought [35] and Plan-and-Solve [32] techniques. At each iteration, candidates
+2
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+are improved through the application of a randomly selected mutation from a uniform distribution. The authors identify
+five mutation classes: direct mutation, hypermutation, estimation of distribution mutation [20], Lamarckian mutation
+[24], and prompt crossover/context shuffling. The first two classes further include zero-order and first-order mutations,
+totaling ten distinct mutations, each implemented through LLM queries. First-order direct mutation modifies candidates
+using specific mutation prompts, while zero-order mutation utilizes the initial problem statement to address method
+divergence. When problem specifications lack precision, Lamarckian mutation facilitates prompt reconstruction based
+on the last output yielding correct results. The algorithm’s key innovation involves hypermutation, which modifies the
+mutation prompts themselves (via hypermutation prompts), thereby enhancing not only prompt solutions but also the
+improvement mechanisms. According to the authors, this diversity of operators enables continuous reformulation and
+representation of problems by LLMs, leading to more effective solutions [6]. This approach demonstrates adaptability
+across various domains while optimizing prompts and preserving their interpretability.
+2 ReflectivePrompt
+2.1 Reflective Evolution
+Reflective evolution is an approach described in the article ReEvo: Large Language Models as Hyper-Heuristics with
+Reflective Evolution [36]. Its essence lies in using a language model to generate prompts aimed at enhancing the
+efficiency of mutation and crossover operations. The processes of prompt creation are referred to as short-term and
+long-term reflection. According to the authors, such reflective actions can be interpreted as obtaining a "verbal gradient"
+within the prompt space. Short-term reflection involves generating crossover prompts based solely on the current parent
+population, while long-term reflection, as the name suggests, entails accumulating knowledge, dependencies, and
+methods for improving efficiency throughout the entire evolutionary operation.
+The application of reflection helps guide the direction of mutation and crossover operations while also expanding
+the search space, potentially moving beyond the initial population’s predefined prompt space. In the original article,
+this approach was successfully applied to solving problems such as Guided Local Search (GLS) [30], Ant Colony
+Optimization (ACO) [3], Electronic Design Automation (EDA) [27], the Decap Placement Problem (DPP) [12], the
+Traveling Salesman Problem (TSP) [7], and other combinatorial optimization tasks.
+2.2 Proposed solution
+In this study we developed a novel approach that combines methods of reflective evolution with large language models
+for the automatic generation of higher-quality prompts — ReflectivePrompt. ReflectivePrompt employs short-term and
+long-term reflection operations for subsequent use in crossover and elitist mutation. All performed operations and their
+corresponding queries to the language model were modified and refined to directly optimize prompts.
+Specifically, the beginning of each instruction was changed to: "You are an expert in the domain of optimization
+prompts. Your task is to give hints to design better prompts." This adjustment is motivated by the specifics of the
+autoprompting task, for which reflective evolution was applied. Techniques describing possible modification operations
+performed during crossover and mutation, previously used in the SPELL algorithm, were incorporated. Thus, the
+following was added to the model queries defining short-term and long-term reflection: "For example, you can try to
+recommend word replacements, active/positive voice conversions, adding words, or deleting words." This enables the
+LLM to generate more precise, well-described hints that affect not only the semantic content of prompts but also their
+structural aspects.
+ReflectivePrompt simplifies user interaction by generating an initial population of prompts based on just a single input
+prompt. In this approach, the prompt is rephrased using the LLM and structured output techniques [17].
+A key feature of ReflectivePrompt is delegating the decision on the specifics of mutation to the model itself. In
+previously described solutions, the mutation type was either predefined and fixed or randomly selected from a uniform
+distribution. In this approach, however, the model generates hints autonomously and tends to decide whether to apply
+structural transformations to the prompt or only modify its semantic meaning and phrasing.
+When performing crossover and mutation operations, the LLM is provided with a brief task description, which helps
+generate more problem-targeted prompts while preserving the logical structure of the instruction. Empirical observations
+have shown that even large models can achieve decent metric values using prompts that are partially or entirely irrelevant
+to the task. As a result, the final prompts may deviate significantly from the intended meaning. ReflectivePrompt avoids
+this issue and, in the vast majority of cases, generates semantically correct prompts that are more comprehensible to
+human perception and logic.
+The general scheme of reflective evolution within ReflectivePrompt is illustrated in Figure 1.
+3
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+Figure 1: The Reflective Evolution pipeline in ReflectivePrompt
+Particular attention should be paid to the two selection operations. The parent population selection of prompts chooses
+pairs of parent prompts from the current population. In this process, each prompt can be included in multiple parent
+pairs. The main constraint, which is related to the original reflective evolution algorithm, is that prompts in a parent pair
+must have different fitness function values. Parent selection is performed using the roulette-wheel method [16]. The
+probability vector for being selected for each individual is represented by the normalized vector of their fitness scores.
+The second selection operation, which mimics the survival of the fittest, also employs the roulette-wheel method, but in
+this case, the probabilities are obtained by applying a softmax operation with a temperature of 0.1 to the fitness function
+value vector. This temperature value yields a less uniform distribution in cases where all prompts have approximately
+similar scores, thereby increasing the probability of selection for individuals with higher fitness values.
+Another crucial aspect is the preservation of elite individuals in the population. Before the start of each epoch, the
+individual that has demonstrated the best performance throughout the entire evolutionary process is reintroduced into
+the population, even if it was not selected at the end of the previous iteration. This approach enhances the algorithm’s
+convergence speed, as the best individuals are not lost over time due to unfavorable selection outcomes.
+The examples of ReflectivePrompt optimization are shown in Figures 2 and 3.
+Figure 2: The optimized prompt for SST-2 dataset
+4
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+Figure 3: The optimized prompt for BBH/logical_deduction_three_objects
+3 Experimental Evaluation
+3.1 Experimental Setup
+ReflectivePrompt was evaluated on 33 datasets for text classification and generation tasks. As baselines and reference
+points for comparison, we used results from EvoPrompt, SPELL, PromptBreeder, and Plum. The autoprompting
+algorithms were executed using large language models from different families and sizes (t-lite-instruct-0.1, gemma3-
+27b-it [29]). This choice of LLMs was made due to the use of open source white-box models which are more
+user-friendly and can be utilized by everyone. Also the significant difference in the number of model parameters leads
+to better testing coverage and makes our results more unbiased.
+5
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+3.2 Classification tasks
+For classification tasks, the following datasets and benchmarks were used: MNLI, MR, SST-2, YAHOO, and BBH (a
+subset of datasets with strictly formatted answers that can be treated as classification tasks). The metric selected for
+evaluation and optimization during evolution was the F1-score. The results of each method are presented in Figures 4-5.
+Figure 4: Histogram of F1-score values. Model: t-lite-instruct-0.1
+Figure 5: Histogram of F1-score values. Model: gemma3-27b-it
+3.3 Generation tasks
+ReflectivePrompt and its counterparts were evaluated on the following datasets: BBH (dyck_languages, multi-
+step_arithmetic_two, object_counting, word_sorting), GSM8K, and SamSUM. The metric used for evaluation and
+optimization was METEOR. The main results are shown in Figures 6-7.
+6
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+Figure 6: Histogram of METEOR scores for text generation datasets. Model: t-lite-instruct-0.1
+Figure 7: Histogram of METEOR scores for text generation datasets. Model: gemma3-27b-it
+4 Discussion
+The conducted experiments demonstrate that ReflectivePrompt effectively handles both classification and text generation
+tasks. Across all evaluated datasets, ReflectivePrompt either outperformed or matched the performance of existing
+evolutionary algorithm-based autoprompting methods. The method showed particularly strong results on the BBH
+benchmark, comprising 23 classification tasks and 4 text generation tasks. For classification tasks, the average F1-score
+improved by 6.59% on the t-lite-instruct-0.1 model and by 0.96% on the gemma3-27b-it model. In text generation tasks,
+the average METEOR score increased by 33.34% on the t-lite-instruct-0.1 model (comparisons and improvements
+were calculated relative to the maximum average metrics achieved by existing solutions). It should be noted that
+ReflectivePrompt’s performance significantly depends on the underlying LLM. The effectiveness of reflective evolution
+relies on the quality of generated hints, and weaker language models may produce suggestions that are not fully relevant
+to the optimization task. This work creates a scope for future research into reflective evolution for autoprompting
+applications. The current ReflectivePrompt implementation could potentially be further refined for more targeted prompt
+optimization. Moreover, the concept of reflective evolution could be generalized and adapted to other metaheuristic
+optimization algorithms, representing a promising direction for future studies. For example, there was a recent research
+where reflective prompt evolution outperforms reinforcement learning on a group of benchmarks [1].
+7
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+5 Conclusion
+The proposed ReflectivePrompt algorithm, which employs reflective evolution for prompt optimization, was evaluated
+on 33 datasets covering various natural language processing domains. It demonstrated consistent improvements over
+existing evolutionary algorithm-based autoprompting methods. ReflectivePrompt proves to be a competitive solution,
+showing that exploring reflective evolution for autoprompting can yield significant benefits and advance current methods
+to new levels of performance.
+References
+[1] Lakshya A Agrawal, Shangyin Tan, Dilara Soylu, Noah Ziems, Rishi Khare, Krista Opsahl-Ong, Arnav Singhvi,
+Herumb Shandilya, Michael J Ryan, Meng Jiang, Christopher Potts, Koushik Sen, Alexandros G. Dimakis,
+Ion Stoica, Dan Klein, Matei Zaharia, and Omar Khattab. Gepa: Reflective prompt evolution can outperform
+reinforcement learning, 2025.
+[2] Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Nee-
+lakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger,
+Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse,
+Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam
+McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners, 2020.
+[3] M. Dorigo, V. Maniezzoa, and A. Colorni. Ant system: Optimization by a colony of cooperating agents. IEEE
+Transactions on Systems, Man, and Cybernetics, 26(1):29–41, january 1996.
+[4] Eiben A. E. and Smith J. E. Introduction to evolutionary computing. Springer, 2015.
+[5] Glover F. Future paths for integer programming and links to artificial intelligence. Computers & operations
+research, 13(5):533–549, january 1986.
+[6] Chrisantha Fernando, Dylan Banarse, Henryk Michalewski, Simon Osindero, and Tim Rocktäschel. Promptbreeder:
+Self-referential self-improvement via prompt evolution, 2023.
+[7] Amey Gohil, Manan Tayal, Tezan Sahu, and Vyankatesh Sawalpurkar. Travelling salesman problem: Parallel
+implementations & analysis, 2022.
+[8] Qingyan Guo, Rui Wang, Junliang Guo, Bei Li, Kaitao Song, Xu Tan, Guoqing Liu, Jiang Bian, and Yujiu Yang.
+Evoprompt: Connecting llms with evolutionary algorithms yields powerful prompt optimizers, 2025.
+[9] Holland J. H. Genetic algorithms. Scientific American, 267(1):66–73, july 1992.
+[10] Russell S. J. and Norvig P. Artificial intelligence: a modern approach. Pearson, 2016.
+[11] Saurav Kadavath, Tom Conerly, Amanda Askell, Tom Henighan, Dawn Drain, Ethan Perez, Nicholas Schiefer,
+Zac Hatfield-Dodds, Nova DasSarma, Eli Tran-Johnson, Scott Johnston, Sheer El-Showk, Andy Jones, Nelson
+Elhage, Tristan Hume, Anna Chen, Yuntao Bai, Sam Bowman, Stanislav Fort, Deep Ganguli, Danny Hernandez,
+Josh Jacobson, Jackson Kernion, Shauna Kravec, Liane Lovitt, Kamal Ndousse, Catherine Olsson, Sam Ringer,
+Dario Amodei, Tom Brown, Jack Clark, Nicholas Joseph, Ben Mann, Sam McCandlish, Chris Olah, and Jared
+Kaplan. Language models (mostly) know what they know, 2022.
+[12] Haeyeon Kim, Minsu Kim, Federico Berto, Joungho Kim, and Jinkyoo Park. Devformer: A symmetric transformer
+for context-aware device placement, 2023.
+[13] Minchan Kwon, Gaeun Kim, Jongsuk Kim, Haeil Lee, and Junmo Kim. Stableprompt: Automatic prompt tuning
+using reinforcement learning for large language models, 2024.
+[14] Alina Leidinger, Robert van Rooij, and Ekaterina Shutova. The language of prompting: What linguistic properties
+make a prompt successful?, 2023.
+[15] Yujian Betterest Li and Kai Wu. Spell: Semantic prompt evolution based on a llm, 2023.
+[16] Adam Lipowski and Dorota Lipowska. Roulette-wheel selection via stochastic acceptance. Physica A: Statistical
+Mechanics and its Applications, 391(6):2193–2196, March 2012.
+[17] Michael Xieyang Liu, Frederick Liu, Alexander J. Fiannaca, Terry Koo, Lucas Dixon, Michael Terry, and Carrie J.
+Cai. “we need structured output”: Towards user-centered constraints on large language model output. In Extended
+Abstracts of the CHI Conference on Human Factors in Computing Systems, CHI ’24, page 1–9. ACM, May 2024.
+[18] Pengfei Liu, Weizhe Yuan, Jinlan Fu, Zhengbao Jiang, Hiroaki Hayashi, and Graham Neubig. Pre-train, prompt,
+and predict: A systematic survey of prompting methods in natural language processing, 2021.
+8
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+[19] Pengfei Liu, Weizhe Yuan, Jinlan Fu, Zhengbao Jiang, Hiroaki Hayashi, and Graham Neubig. Pre-train, prompt,
+and predict: A systematic survey of prompting methods in natural language processing. ACM computing surveys,
+55(9):1–35, 2023.
+[20] Larranaga P. A review on estimation of distribution algorithms: 3, pages 57–100. Kluwer, 2002.
+[21] Rui Pan, Shuo Xing, Shizhe Diao, Wenhe Sun, Xiang Liu, Kashun Shum, Renjie Pi, Jipeng Zhang, and Tong
+Zhang. Plum: Prompt learning using metaheuristic, 2024.
+[22] Archiki Prasad, Peter Hase, Xiang Zhou, and Mohit Bansal. Grips: Gradient-free, edit-based instruction search
+for prompting large language models, 2023.
+[23] Storn R. and Price K. Differential evolution–a simple and efficient heuristic for global optimization over continuous
+spaces. Journal of Global Optimization, 11(6):341–359, december 1997.
+[24] Brian J. Ross. A Lamarckian Evolution Strategy for Genetic Algorithms, pages 1–16. CRC Press, 1998.
+[25] Kirkpatrick S., Gelatt Jr C. D., and Vecchi M. P. Optimization by simulated annealing. Science, 220(4598):671–
+680, june 1983.
+[26] Sander Schulhoff, Michael Ilie, Nishant Balepur, Konstantine Kahadze, Amanda Liu, Chenglei Si, Yinheng Li,
+Aayush Gupta, HyoJung Han, Sevien Schulhoff, Pranav Sandeep Dulepet, Saurav Vidyadhara, Dayeon Ki, Sweta
+Agrawal, Chau Pham, Gerson Kroiz, Feileen Li, Hudson Tao, Ashay Srivastava, Hevander Da Costa, Saloni
+Gupta, Megan L. Rogers, Inna Goncearenco, Giuseppe Sarli, Igor Galynker, Denis Peskoff, Marine Carpuat, Jules
+White, Shyamal Anadkat, Alexander Hoyle, and Philip Resnik. The prompt report: A systematic survey of prompt
+engineering techniques, 2025.
+[27] K. Shibasaka, K. Kanazawa, and M. Yasunaga. Decoupling-capacitor allocation problem solved by genetic
+algorithm. In 2013 IEEE Electrical Design of Advanced Packaging Systems Symposium (EDAPS), pages 225–228.
+IEEE, 2013.
+[28] Taylor Shin, Yasaman Razeghi, Robert L. Logan IV, Eric Wallace, and Sameer Singh. Autoprompt: Eliciting
+knowledge from language models with automatically generated prompts, 2020.
+[29] Gemma Team, Aishwarya Kamath, Johan Ferret, Shreya Pathak, Nino Vieillard, Ramona Merhej, Sarah Perrin,
+Tatiana Matejovicova, Alexandre Ramé, Morgane Rivière, Louis Rouillard, Thomas Mesnard, Geoffrey Cideron,
+Jean bastien Grill, Sabela Ramos, Edouard Yvinec, Michelle Casbon, Etienne Pot, Ivo Penchev, Gaël Liu,
+Francesco Visin, Kathleen Kenealy, Lucas Beyer, Xiaohai Zhai, Anton Tsitsulin, Robert Busa-Fekete, Alex Feng,
+Noveen Sachdeva, Benjamin Coleman, Yi Gao, Basil Mustafa, Iain Barr, Emilio Parisotto, David Tian, Matan Eyal,
+Colin Cherry, Jan-Thorsten Peter, Danila Sinopalnikov, Surya Bhupatiraju, Rishabh Agarwal, Mehran Kazemi,
+Dan Malkin, Ravin Kumar, David Vilar, Idan Brusilovsky, Jiaming Luo, Andreas Steiner, Abe Friesen, Abhanshu
+Sharma, Abheesht Sharma, Adi Mayrav Gilady, Adrian Goedeckemeyer, Alaa Saade, Alex Feng, Alexander
+Kolesnikov, Alexei Bendebury, Alvin Abdagic, Amit Vadi, András György, André Susano Pinto, Anil Das, Ankur
+Bapna, Antoine Miech, Antoine Yang, Antonia Paterson, Ashish Shenoy, Ayan Chakrabarti, Bilal Piot, Bo Wu,
+Bobak Shahriari, Bryce Petrini, Charlie Chen, Charline Le Lan, Christopher A. Choquette-Choo, CJ Carey, Cormac
+Brick, Daniel Deutsch, Danielle Eisenbud, Dee Cattle, Derek Cheng, Dimitris Paparas, Divyashree Shivakumar
+Sreepathihalli, Doug Reid, Dustin Tran, Dustin Zelle, Eric Noland, Erwin Huizenga, Eugene Kharitonov, Frederick
+Liu, Gagik Amirkhanyan, Glenn Cameron, Hadi Hashemi, Hanna Klimczak-Pluci´ nska, Harman Singh, Harsh
+Mehta, Harshal Tushar Lehri, Hussein Hazimeh, Ian Ballantyne, Idan Szpektor, Ivan Nardini, Jean Pouget-Abadie,
+Jetha Chan, Joe Stanton, John Wieting, Jonathan Lai, Jordi Orbay, Joseph Fernandez, Josh Newlan, Ju yeong Ji,
+Jyotinder Singh, Kat Black, Kathy Yu, Kevin Hui, Kiran Vodrahalli, Klaus Greff, Linhai Qiu, Marcella Valentine,
+Marina Coelho, Marvin Ritter, Matt Hoffman, Matthew Watson, Mayank Chaturvedi, Michael Moynihan, Min
+Ma, Nabila Babar, Natasha Noy, Nathan Byrd, Nick Roy, Nikola Momchev, Nilay Chauhan, Noveen Sachdeva,
+Oskar Bunyan, Pankil Botarda, Paul Caron, Paul Kishan Rubenstein, Phil Culliton, Philipp Schmid, Pier Giuseppe
+Sessa, Pingmei Xu, Piotr Stanczyk, Pouya Tafti, Rakesh Shivanna, Renjie Wu, Renke Pan, Reza Rokni, Rob
+Willoughby, Rohith Vallu, Ryan Mullins, Sammy Jerome, Sara Smoot, Sertan Girgin, Shariq Iqbal, Shashir Reddy,
+Shruti Sheth, Siim Põder, Sijal Bhatnagar, Sindhu Raghuram Panyam, Sivan Eiger, Susan Zhang, Tianqi Liu,
+Trevor Yacovone, Tyler Liechty, Uday Kalra, Utku Evci, Vedant Misra, Vincent Roseberry, Vlad Feinberg, Vlad
+Kolesnikov, Woohyun Han, Woosuk Kwon, Xi Chen, Yinlam Chow, Yuvein Zhu, Zichuan Wei, Zoltan Egyed,
+Victor Cotruta, Minh Giang, Phoebe Kirk, Anand Rao, Kat Black, Nabila Babar, Jessica Lo, Erica Moreira,
+Luiz Gustavo Martins, Omar Sanseviero, Lucas Gonzalez, Zach Gleicher, Tris Warkentin, Vahab Mirrokni, Evan
+Senter, Eli Collins, Joelle Barral, Zoubin Ghahramani, Raia Hadsell, Yossi Matias, D. Sculley, Slav Petrov,
+Noah Fiedel, Noam Shazeer, Oriol Vinyals, Jeff Dean, Demis Hassabis, Koray Kavukcuoglu, Clement Farabet,
+Elena Buchatskaya, Jean-Baptiste Alayrac, Rohan Anil, Dmitry, Lepikhin, Sebastian Borgeaud, Olivier Bachem,
+Armand Joulin, Alek Andreev, Cassidy Hardin, Robert Dadashi, and Léonard Hussenot. Gemma 3 technical
+report, 2025.
+9
+ReflectivePrompt: Reflective evolution in autoprompting algorithms
+[30] C. Voudouris, E.P. Tsang, and A. Alsheddy. Guided local search, pages 321–361. Springer, 2010.
+[31] Geem Z. W., Kim J. H., and Loganathan G. V. A new heuristic optimization algorithm: harmony search. Simulation,
+76(2):60–68, february 2001.
+[32] Lei Wang, Wanyu Xu, Yihuai Lan, Zhiqiang Hu, Yunshi Lan, Roy Ka-Wei Lee, and Ee-Peng Lim. Plan-and-solve
+prompting: Improving zero-shot chain-of-thought reasoning by large language models, 2023.
+[33] Zekun Moore Wang, Zhongyuan Peng, Haoran Que, Jiaheng Liu, Wangchunshu Zhou, Yuhan Wu, Hongcheng
+Guo, Ruitong Gan, Zehao Ni, Jian Yang, Man Zhang, Zhaoxiang Zhang, Wanli Ouyang, Ke Xu, Stephen W.
+Huang, Jie Fu, and Junran Peng. Rolellm: Benchmarking, eliciting, and enhancing role-playing abilities of large
+language models, 2024.
+[34] Jason Wei, Maarten Bosma, Vincent Y. Zhao, Kelvin Guu, Adams Wei Yu, Brian Lester, Nan Du, Andrew M. Dai,
+and Quoc V. Le. Finetuned language models are zero-shot learners, 2022.
+[35] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc Le, and Denny
+Zhou. Chain-of-thought prompting elicits reasoning in large language models, 2023.
+[36] Haoran Ye, Jiarui Wang, Zhiguang Cao, Federico Berto, Chuanbo Hua, Haeyeon Kim, Jinkyoo Park, and Guojie
+Song. Reevo: Large language models as hyper-heuristics with reflective evolution, 2024.
+10
