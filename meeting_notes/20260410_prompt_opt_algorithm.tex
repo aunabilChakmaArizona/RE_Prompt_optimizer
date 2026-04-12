@@ -2,7 +2,7 @@
 
 % Packages
 \usepackage[
-  paperwidth=8.5in,
+  paperwidth=11in,
   paperheight=11in,
   margin=0.5in
 ]{geometry}
@@ -34,39 +34,54 @@ In contrast, numeric gradient-based optimization progresses more slowly but prov
 Therefore, we first apply textual gradient updates to quickly reach a strong initial solution, 
 and then refine it using numeric gradients to achieve more stable and precise improvements near the optimum.
 
-*Justification of Line 19 in Algorithm~\ref{alg:numeric-gradient}: \textit{Why we prepend the original prompt as a prefix during autoregression}: 
-We append the original prompt prefix along with a paraphrasing instruction to preserve task context during autoregressive generation. 
+\paragraph{Overview of Algorithm \ref{alg:prompt-optimization}: Prompt Optimization} We are given an initial Prompt, a train set and a validation set.
+We will optimize the prompt by using textual gradient for many iterations using evolutionary search.
+At the end, we keep the top prompt from the population for the next stage (numeric gradient based optimization).
+We then further refine the prompt by using numerical gradients for several iterations also using an evolutionary search.
+Finally, we keep the top prompt from the population.
+
+\paragraph{Overview of Algorithm \ref{alg:textual-gradient}: Textual Gradient-based Optimization}
+We are given an initial Prompt, a train set and a validation set.
+The population consists of prompts, starting with the initial prompt.
+In each step, a prompt is sampled from the population.
+A small mini-batch is then sampled from the training set.
+The sampled prompt is used to generate predictions on this mini-batch.
+From these predictions, a feedback set is constructed by selecting a few correct and incorrect examples.
+The LLM then analyzes this feedback set and produces textual feedback describing why the prompt made correct or incorrect predictions.
+Finally, the prompt is revised using this feedback to produce an updated prompt, which is added back to the population.
+
+\paragraph{Overview of Algorithm \ref{alg:numeric-gradient}: Numeric Gradient-based Optimization}
+We are given an initial prompt, a training set, and a validation set.
+The population is initialized with the initial prompt.
+In each iteration, a prompt is sampled from the population.
+A small subset of data is then sampled from the training set.
+Using this data, the algorithm computes token-level gradients for the sampled prompt.
+It then identifies the regions of the prompt with the highest gradients.
+For simplicity, each region is treated as a single token, and only the top three regions are considered.
+\textbf{Next, the algorithm generates candidate replacements for each of these regions.
+This can be done in two ways.
+1)The first way is to ask an LLM to generate replacement candidates by marking the target region with a \texttt{<target>} span.
+2) The second approach uses the language modeling probabilities to predict the next token given the prompt prefix (i.e., the text before the region)
+ and selects topK replacements (tokens) based on these probabilities.}
+After candidate replacements are obtained for each region, the algorithm combines them to create new prompt variants.
+The new prompts are then scored using their loss and perplexity on the sampled training data.
+The few top prompts with the best (lowest) scores are kept.
+Finally, these prompts are evaluated on the validation set and added to the population.
+
+*Line 17 in Algorithm~\ref{alg:numeric-gradient}: \textit{Instead of just the prefix, we prepend the original prompt as a prefix during autoregression}: 
+We prepend the original prompt prefix to provide context about the full prompt during autoregressive generation. 
 Using only the prefix of the prompt provides insufficient information about the task and 
-ignores the right-side context of the prompt, leading the LLM to generate unrelated or inconsistent tokens. 
-Including this context ensures that candidate tokens remain aligned with both the task and the overall prompt structure.
+ignores the right-side context of the prompt, leading the LLM to generate unrelated or inconsistent tokens for replacements. 
+Including this context ensures that candidate tokens remain aligned with the region and the overall prompt structure.
 
 \begin{algorithm}
 \caption{Prompt Optimization}
+\label{alg:prompt-optimization}
 \begin{algorithmic}[1]
 \Require Initial prompt $P$, training set $\mathcal{D}_{\text{train}}$, validation set $\mathcal{D}_{\text{val}}$
 \Ensure Optimized prompt $P^{*}$
-
-\State $\mathcal{P}_{\text{text}} \gets \{P\}$ \Comment{Textual population}
-
-\For{$t = 1$ to $T$}
-    \State Sample $P_t \sim \mathcal{P}_{\text{text}}$
-    \State $P' \gets$ TextualGradient$(P_t, \mathcal{D}_{\text{train}})$
-    \State Add $P'$ to $\mathcal{P}_{\text{text}}$ with validation score on $\mathcal{D}_{\text{val}}$
-\EndFor
-
-\State $P^{*} \gets \arg\max_{P \in \mathcal{P}_{\text{text}}} \text{Score}(P, \mathcal{D}_{\text{val}})$
-
-\State $\mathcal{P}_{\text{num}} \gets \{P^{*}\}$ \Comment{Numeric population}
-
-\For{$q = 1$ to $Q$}
-    \State Sample $P_q \sim \mathcal{P}_{\text{num}}$
-    \State $\mathcal{P}' \gets$ NumericGradient$(P_q, \mathcal{D}_{\text{train}})$
-    \ForAll{$p \in \mathcal{P}'$}
-        \State Add $p$ to $\mathcal{P}_{\text{num}}$ with validation score on $\mathcal{D}_{\text{val}}$
-    \EndFor
-\EndFor
-
-\State $P^{*} \gets \arg\max_{P \in \mathcal{P}_{\text{num}}} \text{Score}(P, \mathcal{D}_{\text{val}})$
+\State $P^{*} \gets$ TextualGradientUpdate$(P, \mathcal{D}_{\text{train}}, \mathcal{D}_{\text{val}}, T)$ \Comment{We run Textual Gradient based optimization for $T$ iterations}
+\State $P^{*} \gets$ NumericGradientUpdate$(P^{*}, \mathcal{D}_{\text{train}}, \mathcal{D}_{\text{val}}, Q)$ \Comment{We run Numeric Gradient based update for $Q$ iterations}
 \State \Return $P^{*}$
 \end{algorithmic}
 \end{algorithm}
@@ -75,15 +90,23 @@ Including this context ensures that candidate tokens remain aligned with both th
 \caption{Textual Gradient Update}
 \label{alg:textual-gradient}
 \begin{algorithmic}[1]
-\Require Prompt $P_x$, training set $\mathcal{D}_{\mathrm{train}}$
-\Ensure Updated prompt $P_x'$
+\Require Initial prompt $P$, training set $\mathcal{D}_{\mathrm{train}}$, validation set $\mathcal{D}_{\mathrm{val}}$, number of iterations $T$
+\Ensure Optimized prompt $P^{*}$
 
-\State Sample a mini-batch $\mathcal{B} \subset \mathcal{D}_{\mathrm{train}}$
-\State Use an LLM to infer predictions for $\mathcal{B}$ under $P_x$
-\State Construct a feedback set $\mathcal{D}_{\mathrm{feedback}}$ with three correct and three incorrect predictions
-\State Use an LLM to analyze $\mathcal{D}_{\mathrm{feedback}}$ and produce feedback $R$
-\State Revise $P_x$ using $R$ to obtain $P_x'$
-\State \Return $P_x'$
+\State Initialize $\mathcal{P}_{\text{text}} \gets \{P\}$ 
+
+\For{$t = 1$ to $T$} \Comment{will run $T$ iterations for optimization}
+    \State Sample a prompt $P_t \sim \mathcal{P}_{\text{text}}$
+    \State Sample a mini-batch $\mathcal{B} \subset \mathcal{D}_{\mathrm{train}}$
+    \State Use an LLM to infer predictions for $\mathcal{B}$ under $P_t$
+    \State Construct a feedback set $\mathcal{D}_{\mathrm{feedback}}$ with three predictions (mix of corrects and incorrects)
+    \State Use an LLM to analyze the predictions and produce feedbacks $R$  \Comment{Each feedbacks are``why the model made correct/incorrect prediction"}
+    \State Revise $P_t$ using $R$ to obtain $P_t'$
+    \State Compute $\mathrm{Score}(P_t', \mathcal{D}_{\mathrm{val}})$
+    \State Add $P_t'$ to $\mathcal{P}_{\text{text}}$
+\EndFor
+\State $P^{*} \gets \arg\max_{P \in \mathcal{P}_{\text{text}}} \mathrm{Score}(P, \mathcal{D}_{\text{val}})$
+\State \Return $P^{*}$
 \end{algorithmic}
 \end{algorithm}
 
@@ -91,106 +114,73 @@ Including this context ensures that candidate tokens remain aligned with both th
 \caption{Numeric Gradient Update}
 \label{alg:numeric-gradient}
 \begin{algorithmic}[1]
-\Require Prompt $P_x$, training set $\mathcal{D}_{\mathrm{train}}$, method $m$, feedback sample size $N$, number of prompt to generate $M$, number of prompts to keep $K$, candidate size $E$
-\Ensure Top-$K$ updated prompts $\mathcal{P}'$
+\Require Initial prompt $P^{*}$, training set $\mathcal{D}_{\mathrm{train}}$, validation set $\mathcal{D}_{\mathrm{val}}$, number of iterations $Q$
+\Ensure Optimized prompt $P^{*}$
 
-\State Sample $N$ examples from $\mathcal{D}_{\mathrm{train}}$ to form $\mathcal{D}_{\mathrm{feedback}}$
-\State Convert $\mathcal{D}_{\mathrm{feedback}}$ into binary support--query pairs
-\State Run inference on $\mathcal{D}_{\mathrm{feedback}}$ using $P_x$ and obtain predictions $R$
-\State Partition $R$ into confusion buckets $\{\mathrm{TP}, \mathrm{TN}, \mathrm{FP}, \mathrm{FN}\}$
-\State Construct a balanced subset $\mathcal{D}_{\mathrm{grad}}$ by sampling equally from each bucket
-\State Compute token-level gradients of $P_x$ on $\mathcal{D}_{\mathrm{grad}}$
-\State Select the top three gradient regions and store them in $\mathcal{R}$
-\State Initialize an empty candidate map $\mathcal{C}$
+\State Initialize $\mathcal{P}_{\text{num}} \gets \{P^{*}\}$
 
-\If{$m = \texttt{GENERATE\_CANDIDATES\_BY\_PROMPTING}$}
-    \ForAll{$r \in \mathcal{R}$}
-        \State $\widetilde{P}$ = updated prompt $P_x$ where region $r$ is marked using a \texttt{<target>} span
-        \State $P_{meta}$ = meta-prompt requesting $E$ replacements (i.e. candidates) of region $r$ in $\widetilde{P}$
-        \State Generate candidate tokens $C_r$ using the LLM with $P_{meta}$
-        \State Store $C_r$ in $\mathcal{C}$ for region $r$
+\For{$q = 1$ to $Q$} \Comment{will run $Q$ iterations for optimization}
+    \State Sample a prompt $P_q \sim \mathcal{P}_{\text{num}}$
+    % \State Sample $N$ examples from $\mathcal{D}_{\mathrm{train}}$ to form $\mathcal{D}_{\mathrm{feedback}}$
+    % \State Convert $\mathcal{D}_{\mathrm{feedback}}$ into binary support--query pairs
+    % \State Run inference on $\mathcal{D}_{\mathrm{feedback}}$ using $P_q$ and obtain predictions $R$
+    % \State Partition $R$ into confusion buckets $\{\mathrm{TP}, \mathrm{TN}, \mathrm{FP}, \mathrm{FN}\}$
+    % \State Construct a balanced subset $\mathcal{D}_{\mathrm{grad}}$ by sampling equally from each bucket
+    % \State Compute token-level gradients of $P_q$ on $\mathcal{D}_{\mathrm{grad}}$
+    \State Sample a mini-batch from $\mathcal{D}_{\mathrm{train}}$ to construct a feedback set $\mathcal{D}_{\mathrm{grad}}$
+    \State Run inference using $P_q$ on $\mathcal{D}_{\mathrm{grad}}$ and compute token-level gradients
+    \State Select the top three gradient regions and store them in $\mathcal{R}$ \Comment{each region is comprised of one token for now}
+    \State Initialize an empty candidate map $\mathcal{C}$ \Comment{Here, for each region, we will store the candidates}
+
+    \If{$m = \texttt{GENERATE\_CANDIDATES\_BY\_PROMPTING}$} \Comment{In this method, we use LLM to generate candidates via prompting}
+        \ForAll{$r \in \mathcal{R}$} \Comment{iterate through each region}
+            \State $\widetilde{P}$ = updated prompt $P_q$ where region $r$ is marked using a \texttt{<target>} span \Comment{we mark the region by \texttt{<target>} span}
+            \State Generate candidate replacements $C_r$ on the prompt $\widetilde{P}$ \Comment{we use LLM to generate few candidates that can replace the region}
+            \State Store $C_r$ in $\mathcal{C}$ for region $r$ \Comment{store the candidates in a map for region $r$}
+        \EndFor
+    \ElsIf{$m = \texttt{GENERATE\_CANDIDATES\_BY\_AUTOREGRESSION}$} \Comment{Here, we use LM probabilities to generate candidates (tokens)}
+        \ForAll{$r \in \mathcal{R}$} \Comment{iterate through each region}
+            \State Let $i$ be the index of region $r$ in $P_q$ 
+            % \State Construct $\widetilde{P} = P_q +$ paraphrase instruction $+\, P_q[0:(i-1)]$ 
+            \State $\widetilde{P} = P_q[0:(i-1)]$  \Comment{our goal is to predict tokens for position $i$; so, we take the tokens upto \texttt{<=}$(i-1)$ position as input}
+            \State $\text{Candidate tokens}, C_r = \operatorname*{arg\,topK}_{t \in V} \mathrm{LLM}(t \mid \widetilde{P})$ \Comment{given $\widetilde{P}$, we collect topK tokens that has highest LM probabilities}
+            \State Store $C_r$ in $\mathcal{C}$ for region $r$ \Comment{store the candidates in a map for region $r$}
+        \EndFor
+    \EndIf
+
+    % \State Construct a meta-prompt requesting $M$ combinations of candidates from $\mathcal{C}$
+    % \State Generate $M$ candidate combinations $\mathcal{C}_{\mathrm{comb}}$ by running the meta-prompt
+    % \State Initialize an empty prompt set $\mathcal{P}_{\mathrm{cand}}$
+
+    % \ForAll{$c \in \mathcal{C}_{\mathrm{comb}}$}
+    %     \State Construct a meta-prompt that replaces each region $r$ in $P_q$ with its selected candidate $c_r$
+    %     \State Generate a new prompt $P_{\mathrm{new}}$ by running the meta-prompt
+    %     \State Add $P_{\mathrm{new}}$ to $\mathcal{P}_{\mathrm{cand}}$
+    % \EndFor
+    \State Generate new prompts $\mathcal{P}_{\mathrm{cand}}$ by combining candidates $C_r$ across regions 
+
+    \State Initialize an empty score map $\mathcal{S}$ \Comment{Here, for new prompt in $\mathcal{P}_{\mathrm{cand}}$, we will store the scores (loss + perplexity)}
+    \ForAll{$P \in \mathcal{P}_{\mathrm{cand}}$}
+        \State Compute $s = \mathrm{Loss}_{\mathrm{cross\_entropy}}(P, \mathcal{D}_{\mathrm{grad}}) + \lambda\,\mathrm{Perplexity}(P)$ \Comment{calculate the score of the prompt}
+        \State Store score $s$ in $\mathcal{S}$ for prompt $P$
     \EndFor
-\ElsIf{$m = \texttt{GENERATE\_CANDIDATES\_BY\_AUTOREGRESSION}$}
-    \ForAll{$r \in \mathcal{R}$}
-        \State Let $i$ be the index of region $r$ in $P_x$
-        \State Construct $\widetilde{P}$ = $P_x$ + paraphrase instruction + $P_x[0:(i - 1)]$
-        \State $\text{Candidate tokens}, C_r = \operatorname*{arg\,topK}_{t \in V} {{LLM}}(t \mid \widetilde{P})$
-        \State Store $C_r$ in $\mathcal{C}$ for region $r$
-    \EndFor
-\EndIf
 
-\State Construct a meta-prompt requesting $M$ combinations of candidates from $\mathcal{C}$
-\State Generate $M$ candidate combinations $\mathcal{C}_{\mathrm{comb}}$ by running the meta-prompt
-\State Initialize an empty prompt set $\mathcal{P}_{\mathrm{cand}}$
+    % \State Rank prompts in $\mathcal{P}_{\mathrm{cand}}$ according to $\mathcal{S}$
+    % \State Let $\mathcal{P}'$ be the top-$K$ prompts in $\mathcal{P}_{\mathrm{cand}}$
 
-\ForAll{$c \in \mathcal{C}_{\mathrm{comb}}$}
-    \State Construct a meta-prompt that replaces each region $r$ in $P_x$ with its selected candidate $c_r$
-    \State Generate a new prompt $P_{\mathrm{new}}$ running the meta-prompt
-    \State Add $P_{\mathrm{new}}$ to $\mathcal{P}_{\mathrm{cand}}$
+    % \ForAll{$p \in \mathcal{P}'$}
+    %     \State Compute $\mathrm{Score}(p, \mathcal{D}_{\mathrm{val}})$
+    %     \State Add $p$ to $\mathcal{P}_{\text{num}}$
+    % \EndFor
+
+    \State Select the top-$K$ prompts $\mathcal{P}'$ from $\mathcal{P}_{\mathrm{cand}}$ according to $\mathcal{S}$
+    \State Add $\mathcal{P}'$ to $\mathcal{P}_{\text{num}}$ with validation scores on $\mathcal{D}_{\mathrm{val}}$
 \EndFor
+\State $P^{*} \gets \arg\max_{P \in \mathcal{P}_{\text{num}}} \mathrm{Score}(P, \mathcal{D}_{\text{val}})$
 
-\State Initialize an empty score map $\mathcal{S}$
-\ForAll{$P \in \mathcal{P}_{\mathrm{cand}}$}
-    \State Compute $s = \mathrm{Loss}_{\mathrm{cross\_entropy}}(P, \mathcal{D}_{\mathrm{grad}}) + \lambda \,\mathrm{Perplexity}(P)$
-    \State Store score $s$ in $\mathcal{S}$ for prompt $P$
-\EndFor
-
-\State Rank prompts in $\mathcal{P}_{\mathrm{cand}}$ according to $\mathcal{S}$
-\State Let $\mathcal{P}'$ be the top-$K$ prompts of $\mathcal{P}_{\mathrm{cand}}$
-\State \Return $\mathcal{P}'$
+\State \Return $P^{*}$
 \end{algorithmic}
 \end{algorithm}
-
-% \begin{algorithm}[h]
-% \caption{\textsc{Prompt optimization using numeric gradients}}
-% \begin{algorithmic}[1]
-% \Require $method$ (prompting / autoregression), $LLM$(model), $P$(initial prompt), 
-% $\mathcal{D}_{train}$(train set), $\mathcal{D}_{validation}$(validation set), $N$(sample size feedback), $M$(number of new prompts to generate), $K$(number of new prompts to keep), 
-% $E$ (number of candidates to generate to replace a token)
-% \Ensure $K$ optimized prompts
-% \State Sample $N$ samples (a relation with a support sentence) from train set, $\mathcal{D}_{train}$
-% \State Convert sampled feedback examples into binary support-query pairs $\mathcal{D}_{feedback}$
-% \State Run binary inference on all pairs in $\mathcal{D}_{feedback}$ using prompt $P$ and get result $R_{feedback}$
-% \State Create confusion buckets from result $R_{feedback}$: $\{\mathrm{TP}, \mathrm{TN}, \mathrm{FP}, \mathrm{FN}\}$
-% \State Sample a balanced subset $\mathcal{D}_{grad}$ by taking the same number of samples from each bucket
-% \State Calculate gradients on each token of prompt $P$ using $\mathcal{D}_{grad}$
-% \State Find top 3 gradient regions and store in $\mathcal{R}$ (assume each region has 1 token only)
-% \State Initialize an empty region-candidate map ${C_{region}}$
-% \If{$method = \texttt{GENERATE\_CANDIDATES\_BY\_PROMPTING}$}
-%     \ForAll{selected region $r \in \mathcal{R}$}
-%         \State $P''$ = updated prompt $P$ where region $r$ is marked using a \texttt{<target>} span
-%         \State $P_{meta1}$ = meta-prompt requesting $E$ replacements (i.e. candidates) of region $r$ in $P''$
-%         \State Candidate tokens, $C_r$ = extracted tokens from output of ${LLM}(P_{meta1})$
-%         \State Store the $C_r$ for region $r$ in ${C_{region}}$
-%     \EndFor
-% \ElsIf {$method = \texttt{GENERATE\_CANDIDATES\_BY\_AUTOREGRESSSION}$}
-%     \ForAll{selected region $r \in \mathcal{R}$}
-%         \State $i$ = index where region $r$ (i.e. token) is located in prompt $P$
-%         \State Prepare input prompt, $P''$ = $P$ + paraphrase instruction + $P[ : (i - 1)]$
-%         \State $\text{Candidate tokens}, C_r = \operatorname*{arg\,topK}_{t \in V} {{LLM}}(t \mid P'')$
-%         \State Store the $C_r$ for region $r$ in ${C_{region}}$
-%     \EndFor
-% \EndIf
-% \State $P_{meta2}$ = meta-prompt that requests to create M combination of candidates (one candidate per region is picked) from $C_{region}$
-% \State $C_{combination}$ = extracted M combinations of candidates from the output of $LLM({P_{meta2}})$
-% \State Initialize an empty prompt candidates list ${P_{candidates}}$
-% \ForAll{$c$ $\in$ $C_{combination}$}
-%     \State $P_{meta3}$ = meta-prompt that requests to update the prompt $P$ by replacing each region $r$ by the selected candidate $c_r$
-%     \State $P_{new}$ = get new prompt by running $LLM(P_{meta3})$
-%     \State Store $P_{new}$ in ${P_{candidates}}$
-% \EndFor
-% \State Initialize an empty score map ${S_{candidates}}$
-% \ForAll{$p$ $\in$ ${P_{candidates}}$}
-%     \State $score$ = $Loss_{cross\_entropy}$($p$ on $\mathcal{D}_{grad}$) + $\lambda*Perplexity(p)$
-%     \State Store $score$ in ${S_{candidates}}$ for prompt $p$
-% \EndFor
-% \State $P'_{candidates}$ = sorted prompts of $P_{candidates}$ based on scores from ${S_{candidates}}$
-% \State $P''_{candidates}$ = $P'_{candidates}[:K]$ 
-% \State validate each prompt, p, $\in P''_{candidates}$ on validation dataset, $\mathcal{D}_{validation}$
-% \State \Return $P''_{candidates}$ and validation scores
-% \end{algorithmic}
-% \end{algorithm}
-
 
 \end{document}
 
