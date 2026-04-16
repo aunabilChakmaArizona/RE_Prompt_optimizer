@@ -26,6 +26,7 @@ from agents.agent_gradient_token_analysis import (
     TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
     analyze_relation_extraction_binary_pairs,
     build_relation_prompt,
+    score_instruction_prompt_fluency_perplexity,
     score_binary_prompts_with_ce_and_perplexity,
 )
 from agents.agent_llm_prompting import run_prompts
@@ -245,8 +246,8 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=0.2,
         help=(
-            "Candidate-suggestion modes only. Combined score = cross_entropy + "
-            "lambda * perplexity."
+            "Candidate-suggestion modes only. Combined score = task cross_entropy + "
+            "lambda * prompt fluency perplexity."
         ),
     )
     parser.add_argument(
@@ -1699,6 +1700,14 @@ def _score_instruction_prompt_for_candidate_selection(
         batch_size=validation_batch_size,
         use_chat_template=use_chat_template,
     )
+    prompt_perplexity = score_instruction_prompt_fluency_perplexity(
+        instruction_prompt=instruction_prompt,
+        model=model,
+        tokenizer=tokenizer,
+    )
+    selection_metrics["prompt_perplexity"] = prompt_perplexity
+    selection_metrics["perplexities"] = [prompt_perplexity]
+    selection_metrics["mean_perplexity"] = prompt_perplexity
     combined_score = (
         selection_metrics["mean_cross_entropy"]
         + selection_perplexity_lambda * selection_metrics["mean_perplexity"]

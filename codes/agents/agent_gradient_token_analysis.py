@@ -431,6 +431,49 @@ def score_binary_prompts_with_ce_and_perplexity(
     }
 
 
+def score_instruction_prompt_fluency_perplexity(
+    *,
+    instruction_prompt: str,
+    model,
+    tokenizer,
+) -> float:
+    encoded_prompt = tokenizer(
+        instruction_prompt,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
+    input_ids = encoded_prompt["input_ids"]
+    attention_mask = encoded_prompt.get("attention_mask")
+    if input_ids.size(1) < 2:
+        return 1.0
+
+    target_device = getattr(model, "device", None)
+    if target_device is None:
+        target_device = next(model.parameters()).device
+    input_ids = input_ids.to(target_device)
+    if attention_mask is not None:
+        attention_mask = attention_mask.to(target_device)
+
+    with torch.inference_mode():
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=False,
+        )
+        shift_logits = outputs.logits[:, :-1, :].contiguous()
+        shift_labels = input_ids[:, 1:].contiguous()
+        token_nll = F.cross_entropy(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1),
+            reduction="mean",
+        )
+
+    prompt_perplexity = float(torch.exp(token_nll).item())
+    del encoded_prompt, input_ids, attention_mask, outputs, shift_logits, shift_labels, token_nll
+    clear_cuda_cache()
+    return prompt_perplexity
+
+
 def _candidate_tokens_for_position(
     *,
     token_id: int,
