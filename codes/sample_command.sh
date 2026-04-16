@@ -718,7 +718,6 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 --initial-prompt-source-path "../trainings/20260303_002034_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
 --initial-prompt-node-id 13 > nohup_outs/nohup_v3_qwen4_group2_mixed_20260303_002034_node13_initial_prompt_only.out 2>&1 &
 
-trainings/20260301_030139_Qwen-Qwen3-4B/
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
