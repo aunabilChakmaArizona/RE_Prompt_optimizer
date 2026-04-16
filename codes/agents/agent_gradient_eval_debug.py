@@ -200,7 +200,7 @@ def _parse_args() -> argparse.Namespace:
         "--num-generated-prompts",
         type=int,
         default=0,
-        help="How many prompt variants to generate in the active mode.",
+        help="DIRECT_CANDIDATE_GENERATION only. How many prompt variants to generate.",
     )
     parser.add_argument(
         "--num-region-candidates",
@@ -227,8 +227,17 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=5,
         help=(
-            "Candidate-suggestion modes only. Number of lowest-scoring prompts to keep "
-            "for full validation."
+            "Legacy candidate-suggestion option. Beam-search candidate suggestion now "
+            "uses --beam-width as the final top-k size."
+        ),
+    )
+    parser.add_argument(
+        "--beam-width",
+        type=int,
+        default=3,
+        help=(
+            "Candidate-suggestion modes only. Beam width used while expanding regions "
+            "one at a time. The final beam is also the final top-k prompt set."
         ),
     )
     parser.add_argument(
@@ -827,6 +836,76 @@ def _build_region_candidate_synthesis_prompt(
     return prompt
 
 
+def _prepare_region_candidates_for_beam_search(
+    *,
+    region_details: Dict[str, Any],
+    region_candidates: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    candidate_index = {
+        int(item["region_rank"]): item for item in region_candidates
+    }
+    prepared_candidates: List[Dict[str, Any]] = []
+    for region in region_details["selected_regions"]:
+        region_rank = int(region["region_rank"])
+        original_text = region["region_text"]
+        raw_candidates = candidate_index.get(region_rank, {}).get("candidates", [])
+        candidates: List[str] = []
+        seen: set[str] = set()
+        for candidate_text in [original_text, *raw_candidates]:
+            normalized = _normalize_span_replacement_text(candidate_text)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            candidates.append(normalized)
+        prepared_candidates.append(
+            {
+                **copy.deepcopy(candidate_index.get(region_rank, {})),
+                "region_rank": region_rank,
+                "region_text": original_text,
+                "candidates": candidates if candidates else [original_text],
+            }
+        )
+    return prepared_candidates
+
+
+def _build_prompt_from_region_replacements( #todo: we should prompt to build the prompt?
+    *,
+    instruction_prompt: str,
+    selected_regions: Sequence[Dict[str, Any]],
+    selected_replacements: Dict[int, str],
+) -> str:
+    revised_prompt = instruction_prompt
+    for region in sorted(selected_regions, key=lambda item: item["start_char"], reverse=True):
+        region_rank = int(region["region_rank"])
+        replacement_text = selected_replacements.get(region_rank)
+        if replacement_text is None:
+            continue
+        revised_prompt = (
+            revised_prompt[: region["start_char"]]
+            + replacement_text
+            + revised_prompt[region["end_char"] :]
+        )
+    return revised_prompt
+
+
+def _build_selected_replacements_payload(
+    *,
+    selected_regions: Sequence[Dict[str, Any]],
+    selected_replacements: Dict[int, str],
+) -> List[Dict[str, Any]]:
+    return [
+        {
+            "region_rank": int(region["region_rank"]),
+            "region_text": region["region_text"],
+            "replacement_text": selected_replacements.get(
+                int(region["region_rank"]),
+                region["region_text"],
+            ),
+        }
+        for region in selected_regions
+    ]
+
+
 def _normalize_span_replacement_text(value: Any) -> str:
     text = str(value).strip()
     if text.startswith("```") and text.endswith("```") and len(text) >= 6:
@@ -1344,6 +1423,8 @@ def _build_summary_payload(
         "region_candidate_meta_prompts": prompt_editing_payload.get(
             "region_candidate_meta_prompts", []
         ),
+        "beam_width": prompt_editing_payload.get("beam_width"),
+        "beam_search_steps": prompt_editing_payload.get("beam_search_steps", []),
         "combination_meta_prompt": prompt_editing_payload.get("combination_meta_prompt"),
         "synthesis_meta_prompt": prompt_editing_payload.get("synthesis_meta_prompt"),
         "synthesis_meta_prompts": prompt_editing_payload.get("synthesis_meta_prompts", []),
@@ -1362,6 +1443,7 @@ def _build_combination_generated_prompts_payload(
         prompts_with_scores.append(
             {
                 "generation_index": variant.get("generation_index"),
+                "beam_index": variant.get("beam_index"),
                 "combination_key": variant.get("combination_key"),
                 "selected_replacements": variant.get("selected_replacements"),
                 "num_changed_spans": variant.get("num_changed_spans"),
@@ -1377,6 +1459,8 @@ def _build_combination_generated_prompts_payload(
 
     return {
         "mode": prompt_editing_payload.get("mode"),
+        "beam_width": prompt_editing_payload.get("beam_width"),
+        "beam_search_steps": prompt_editing_payload.get("beam_search_steps", []),
         "combination_meta_prompt": prompt_editing_payload.get("combination_meta_prompt"),
         "candidate_combinations": prompt_editing_payload.get("candidate_combinations", []),
         "generated_prompts_with_scores": prompts_with_scores,
@@ -1585,6 +1669,245 @@ def _generate_region_candidates(
         "parsed_output": parsed_output,
         "selected_json_length": json_length,
         "region_candidates": region_candidates,
+    }
+
+
+def _score_instruction_prompt_for_candidate_selection(
+    *,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    selection_perplexity_lambda: float,
+    validation_batch_size: int,
+    use_chat_template: bool,
+    prompt_result_cache: Dict[str, Dict[str, Any]],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    cached_result = prompt_result_cache.get(instruction_prompt)
+    if cached_result is not None:
+        return copy.deepcopy(cached_result)
+
+    prompts, target_labels = _build_binary_prompts_for_instruction(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=sampled_pairs,
+    )
+    selection_metrics = score_binary_prompts_with_ce_and_perplexity(
+        prompts=prompts,
+        target_labels=target_labels,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=validation_batch_size,
+        use_chat_template=use_chat_template,
+    )
+    combined_score = (
+        selection_metrics["mean_cross_entropy"]
+        + selection_perplexity_lambda * selection_metrics["mean_perplexity"]
+    )
+    cached_result = {
+        "selection_metrics": {
+            **selection_metrics,
+            "combined_score": combined_score,
+        },
+    }
+    prompt_result_cache[instruction_prompt] = copy.deepcopy(cached_result)
+    return copy.deepcopy(cached_result)
+
+
+def _run_region_candidate_beam_search(
+    *,
+    args: argparse.Namespace,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    region_details: Dict[str, Any],
+    region_candidates: Sequence[Dict[str, Any]],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    prepared_region_candidates = _prepare_region_candidates_for_beam_search(
+        region_details=region_details,
+        region_candidates=region_candidates,
+    )
+    candidate_index = {
+        int(item["region_rank"]): item for item in prepared_region_candidates
+    }
+    prompt_result_cache: Dict[str, Dict[str, Any]] = {}
+    beam_nodes: List[Dict[str, Any]] = [
+        {
+            "beam_index": 0,
+            "parent_beam_index": None,
+            "selected_replacements": {},
+            "revised_prompt": instruction_prompt,
+            "selection_metrics": None,
+            "changed": False,
+            "duplicate_prompt": False,
+            "num_changed_spans": 0,
+        }
+    ]
+    beam_search_steps: List[Dict[str, Any]] = []
+
+    for step_index, region in enumerate(region_details["selected_regions"], start=1):
+        region_rank = int(region["region_rank"])
+        region_text = region["region_text"]
+        region_candidate_texts = candidate_index.get(region_rank, {}).get("candidates", [])
+        parent_count = len(beam_nodes)
+        expanded_by_prompt: Dict[str, Dict[str, Any]] = {}
+
+        print(
+            "[agent_gradient_eval_debug] beam search expanding region:",
+            f"step_index={step_index}",
+            f"region_rank={region_rank}",
+            f"beam_size={len(beam_nodes)}",
+            f"num_candidates={len(region_candidate_texts)}",
+        )
+
+        for parent_beam_index, parent_node in enumerate(beam_nodes):
+            for candidate_position, candidate_text in enumerate(region_candidate_texts):
+                selected_replacements = copy.deepcopy(parent_node["selected_replacements"])
+                if candidate_text == region_text:
+                    selected_replacements.pop(region_rank, None)
+                else:
+                    selected_replacements[region_rank] = candidate_text
+
+                revised_prompt = _build_prompt_from_region_replacements(
+                    instruction_prompt=instruction_prompt,
+                    selected_regions=region_details["selected_regions"],
+                    selected_replacements=selected_replacements,
+                )
+                cached_result = _score_instruction_prompt_for_candidate_selection(
+                    instruction_prompt=revised_prompt,
+                    sampled_pairs=sampled_pairs,
+                    selection_perplexity_lambda=args.selection_perplexity_lambda,
+                    validation_batch_size=args.validation_batch_size,
+                    use_chat_template=not args.disable_chat_template,
+                    prompt_result_cache=prompt_result_cache,
+                    model=model,
+                    tokenizer=tokenizer,
+                )
+                expanded_node = {
+                    "beam_index": None,
+                    "parent_beam_index": parent_beam_index,
+                    "expanded_region_rank": region_rank,
+                    "candidate_position": candidate_position,
+                    "selected_replacements": selected_replacements,
+                    "revised_prompt": revised_prompt,
+                    "selection_metrics": cached_result["selection_metrics"],
+                    "changed": revised_prompt != instruction_prompt,
+                    "duplicate_prompt": False,
+                    "num_changed_spans": sum(
+                        1
+                        for selected_region in region_details["selected_regions"]
+                        if selected_replacements.get(
+                            int(selected_region["region_rank"]),
+                            selected_region["region_text"],
+                        )
+                        != selected_region["region_text"]
+                    ),
+                }
+                existing_node = expanded_by_prompt.get(revised_prompt)
+                if existing_node is None:
+                    expanded_by_prompt[revised_prompt] = expanded_node
+                    continue
+                existing_metrics = existing_node["selection_metrics"]
+                candidate_metrics = expanded_node["selection_metrics"]
+                existing_key = (
+                    existing_metrics["combined_score"],
+                    existing_metrics["mean_cross_entropy"],
+                    existing_metrics["mean_perplexity"],
+                    existing_node["num_changed_spans"],
+                )
+                candidate_key = (
+                    candidate_metrics["combined_score"],
+                    candidate_metrics["mean_cross_entropy"],
+                    candidate_metrics["mean_perplexity"],
+                    expanded_node["num_changed_spans"],
+                )
+                if candidate_key < existing_key:
+                    expanded_by_prompt[revised_prompt] = expanded_node
+
+        ranked_nodes = sorted(
+            expanded_by_prompt.values(),
+            key=lambda item: (
+                item["selection_metrics"]["combined_score"],
+                item["selection_metrics"]["mean_cross_entropy"],
+                item["selection_metrics"]["mean_perplexity"],
+            ),
+        )
+        beam_nodes = []
+        for beam_index, node in enumerate(ranked_nodes[: args.beam_width]):
+            node_copy = copy.deepcopy(node)
+            node_copy["beam_index"] = beam_index
+            beam_nodes.append(node_copy)
+
+        print("[agent_gradient_eval_debug] beam step retained prompts:")
+        if beam_nodes:
+            for node in beam_nodes:
+                print(
+                    "[beam_node]",
+                    f"step_index={step_index}",
+                    f"beam_index={node['beam_index']}",
+                    f"parent_beam_index={node['parent_beam_index']}",
+                    f"region_rank={region_rank}",
+                    f"combined_score={node['selection_metrics']['combined_score']:.6f}",
+                    f"num_changed_spans={node['num_changed_spans']}",
+                )
+                print(node["revised_prompt"])
+        else:
+            print("[]")
+
+        beam_search_steps.append(
+            {
+                "step_index": step_index,
+                "region_rank": region_rank,
+                "region_text": region_text,
+                "num_parent_nodes": parent_count,
+                "num_candidates_considered_per_parent": len(region_candidate_texts),
+                "num_expanded_unique_prompts": len(expanded_by_prompt),
+                "retained_beam_nodes": [
+                    {
+                        "beam_index": node["beam_index"],
+                        "parent_beam_index": node["parent_beam_index"],
+                        "selected_replacements": _build_selected_replacements_payload(
+                            selected_regions=region_details["selected_regions"],
+                            selected_replacements=node["selected_replacements"],
+                        ),
+                        "num_changed_spans": node["num_changed_spans"],
+                        "prompt": node["revised_prompt"],
+                        "selection_metrics": copy.deepcopy(node["selection_metrics"]),
+                    }
+                    for node in beam_nodes
+                ],
+            }
+        )
+
+    final_variants: List[Dict[str, Any]] = []
+    for generation_index, node in enumerate(beam_nodes):
+        final_variants.append(
+            {
+                "generation_index": generation_index,
+                "beam_index": node["beam_index"],
+                "selected_replacements": _build_selected_replacements_payload(
+                    selected_regions=region_details["selected_regions"],
+                    selected_replacements=node["selected_replacements"],
+                ),
+                "num_changed_spans": node["num_changed_spans"],
+                "meta_prompt": None,
+                "raw_output": None,
+                "revised_prompt": node["revised_prompt"],
+                "changed": node["changed"],
+                "duplicate_prompt": False,
+                "selection_metrics": copy.deepcopy(node["selection_metrics"]),
+                "validation": None,
+                "full_evaluation": None,
+                "delta_vs_baseline": None,
+                "retained_for_full_validation": True,
+            }
+        )
+
+    return {
+        "beam_width": args.beam_width,
+        "region_candidates": prepared_region_candidates,
+        "beam_search_steps": beam_search_steps,
+        "generated_prompt_variants": final_variants,
     }
 
 
@@ -2099,6 +2422,8 @@ def _build_region_candidate_prompt_editing_payload(
         "region_candidate_raw_output": "",
         "region_candidate_meta_prompts": [],
         "region_candidates": [],
+        "beam_width": None,
+        "beam_search_steps": [],
         "combination_meta_prompt": None,
         "combination_raw_output": "",
         "candidate_combinations": [],
@@ -2124,123 +2449,30 @@ def _build_and_evaluate_region_candidate_prompts(
     model,
     tokenizer,
 ) -> Dict[str, Any]:
-    combination_payload = _generate_region_candidate_combinations(
+    beam_payload = _run_region_candidate_beam_search(
+        args=args,
         instruction_prompt=instruction_prompt,
+        sampled_pairs=sampled_pairs,
         region_details=region_details,
         region_candidates=region_candidates,
-        num_generated_prompts=args.num_generated_prompts,
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=args.meta_prompt_max_new_tokens,
-        batch_size=args.meta_prompt_batch_size,
-        use_chat_template=not args.disable_chat_template,
     )
-    print(
-        "[agent_gradient_eval_debug] parsed candidate combinations:",
-        f"count={len(combination_payload['candidate_combinations'])}",
-    )
-    synthesis_payload = _generate_prompt_variants_from_region_combinations(
-        instruction_prompt=instruction_prompt,
-        region_details=region_details,
-        candidate_combinations=combination_payload["candidate_combinations"],
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=args.meta_prompt_max_new_tokens,
-        batch_size=args.meta_prompt_batch_size,
-        use_chat_template=not args.disable_chat_template,
-    )
-
-    prompt_result_cache: Dict[str, Dict[str, Any]] = {}
-    scored_variants: List[Dict[str, Any]] = []
-    for variant in synthesis_payload["generated_prompt_variants"]:
-        revised_prompt = variant["revised_prompt"]
-        if not revised_prompt:
-            scored_variants.append(
-                {
-                    **variant,
-                    "selection_metrics": None,
-                    "validation": None,
-                    "full_evaluation": None,
-                    "delta_vs_baseline": None,
-                    "retained_for_full_validation": False,
-                }
-            )
-            continue
-
-        cached_result = prompt_result_cache.get(revised_prompt)
-        if cached_result is None:
-            prompts, target_labels = _build_binary_prompts_for_instruction(
-                instruction_prompt=revised_prompt,
-                binary_pairs=sampled_pairs,
-            )
-            selection_metrics = score_binary_prompts_with_ce_and_perplexity(
-                prompts=prompts,
-                target_labels=target_labels,
-                model=model,
-                tokenizer=tokenizer,
-                batch_size=args.validation_batch_size,
-                use_chat_template=not args.disable_chat_template,
-            )
-            combined_score = (
-                selection_metrics["mean_cross_entropy"]
-                + args.selection_perplexity_lambda * selection_metrics["mean_perplexity"]
-            )
-            cached_result = {
-                "selection_metrics": {
-                    **selection_metrics,
-                    "combined_score": combined_score,
-                },
-            }
-            prompt_result_cache[revised_prompt] = copy.deepcopy(cached_result)
-
-        scored_variants.append(
-            {
-                **variant,
-                "selection_metrics": copy.deepcopy(cached_result["selection_metrics"]),
-                "validation": None,
-                "full_evaluation": None,
-                "delta_vs_baseline": None,
-                "retained_for_full_validation": False,
-            }
-        )
-        print(
-            "[agent_gradient_eval_debug] scored synthesized prompt:",
-            f"generation_index={variant['generation_index']}",
-            f"combination_key={variant['combination_key']}",
-            f"combined_score={cached_result['selection_metrics']['combined_score']:.6f}",
-        )
-
-    ranked_variants = sorted(
-        [
-            variant for variant in scored_variants
-            if variant["selection_metrics"] is not None and variant["changed"]
-        ],
-        key=lambda item: (
-            item["selection_metrics"]["combined_score"],
-            item["selection_metrics"]["mean_cross_entropy"],
-            item["selection_metrics"]["mean_perplexity"],
-        ),
-    )
-    retained_prompt_texts: List[str] = []
-    for variant in ranked_variants:
-        prompt_text = variant["revised_prompt"]
-        if prompt_text in retained_prompt_texts:
-            continue
-        retained_prompt_texts.append(prompt_text)
-        if len(retained_prompt_texts) == args.top_k_prompts:
-            break
+    scored_variants = beam_payload["generated_prompt_variants"]
+    retained_prompt_texts = [variant["revised_prompt"] for variant in scored_variants]
     retained_prompt_text_set = set(retained_prompt_texts)
-    print("[agent_gradient_eval_debug] retained top-k prompts:")
+    print("[agent_gradient_eval_debug] final beam prompts:")
     if retained_prompt_texts:
         for retained_index, prompt_text in enumerate(retained_prompt_texts):
-            print(f"[retained_prompt {retained_index}]")
+            print(f"[beam_prompt {retained_index}]")
             print(prompt_text)
     else:
         print("[]")
     evaluation_cache: Dict[str, Dict[str, Any]] = {}
     selection_metrics_by_prompt = {
         variant["revised_prompt"]: variant["selection_metrics"]
-        for variant in ranked_variants
+        for variant in scored_variants
+        if variant["selection_metrics"] is not None
     }
 
     for variant in scored_variants:
@@ -2262,7 +2494,7 @@ def _build_and_evaluate_region_candidate_prompts(
                 use_chat_template=not args.disable_chat_template,
                 log_context={
                     "generation_index": variant.get("generation_index"),
-                    "combination_key": variant.get("combination_key"),
+                    "beam_index": variant.get("beam_index"),
                 },
             )
             evaluation_cache[revised_prompt] = copy.deepcopy(evaluation)
@@ -2288,16 +2520,16 @@ def _build_and_evaluate_region_candidate_prompts(
             "meta_prompt": item.get("meta_prompt"),
             "raw_output": item.get("raw_output"),
         }
-        for item in region_candidates
+        for item in beam_payload["region_candidates"]
     ]
-    prompt_editing_payload["region_candidates"] = list(region_candidates)
-    prompt_editing_payload["combination_meta_prompt"] = combination_payload["meta_prompt"]
-    prompt_editing_payload["combination_raw_output"] = combination_payload["raw_output"]
-    prompt_editing_payload["candidate_combinations"] = combination_payload["candidate_combinations"]
-    prompt_editing_payload["synthesis_meta_prompt"] = (
-        synthesis_payload["meta_prompts"][0] if synthesis_payload["meta_prompts"] else None
-    )
-    prompt_editing_payload["synthesis_meta_prompts"] = synthesis_payload["meta_prompts"]
+    prompt_editing_payload["region_candidates"] = list(beam_payload["region_candidates"])
+    prompt_editing_payload["beam_width"] = beam_payload["beam_width"]
+    prompt_editing_payload["beam_search_steps"] = beam_payload["beam_search_steps"]
+    prompt_editing_payload["combination_meta_prompt"] = None
+    prompt_editing_payload["combination_raw_output"] = ""
+    prompt_editing_payload["candidate_combinations"] = []
+    prompt_editing_payload["synthesis_meta_prompt"] = None
+    prompt_editing_payload["synthesis_meta_prompts"] = []
     prompt_editing_payload["generated_prompt_variants"] = scored_variants
     prompt_editing_payload["retained_top_k_prompts"] = [
         {
@@ -2327,13 +2559,10 @@ def _run_llm_candidate_suggestion(
         mode=MODE_LLM_CANDIDATE_SUGGESTION,
         baseline_validation=baseline_validation,
     )
-    if args.num_generated_prompts <= 0:
-        print("[agent_gradient_eval_debug] prompt variant generation skipped")
-        return prompt_editing_payload
     if args.num_region_candidates <= 0:
         raise ValueError("--num-region-candidates must be positive in LLM_CANDIDATE_SUGGESTION.")
-    if args.top_k_prompts <= 0:
-        raise ValueError("--top-k-prompts must be positive in LLM_CANDIDATE_SUGGESTION.")
+    if args.beam_width <= 0:
+        raise ValueError("--beam-width must be positive in LLM_CANDIDATE_SUGGESTION.")
 
     region_details = _resolve_region_details(
         instruction_prompt=instruction_prompt,
@@ -2345,6 +2574,7 @@ def _run_llm_candidate_suggestion(
         "[agent_gradient_eval_debug] generating all-region candidates in a single LLM run:",
         f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
         f"num_region_candidates={args.num_region_candidates}",
+        f"beam_width={args.beam_width}",
     )
     region_candidate_generation_payload = _generate_region_candidates(
         instruction_prompt=instruction_prompt,
@@ -2388,15 +2618,12 @@ def _run_lm_probability_candidate_suggestion(
         mode=MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
         baseline_validation=baseline_validation,
     )
-    if args.num_generated_prompts <= 0:
-        print("[agent_gradient_eval_debug] prompt variant generation skipped")
-        return prompt_editing_payload
     if args.num_region_candidates <= 0:
         raise ValueError(
             "--num-region-candidates must be positive in LM_PROBABILITY_CANDIDATE_SUGGESTION."
         )
-    if args.top_k_prompts <= 0:
-        raise ValueError("--top-k-prompts must be positive in LM_PROBABILITY_CANDIDATE_SUGGESTION.")
+    if args.beam_width <= 0:
+        raise ValueError("--beam-width must be positive in LM_PROBABILITY_CANDIDATE_SUGGESTION.")
 
     region_details = _resolve_region_details(
         instruction_prompt=instruction_prompt,
@@ -2408,6 +2635,7 @@ def _run_lm_probability_candidate_suggestion(
         "[agent_gradient_eval_debug] generating LM probability region candidates:",
         f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
         f"num_region_candidates={args.num_region_candidates}",
+        f"beam_width={args.beam_width}",
         f"lm_probability_submode={args.lm_probability_submode}",
     )
     region_candidates = _generate_region_candidates_from_lm_probability(
