@@ -59,7 +59,6 @@ LM_PROBABILITY_SUBMODE_CHOICES = [
     LM_PROBABILITY_SUBMODE_NO_CONTEXT,
     LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT,
 ]
-REGION_CANDIDATE_SUGGESTION_NUM_RUNS = 3
 MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
     MODE_LLM_CANDIDATE_SUGGESTION,
@@ -673,20 +672,6 @@ def _build_gradient_region_meta_prompt(
     return prompt
 
 
-def _build_single_region_marked_prompt(
-    *,
-    instruction_prompt: str,
-    region: Dict[str, Any],
-) -> str:
-    return (
-        instruction_prompt[: region["start_char"]]
-        + "<target>"
-        + instruction_prompt[region["start_char"] : region["end_char"]]
-        + "</target>"
-        + instruction_prompt[region["end_char"] :]
-    )
-
-
 def _build_multi_region_marked_prompt(
     *,
     instruction_prompt: str,
@@ -705,22 +690,45 @@ def _build_multi_region_marked_prompt(
     return marked_prompt
 
 
+def _build_region_candidate_request_blocks(
+    *,
+    selected_regions: Sequence[Dict[str, Any]],
+) -> str:
+    blocks: List[str] = []
+    for region in selected_regions:
+        blocks.append(
+            "\n".join(
+                [
+                    f"Span {region['region_rank']}",
+                    f"Text: ```{region['region_text']}```",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
+
+
 def _build_region_candidate_meta_prompt(
     *,
     instruction_prompt: str,
-    region: Dict[str, Any],
+    region_details: Dict[str, Any],
     num_region_candidates: int,
 ) -> str:
     prompt = GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1
-    prompt = prompt.replace("#REGION_TEXT#", region["region_text"])
     prompt = prompt.replace(
         "#MARKED_PROMPT#",
-        _build_single_region_marked_prompt(
+        _build_multi_region_marked_prompt(
             instruction_prompt=instruction_prompt,
-            region=region,
+            selected_regions=region_details["selected_regions"],
+        ),
+    )
+    prompt = prompt.replace(
+        "#REGION_CANDIDATE_REQUEST_BLOCKS#",
+        _build_region_candidate_request_blocks(
+            selected_regions=region_details["selected_regions"],
         ),
     )
     prompt = prompt.replace("#NUM_CANDIDATES#", str(num_region_candidates))
+    prompt = prompt.replace("#NUM_REGIONS#", str(region_details["num_edit_regions"]))
     return prompt
 
 
@@ -834,6 +842,22 @@ def _sort_key_with_numeric_suffix(value: Any) -> Tuple[str, int]:
     if match:
         return text[: match.start()], int(match.group(1))
     return text, 0
+
+
+def _extract_region_candidate_values(
+    *,
+    parsed_output: Dict[str, Any],
+    region_rank: int,
+) -> List[Any]:
+    region_payload = parsed_output.get(f"span_{region_rank}")
+    if not isinstance(region_payload, dict):
+        return []
+
+    candidate_values = region_payload.get("candidates")
+    if not isinstance(candidate_values, list):
+        return []
+
+    return list(candidate_values)
 
 
 def _strip_region_markup(text: str) -> str:
@@ -1311,6 +1335,12 @@ def _build_summary_payload(
             "dev_prf": original_dev_prf,
         },
         "meta_prompt": prompt_editing_payload.get("meta_prompt"),
+        "region_candidate_meta_prompt": prompt_editing_payload.get(
+            "region_candidate_meta_prompt"
+        ),
+        "region_candidate_raw_output": prompt_editing_payload.get(
+            "region_candidate_raw_output"
+        ),
         "region_candidate_meta_prompts": prompt_editing_payload.get(
             "region_candidate_meta_prompts", []
         ),
@@ -1467,89 +1497,62 @@ def _generate_region_candidates(
     max_new_tokens: int,
     batch_size: int,
     use_chat_template: bool,
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     if num_region_candidates <= 0:
-        return []
+        return {
+            "meta_prompt": None,
+            "raw_output": "",
+            "parsed_output": {},
+            "selected_json_length": None,
+            "region_candidates": [],
+        }
+
+    meta_prompt = _build_region_candidate_meta_prompt(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        num_region_candidates=num_region_candidates,
+    )
+    print("[agent_gradient_eval_debug] all-region candidate meta prompt:")
+    print(meta_prompt)
+    raw_output = run_prompts(
+        [meta_prompt],
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        batch_size=batch_size,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        do_sample=True,
+        do_log=True,
+        log_label="agent_gradient_eval_debug_region_candidates",
+    )[0]
+    print("[agent_gradient_eval_debug] all-region candidate raw output:")
+    print(raw_output)
+
+    try:
+        parsed_output = extract_json_object(raw_output)
+    except (ValueError, TypeError):
+        parsed_output = {}
+    if not isinstance(parsed_output, dict):
+        parsed_output = {}
+
+    json_length = None
+    if parsed_output:
+        json_length = len(json.dumps(parsed_output, ensure_ascii=False, sort_keys=True))
+        print(
+            "[agent_gradient_eval_debug] all-region candidate parsed json length:",
+            f"json_length={json_length}",
+        )
 
     region_candidates: List[Dict[str, Any]] = []
     for region in region_details["selected_regions"]:
-        meta_prompt = _build_region_candidate_meta_prompt(
-            instruction_prompt=instruction_prompt,
-            region=region,
-            num_region_candidates=num_region_candidates,
-        )
-        print(
-            "[agent_gradient_eval_debug] region candidate meta prompt:",
-            f"region_rank={region['region_rank']}",
-            f"region_text={region['region_text']!r}",
-        )
-        print(meta_prompt)
-        raw_outputs = run_prompts(
-            [meta_prompt] * REGION_CANDIDATE_SUGGESTION_NUM_RUNS,
-            model=model,
-            tokenizer=tokenizer,
-            max_new_tokens=max_new_tokens,
-            batch_size=batch_size,
-            use_chat_template=use_chat_template,
-            add_generation_prompt=True,
-            enable_thinking=False,
-            do_sample=True,
-            do_log=True,
-            log_label="agent_gradient_eval_debug_region_candidates",
-        )
-        best_raw_output = raw_outputs[0] if raw_outputs else ""
-        best_parsed_output: Dict[str, Any] = {}
-        best_json_length = float("inf")
-        best_generation_index = 0
-        for generation_index, raw_output in enumerate(raw_outputs):
-            print(
-                "[agent_gradient_eval_debug] region candidate raw output:",
-                f"region_rank={region['region_rank']}",
-                f"generation_index={generation_index}",
-                f"region_text={region['region_text']!r}",
-            )
-            print(raw_output)
-            try:
-                parsed_output = extract_json_object(raw_output)
-            except (ValueError, TypeError):
-                parsed_output = {}
-            if not isinstance(parsed_output, dict):
-                continue
-            json_string = json.dumps(parsed_output, ensure_ascii=False, sort_keys=True)
-            json_length = len(json_string)
-            print(
-                "[agent_gradient_eval_debug] region candidate parsed json length:",
-                f"region_rank={region['region_rank']}",
-                f"generation_index={generation_index}",
-                f"json_length={json_length}",
-            )
-            if json_length < best_json_length:
-                best_raw_output = raw_output
-                best_parsed_output = parsed_output
-                best_json_length = json_length
-                best_generation_index = generation_index
-
-        print(
-            "[agent_gradient_eval_debug] selected region candidate output:",
-            f"region_rank={region['region_rank']}",
-            f"selected_generation_index={best_generation_index}",
-            f"selected_json_length={best_json_length if best_json_length != float('inf') else 'unparsed'}",
+        ordered_candidates = _extract_region_candidate_values(
+            parsed_output=parsed_output,
+            region_rank=int(region["region_rank"]),
         )
         candidates: List[str] = []
         seen: set[str] = set()
-        ordered_candidates: List[Any] = []
-        if isinstance(best_parsed_output, dict):
-            numeric_items: List[Tuple[int, Any]] = []
-            fallback_items: List[Tuple[str, Any]] = []
-            for key, candidate_text in best_parsed_output.items():
-                try:
-                    numeric_items.append((int(str(key)), candidate_text))
-                except (TypeError, ValueError):
-                    fallback_items.append((str(key), candidate_text))
-            numeric_items.sort(key=lambda item: item[0])
-            fallback_items.sort(key=lambda item: item[0])
-            ordered_candidates = [value for _, value in numeric_items]
-            ordered_candidates.extend(value for _, value in fallback_items)
         for candidate_text in ordered_candidates:
             normalized = _normalize_span_replacement_text(candidate_text)
             if not normalized or normalized in seen:
@@ -1563,12 +1566,10 @@ def _generate_region_candidates(
                 "region_rank": region["region_rank"],
                 "region_text": region["region_text"],
                 "meta_prompt": meta_prompt,
-                "raw_output": best_raw_output,
-                "raw_outputs": raw_outputs,
-                "selected_generation_index": best_generation_index,
-                "selected_json_length": (
-                    None if best_json_length == float("inf") else best_json_length
-                ),
+                "raw_output": raw_output,
+                "raw_outputs": [raw_output],
+                "selected_generation_index": 0,
+                "selected_json_length": json_length,
                 "candidates": candidates,
             }
         )
@@ -1577,7 +1578,14 @@ def _generate_region_candidates(
             f"region_rank={region['region_rank']}",
             f"candidates={json.dumps(candidates, ensure_ascii=False)}",
         )
-    return region_candidates
+
+    return {
+        "meta_prompt": meta_prompt,
+        "raw_output": raw_output,
+        "parsed_output": parsed_output,
+        "selected_json_length": json_length,
+        "region_candidates": region_candidates,
+    }
 
 
 def _generate_region_candidate_combinations(
@@ -2087,6 +2095,8 @@ def _build_region_candidate_prompt_editing_payload(
         "mode": mode,
         "baseline_validation": baseline_validation,
         "selected_regions": [],
+        "region_candidate_meta_prompt": None,
+        "region_candidate_raw_output": "",
         "region_candidate_meta_prompts": [],
         "region_candidates": [],
         "combination_meta_prompt": None,
@@ -2099,7 +2109,7 @@ def _build_region_candidate_prompt_editing_payload(
     }
 
 
-def _complete_region_candidate_suggestion(
+def _build_and_evaluate_region_candidate_prompts(
     *,
     args: argparse.Namespace,
     instruction_prompt: str,
@@ -2109,6 +2119,7 @@ def _complete_region_candidate_suggestion(
     baseline_confusion_matrix: Dict[str, int],
     region_details: Dict[str, Any],
     region_candidates: Sequence[Dict[str, Any]],
+    region_candidate_generation_payload: Dict[str, Any] | None,
     prompt_editing_payload: Dict[str, Any],
     model,
     tokenizer,
@@ -2261,6 +2272,16 @@ def _complete_region_candidate_suggestion(
         variant["retained_for_full_validation"] = True
 
     prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
+    prompt_editing_payload["region_candidate_meta_prompt"] = (
+        region_candidate_generation_payload.get("meta_prompt")
+        if region_candidate_generation_payload
+        else None
+    )
+    prompt_editing_payload["region_candidate_raw_output"] = (
+        region_candidate_generation_payload.get("raw_output", "")
+        if region_candidate_generation_payload
+        else ""
+    )
     prompt_editing_payload["region_candidate_meta_prompts"] = [
         {
             "region_rank": item["region_rank"],
@@ -2321,11 +2342,11 @@ def _run_llm_candidate_suggestion(
         num_edit_regions=args.num_edit_regions,
     )
     print(
-        "[agent_gradient_eval_debug] generating per-region candidates:",
+        "[agent_gradient_eval_debug] generating all-region candidates in a single LLM run:",
         f"regions={[region['region_rank'] for region in region_details['selected_regions']]}",
         f"num_region_candidates={args.num_region_candidates}",
     )
-    region_candidates = _generate_region_candidates(
+    region_candidate_generation_payload = _generate_region_candidates(
         instruction_prompt=instruction_prompt,
         region_details=region_details,
         num_region_candidates=args.num_region_candidates,
@@ -2335,7 +2356,8 @@ def _run_llm_candidate_suggestion(
         batch_size=args.meta_prompt_batch_size,
         use_chat_template=not args.disable_chat_template,
     )
-    return _complete_region_candidate_suggestion(
+    region_candidates = region_candidate_generation_payload["region_candidates"]
+    return _build_and_evaluate_region_candidate_prompts(
         args=args,
         instruction_prompt=instruction_prompt,
         sampled_pairs=sampled_pairs,
@@ -2344,6 +2366,7 @@ def _run_llm_candidate_suggestion(
         baseline_confusion_matrix=baseline_confusion_matrix,
         region_details=region_details,
         region_candidates=region_candidates,
+        region_candidate_generation_payload=region_candidate_generation_payload,
         prompt_editing_payload=prompt_editing_payload,
         model=model,
         tokenizer=tokenizer,
@@ -2397,7 +2420,7 @@ def _run_lm_probability_candidate_suggestion(
         batch_size=args.meta_prompt_batch_size,
         lm_probability_submode=args.lm_probability_submode,
     )
-    return _complete_region_candidate_suggestion(
+    return _build_and_evaluate_region_candidate_prompts(
         args=args,
         instruction_prompt=instruction_prompt,
         sampled_pairs=sampled_pairs,
@@ -2406,6 +2429,7 @@ def _run_lm_probability_candidate_suggestion(
         baseline_confusion_matrix=baseline_confusion_matrix,
         region_details=region_details,
         region_candidates=region_candidates,
+        region_candidate_generation_payload=None,
         prompt_editing_payload=prompt_editing_payload,
         model=model,
         tokenizer=tokenizer,

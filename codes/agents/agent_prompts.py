@@ -239,34 +239,45 @@ Do not include any edit tags such as <edit_start_1> or <edit_end_1> in the final
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
 
-GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1 = '''You are an expert on suggesting replacements for a targeted span in a prompt.
+GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1 = '''You are an expert on suggesting replacements for targeted spans in a prompt.
 
-The targeted span is marked using <target> and </target>.
+The editable spans are marked using tags such as <span_1>...</span_1>, <span_2>...</span_2>, and so on.
 
-Input Prompt with targeted span:
+Input Prompt with editable spans:
 ```
 #MARKED_PROMPT#
 ```
 
-Targeted span:
-```#REGION_TEXT#```
+Editable spans:
+#REGION_CANDIDATE_REQUEST_BLOCKS#
 
 Task:
-Suggest #NUM_CANDIDATES# replacements for the targeted span that fit naturally in context.
+Suggest #NUM_CANDIDATES# replacements for each editable span so that every replacement fits naturally in context.
 
 Rules:
-- Replacements should preserve the meaning
-- Treat the tagged span as a single unit
-- Return only replacements for the targeted span 
+- Preserve the meaning and role of each editable span
+- Treat each tagged span as a single unit
+- Return replacements only for the editable spans
+- A candidate may be identical to the original span text if keeping it unchanged is the best option
 
 Please reason through the problem, but output the replacements in JSON:
-```
-json
+```json
 {
-  "1": "replacement 1",
-  "2": "replacement 2",
+  "span_1": {
+    "candidates": [
+      "replacement 1",
+      "...",
+      "replacement #NUM_CANDIDATES#"
+    ]
+  },
   ...
-  "#NUM_CANDIDATES#": "replacement #NUM_CANDIDATES#"
+  "span_#NUM_REGIONS#": {
+    "candidates": [
+      "replacement 1",
+      "...",
+      "replacement #NUM_CANDIDATES#"
+    ]
+  }
 }
 ```
 '''
