@@ -1379,6 +1379,7 @@ def _build_summary_payload(
     prompt_editing_payload: Dict[str, Any],
     baseline_confusion_matrix: Dict[str, int],
     original_dev_prf: Dict[str, float] | None,
+    sampling_summary: Dict[str, Any],
 ) -> Dict[str, Any]:
     generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
     summary_variants: List[Dict[str, Any]] = []
@@ -1414,6 +1415,7 @@ def _build_summary_payload(
             "balanced_train_prf": baseline_prf,
             "dev_prf": original_dev_prf,
         },
+        "sampling_summary": copy.deepcopy(sampling_summary),
         "meta_prompt": prompt_editing_payload.get("meta_prompt"),
         "region_candidate_meta_prompt": prompt_editing_payload.get(
             "region_candidate_meta_prompt"
@@ -1487,6 +1489,15 @@ def _strip_prediction_arrays_from_prompt_editing_payload(
         compact_variants.append(compact_variant)
     compact_payload["generated_prompt_variants"] = compact_variants
     return compact_payload
+
+
+def _compact_selection_metrics(selection_metrics: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "mean_cross_entropy": selection_metrics.get("mean_cross_entropy"),
+        "mean_perplexity": selection_metrics.get("mean_perplexity"),
+        "prompt_fluency_perplexity": selection_metrics.get("prompt_fluency_perplexity"),
+        "combined_score": selection_metrics.get("combined_score"),
+    }
 
 
 def _build_sampled_data_and_predictions_payload(
@@ -1692,7 +1703,7 @@ def _score_instruction_prompt_for_candidate_selection(
         instruction_prompt=instruction_prompt,
         binary_pairs=sampled_pairs,
     )
-    selection_metrics = score_binary_prompts_with_ce_and_perplexity(
+    raw_selection_metrics = score_binary_prompts_with_ce_and_perplexity(
         prompts=prompts,
         target_labels=target_labels,
         model=model,
@@ -1705,9 +1716,11 @@ def _score_instruction_prompt_for_candidate_selection(
         model=model,
         tokenizer=tokenizer,
     )
-    selection_metrics["prompt_perplexity"] = prompt_perplexity
-    selection_metrics["perplexities"] = [prompt_perplexity]
-    selection_metrics["mean_perplexity"] = prompt_perplexity
+    selection_metrics = {
+        "mean_cross_entropy": raw_selection_metrics["mean_cross_entropy"],
+        "mean_perplexity": prompt_perplexity,
+        "prompt_fluency_perplexity": prompt_perplexity,
+    }
     combined_score = (
         selection_metrics["mean_cross_entropy"]
         + selection_perplexity_lambda * selection_metrics["mean_perplexity"]
@@ -1841,6 +1854,10 @@ def _run_region_candidate_beam_search(
                 item["selection_metrics"]["mean_perplexity"],
             ),
         )
+        retained_prompt_to_beam_index = {
+            node["revised_prompt"]: beam_index
+            for beam_index, node in enumerate(ranked_nodes[: args.beam_width])
+        }
         beam_nodes = []
         for beam_index, node in enumerate(ranked_nodes[: args.beam_width]):
             node_copy = copy.deepcopy(node)
@@ -1871,6 +1888,22 @@ def _run_region_candidate_beam_search(
                 "num_parent_nodes": parent_count,
                 "num_candidates_considered_per_parent": len(region_candidate_texts),
                 "num_expanded_unique_prompts": len(expanded_by_prompt),
+                "expanded_unique_nodes": [
+                    {
+                        "beam_index": retained_prompt_to_beam_index.get(node["revised_prompt"]),
+                        "parent_beam_index": node["parent_beam_index"],
+                        "candidate_position": node["candidate_position"],
+                        "selected_replacements": _build_selected_replacements_payload(
+                            selected_regions=region_details["selected_regions"],
+                            selected_replacements=node["selected_replacements"],
+                        ),
+                        "num_changed_spans": node["num_changed_spans"],
+                        "prompt": node["revised_prompt"],
+                        "selection_metrics": copy.deepcopy(node["selection_metrics"]),
+                        "retained_in_beam": node["revised_prompt"] in retained_prompt_to_beam_index,
+                    }
+                    for node in ranked_nodes
+                ],
                 "retained_beam_nodes": [
                     {
                         "beam_index": node["beam_index"],
@@ -2868,6 +2901,17 @@ def main() -> None:
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
     )
     original_dev_prf = _extract_prf_from_prompt_info(prompt_info)
+    sampling_summary = {
+        "gradient_split": "train",
+        "evaluation_split": args.full_eval_split,
+        "train_gradient_sample_size": args.train_gradient_sample_size,
+        "train_d_pair_pool_size": len(train_d_pairs),
+        "sampled_pair_count": len(sampled_pairs),
+        "full_eval_pair_count": len(full_eval_pairs),
+        "bucket_stats": copy.deepcopy(bucket_stats),
+        "baseline_bucket_validation": copy.deepcopy(baseline_validation),
+        "baseline_confusion_matrix": copy.deepcopy(baseline_confusion_matrix),
+    }
 
     if args.mode == MODE_DIRECT_CANDIDATE_GENERATION:
         prompt_editing_payload = _run_direct_candidate_generation(
@@ -2943,6 +2987,7 @@ def main() -> None:
         prompt_editing_payload=prompt_editing_payload,
         baseline_confusion_matrix=baseline_confusion_matrix,
         original_dev_prf=original_dev_prf,
+        sampling_summary=sampling_summary,
     )
     run_dir = _create_output_run_dir(
         output_root_dir=args.output_root_dir,

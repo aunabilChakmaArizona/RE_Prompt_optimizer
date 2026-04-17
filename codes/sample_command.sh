@@ -746,6 +746,31 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 --initial-prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B" --parent-selection-mode "initial_prompt_only" \
 --initial-prompt-node-id 11 > nohup_outs/nohup_v3_qwen4_group2_mixed_20260301_030139_node11_initial_prompt_only.out 2>&1 &
 
+## updated code with beam search for lambda test
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
