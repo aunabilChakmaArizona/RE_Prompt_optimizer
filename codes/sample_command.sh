@@ -761,8 +761,8 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --max-total-region-tokens 15 \
   --region-expansion-threshold-ratio 0.6 \
   --num-edit-regions 3 \
-  --num-region-candidates 5 \
-  --beam-width 3 \
+  --num-region-candidates 4 \
+  --beam-width 2 \
   --selection-perplexity-lambda 0.2 \
   --meta-prompt-max-new-tokens 10000 \
   --meta-prompt-batch-size 1 \

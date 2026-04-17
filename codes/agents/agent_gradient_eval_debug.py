@@ -854,10 +854,16 @@ def _prepare_region_candidates_for_beam_search(
         seen: set[str] = set()
         for candidate_text in [original_text, *raw_candidates]:
             normalized = _normalize_span_replacement_text(candidate_text)
-            if not normalized or normalized in seen:
+            if not normalized:
                 continue
-            seen.add(normalized)
-            candidates.append(normalized)
+            aligned_candidate = _align_replacement_whitespace_to_region(
+                region_text=original_text,
+                replacement_text=normalized,
+            )
+            if aligned_candidate in seen:
+                continue
+            seen.add(aligned_candidate)
+            candidates.append(aligned_candidate)
         prepared_candidates.append(
             {
                 **copy.deepcopy(candidate_index.get(region_rank, {})),
@@ -867,6 +873,22 @@ def _prepare_region_candidates_for_beam_search(
             }
         )
     return prepared_candidates
+
+
+def _align_replacement_whitespace_to_region(
+    *,
+    region_text: str,
+    replacement_text: str,
+) -> str:
+    leading_whitespace_length = len(region_text) - len(region_text.lstrip())
+    trailing_whitespace_length = len(region_text) - len(region_text.rstrip())
+    leading_whitespace = region_text[:leading_whitespace_length]
+    trailing_whitespace = (
+        region_text[len(region_text) - trailing_whitespace_length :]
+        if trailing_whitespace_length > 0
+        else ""
+    )
+    return f"{leading_whitespace}{replacement_text.strip()}{trailing_whitespace}"
 
 
 def _build_prompt_from_region_replacements( #todo: we should prompt to build the prompt?
@@ -881,6 +903,10 @@ def _build_prompt_from_region_replacements( #todo: we should prompt to build the
         replacement_text = selected_replacements.get(region_rank)
         if replacement_text is None:
             continue
+        replacement_text = _align_replacement_whitespace_to_region(
+            region_text=region["region_text"],
+            replacement_text=replacement_text,
+        )
         revised_prompt = (
             revised_prompt[: region["start_char"]]
             + replacement_text
@@ -898,9 +924,12 @@ def _build_selected_replacements_payload(
         {
             "region_rank": int(region["region_rank"]),
             "region_text": region["region_text"],
-            "replacement_text": selected_replacements.get(
-                int(region["region_rank"]),
-                region["region_text"],
+            "replacement_text": _align_replacement_whitespace_to_region(
+                region_text=region["region_text"],
+                replacement_text=selected_replacements.get(
+                    int(region["region_rank"]),
+                    region["region_text"],
+                ),
             ),
         }
         for region in selected_regions
