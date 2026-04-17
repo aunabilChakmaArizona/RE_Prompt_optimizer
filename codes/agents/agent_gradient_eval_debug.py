@@ -855,7 +855,7 @@ def _prepare_region_candidates_for_beam_search(
             replacement_text=original_text,
         )
         candidates: List[str] = [original_candidate]
-        seen_stripped: set[str] = {original_candidate.strip()}
+        seen_normalized: set[str] = {original_candidate.strip().casefold()}
         for candidate_text in raw_candidates:
             normalized = _normalize_span_replacement_text(candidate_text)
             if not normalized:
@@ -864,9 +864,10 @@ def _prepare_region_candidates_for_beam_search(
                 region_text=original_text,
                 replacement_text=normalized,
             )
-            if aligned_candidate.strip() in seen_stripped:
+            normalized_candidate = aligned_candidate.strip().casefold()
+            if normalized_candidate in seen_normalized:
                 continue
-            seen_stripped.add(aligned_candidate.strip())
+            seen_normalized.add(normalized_candidate)
             candidates.append(aligned_candidate)
         prepared_candidates.append(
             {
