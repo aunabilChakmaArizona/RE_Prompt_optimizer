@@ -850,9 +850,13 @@ def _prepare_region_candidates_for_beam_search(
         region_rank = int(region["region_rank"])
         original_text = region["region_text"]
         raw_candidates = candidate_index.get(region_rank, {}).get("candidates", [])
-        candidates: List[str] = []
-        seen: set[str] = set()
-        for candidate_text in [original_text, *raw_candidates]:
+        original_candidate = _align_replacement_whitespace_to_region(
+            region_text=original_text,
+            replacement_text=original_text,
+        )
+        candidates: List[str] = [original_candidate]
+        seen_stripped: set[str] = {original_candidate.strip()}
+        for candidate_text in raw_candidates:
             normalized = _normalize_span_replacement_text(candidate_text)
             if not normalized:
                 continue
@@ -860,16 +864,16 @@ def _prepare_region_candidates_for_beam_search(
                 region_text=original_text,
                 replacement_text=normalized,
             )
-            if aligned_candidate in seen:
+            if aligned_candidate.strip() in seen_stripped:
                 continue
-            seen.add(aligned_candidate)
+            seen_stripped.add(aligned_candidate.strip())
             candidates.append(aligned_candidate)
         prepared_candidates.append(
             {
                 **copy.deepcopy(candidate_index.get(region_rank, {})),
                 "region_rank": region_rank,
                 "region_text": original_text,
-                "candidates": candidates if candidates else [original_text],
+                "candidates": candidates,
             }
         )
     return prepared_candidates
