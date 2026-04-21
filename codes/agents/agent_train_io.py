@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
+import pickle
+import random
 import sys
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Set, Tuple
@@ -83,6 +86,14 @@ def _resolve_population_path(source_path: str) -> str:
             f"Could not find population.json at '{population_path}'"
         )
     return population_path
+
+
+def _resolve_run_dir_from_source_path(source_path: str) -> str:
+    abs_source_path = os.path.abspath(source_path)
+    if os.path.isdir(abs_source_path):
+        return abs_source_path
+    population_path = _resolve_population_path(source_path)
+    return os.path.dirname(population_path)
 
 
 def _load_population_payload(source_path: str) -> Tuple[Dict[str, object], str]:
@@ -313,6 +324,36 @@ def serialize_feedback_sample(sample: FeedbackSample) -> Dict[str, object]:
         "raw_feedback_text": sample.raw_feedback_text,
         "feedback_text": sample.feedback_text,
     }
+
+
+def save_resume_state(run_dir: str, rng: random.Random, next_node_id: int) -> None:
+    rng_state_bytes = pickle.dumps(rng.getstate(), protocol=pickle.HIGHEST_PROTOCOL)
+    payload = {
+        "python_random_state_b64": base64.b64encode(rng_state_bytes).decode("ascii"),
+        "next_node_id": next_node_id,
+    }
+    with open(os.path.join(run_dir, "resume_state.json"), "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+
+
+def load_resume_state(source_path: str) -> Tuple[object, Optional[int], str]:
+    run_dir = _resolve_run_dir_from_source_path(source_path)
+    resume_state_path = os.path.join(run_dir, "resume_state.json")
+    with open(resume_state_path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    rng_state_b64 = payload.get("python_random_state_b64")
+    if not isinstance(rng_state_b64, str):
+        raise ValueError(
+            f"resume_state.json at '{resume_state_path}' is missing python_random_state_b64"
+        )
+    rng_state = pickle.loads(base64.b64decode(rng_state_b64.encode("ascii")))
+
+    next_node_id = payload.get("next_node_id")
+    if next_node_id is not None:
+        next_node_id = int(next_node_id)
+
+    return rng_state, next_node_id, resume_state_path
 
 
 def serialize_feedback_samples(samples: FeedbackSamples) -> Dict[str, object]:

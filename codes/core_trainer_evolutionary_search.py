@@ -17,8 +17,10 @@ from agents.agent_train_io import (
     create_run_dir,
     load_initial_population,
     load_initial_prompt_node,
+    load_resume_state,
     restore_logging,
     save_population,
+    save_resume_state,
     save_summary,
     setup_logging,
     write_args,
@@ -91,6 +93,7 @@ def main() -> None:
 
         initial_prompt_node = None
         initial_population = None
+        resume_next_node_id = None
         if args.load_population:
             if not args.initial_prompt_source_path:
                 raise ValueError(
@@ -116,6 +119,19 @@ def main() -> None:
                 "[core_trainer] initial population node_ids:",
                 [node.node_id for node in initial_population],
             )
+            try:
+                rng_state, resume_next_node_id, resume_state_path = load_resume_state(
+                    args.initial_prompt_source_path
+                )
+            except FileNotFoundError:
+                print(
+                    "[core_trainer] resume_state.json not found; "
+                    "continuing with seed-based RNG initialization"
+                )
+            else:
+                rng.setstate(rng_state)
+                print("[core_trainer] resumed rng state from:", resume_state_path)
+                print("[core_trainer] resumed next_node_id:", resume_next_node_id)
         else:
             if args.initial_prompt_source_path:
                 initial_prompt_node, initial_prompt_population_path = load_initial_prompt_node(
@@ -143,6 +159,7 @@ def main() -> None:
         search = EvolutionarySearch(
             root=root,
             initial_population=initial_population,
+            next_node_id=resume_next_node_id,
             max_iterations=args.max_iterations,
             population_size=args.population_size,
             feedback_sample_size=args.feedback_sample_size,
@@ -179,6 +196,7 @@ def main() -> None:
             best_node,
             final_population=search.population,
         )
+        save_resume_state(run_dir, rng, search._next_node_id)
 
         summary = {
             "run_dir": run_dir,

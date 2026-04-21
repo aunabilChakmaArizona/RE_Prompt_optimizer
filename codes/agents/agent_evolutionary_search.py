@@ -30,6 +30,7 @@ class EvolutionarySearch:
         self,
         root: GraphNode,
         initial_population: Optional[List[GraphNode]] = None,
+        next_node_id: Optional[int] = None,
         max_iterations: int = 20,
         population_size: Optional[int] = None,
         feedback_sample_size: int = 100,
@@ -76,7 +77,14 @@ class EvolutionarySearch:
         if self.root.node_id is None:
             self.root.node_id = (max(existing_node_ids) + 1) if existing_node_ids else 0
             existing_node_ids.append(self.root.node_id)
-        self._next_node_id = (max(existing_node_ids) + 1) if existing_node_ids else 0
+        default_next_node_id = (max(existing_node_ids) + 1) if existing_node_ids else 0
+        if next_node_id is not None and next_node_id < default_next_node_id:
+            raise ValueError(
+                "next_node_id must be >= the next available node id from the initial population"
+            )
+        self._next_node_id = (
+            next_node_id if next_node_id is not None else default_next_node_id
+        )
 
     def _prune_population(self) -> None:
         if self.population_size is None or len(self.population) <= self.population_size:
