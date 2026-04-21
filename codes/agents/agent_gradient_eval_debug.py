@@ -242,6 +242,15 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--Q",
+        type=int,
+        default=1,
+        help=(
+            "Candidate-suggestion modes only. Number of outer gradient-based prompt "
+            "optimization iterations. Q=1 preserves the current single-pass behavior."
+        ),
+    )
+    parser.add_argument(
         "--selection-perplexity-lambda",
         type=float,
         default=0.2,
@@ -1406,15 +1415,10 @@ def _build_confusion_matrix_counts(
     return counts
 
 
-def _build_summary_payload(
+def _build_summary_variants(
     *,
-    instruction_prompt: str,
-    baseline_prf: Dict[str, float],
     prompt_editing_payload: Dict[str, Any],
-    baseline_confusion_matrix: Dict[str, int],
-    original_dev_prf: Dict[str, float] | None,
-    sampling_summary: Dict[str, Any],
-) -> Dict[str, Any]:
+) -> List[Dict[str, Any]]:
     generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
     summary_variants: List[Dict[str, Any]] = []
     for variant in generated_variants:
@@ -1441,8 +1445,150 @@ def _build_summary_payload(
                 ),
             }
         )
+    return summary_variants
+
+
+def _select_best_variant(
+    *,
+    prompt_editing_payload: Dict[str, Any],
+) -> Dict[str, Any] | None:
+    generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
+    ranked_variants = [
+        variant
+        for variant in generated_variants
+        if variant.get("revised_prompt")
+        and variant.get("validation") is not None
+    ]
+    if not ranked_variants:
+        return None
+    return max(
+        ranked_variants,
+        key=lambda variant: (
+            float(variant["validation"]["prf"].get("f1", float("-inf"))),
+            float(variant["validation"]["summary"]["overall"].get("accuracy", float("-inf"))),
+            int(variant["validation"]["summary"].get("fixes_from_mistakes", 0)),
+            -int(variant["validation"]["summary"].get("regressions_from_correct", 0)),
+            -float(variant.get("selection_metrics", {}).get("combined_score", float("inf"))),
+            -float(variant.get("selection_metrics", {}).get("mean_cross_entropy", float("inf"))),
+            -float(variant.get("selection_metrics", {}).get("mean_perplexity", float("inf"))),
+        ),
+    )
+
+
+def _build_selected_prompt_summary(
+    *,
+    iteration_index: int,
+    input_prompt: str,
+    selected_variant: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    if selected_variant is None:
+        return {
+            "iteration_index": iteration_index,
+            "selection_strategy": "fallback_to_input_prompt",
+            "prompt": input_prompt,
+            "changed_vs_input": False,
+            "generation_index": None,
+            "beam_index": None,
+            "selection_metrics": None,
+            "bucket_scores": None,
+            "balanced_train_prf": None,
+            "dev_prf": None,
+        }
+
+    validation = selected_variant.get("validation")
+    full_evaluation = selected_variant.get("full_evaluation")
+    revised_prompt = selected_variant.get("revised_prompt") or input_prompt
+    return {
+        "iteration_index": iteration_index,
+        "selection_strategy": "best_validation_f1",
+        "prompt": revised_prompt,
+        "changed_vs_input": revised_prompt != input_prompt,
+        "generation_index": selected_variant.get("generation_index"),
+        "beam_index": selected_variant.get("beam_index"),
+        "selection_metrics": copy.deepcopy(selected_variant.get("selection_metrics")),
+        "bucket_scores": (
+            copy.deepcopy(validation["confusion_matrix"]["updated"])
+            if validation
+            else None
+        ),
+        "balanced_train_prf": (
+            copy.deepcopy(validation["prf"])
+            if validation
+            else None
+        ),
+        "dev_prf": (
+            copy.deepcopy(full_evaluation["prf"])
+            if full_evaluation
+            else None
+        ),
+    }
+
+
+def _build_iteration_summary(
+    *,
+    iteration_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    prompt_editing_payload = iteration_result["prompt_editing_payload"]
+    gradient_results = iteration_result["gradient_analysis"]
+    return {
+        "iteration_index": iteration_result["iteration_index"],
+        "input_prompt": {
+            "prompt": iteration_result["input_prompt"],
+            "bucket_scores": copy.deepcopy(iteration_result["baseline_confusion_matrix"]),
+            "balanced_train_prf": copy.deepcopy(iteration_result["baseline_prf"]),
+        },
+        "sampling_summary": copy.deepcopy(iteration_result["sampling_summary"]),
+        "train_gradient_collection": copy.deepcopy(iteration_result["train_gradient_collection"]),
+        "gradient_analysis_summary": {
+            "num_instances": gradient_results.get("num_instances"),
+            "token_gradients": len(gradient_results.get("token_gradients", [])),
+            "top_regions_count": len(gradient_results.get("top_regions", [])),
+            "selected_regions": copy.deepcopy(prompt_editing_payload.get("selected_regions", [])),
+        },
+        "region_candidate_meta_prompt": prompt_editing_payload.get(
+            "region_candidate_meta_prompt"
+        ),
+        "region_candidate_raw_output": prompt_editing_payload.get(
+            "region_candidate_raw_output"
+        ),
+        "region_candidate_meta_prompts": copy.deepcopy(
+            prompt_editing_payload.get("region_candidate_meta_prompts", [])
+        ),
+        "region_candidates": copy.deepcopy(prompt_editing_payload.get("region_candidates", [])),
+        "beam_width": prompt_editing_payload.get("beam_width"),
+        "beam_search_steps": copy.deepcopy(prompt_editing_payload.get("beam_search_steps", [])),
+        "generated_prompts": _build_summary_variants(
+            prompt_editing_payload=prompt_editing_payload,
+        ),
+        "selected_prompt": copy.deepcopy(iteration_result["selected_prompt"]),
+    }
+
+
+def _build_summary_payload(
+    *,
+    instruction_prompt: str,
+    baseline_prf: Dict[str, float],
+    prompt_editing_payload: Dict[str, Any],
+    baseline_confusion_matrix: Dict[str, int],
+    original_dev_prf: Dict[str, float] | None,
+    sampling_summary: Dict[str, Any],
+    iteration_results: Sequence[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    summary_variants = _build_summary_variants(
+        prompt_editing_payload=prompt_editing_payload,
+    )
+    iteration_summaries = [
+        _build_iteration_summary(iteration_result=iteration_result)
+        for iteration_result in (iteration_results or [])
+    ]
+    final_selected_prompt = (
+        copy.deepcopy(iteration_summaries[-1]["selected_prompt"])
+        if iteration_summaries
+        else None
+    )
 
     return {
+        "num_iterations": max(len(iteration_summaries), 1),
         "original_prompt": {
             "prompt": instruction_prompt,
             "bucket_scores": baseline_confusion_matrix,
@@ -1450,6 +1596,8 @@ def _build_summary_payload(
             "dev_prf": original_dev_prf,
         },
         "sampling_summary": copy.deepcopy(sampling_summary),
+        "iterations": iteration_summaries,
+        "final_selected_prompt": final_selected_prompt,
         "meta_prompt": prompt_editing_payload.get("meta_prompt"),
         "region_candidate_meta_prompt": prompt_editing_payload.get(
             "region_candidate_meta_prompt"
@@ -1573,6 +1721,30 @@ def _build_sampled_data_and_predictions_payload(
         "sampling": copy.deepcopy(sampling),
         "sampled_examples": copy.deepcopy(list(sampled_examples)),
         "generated_prompt_predictions": generated_variants,
+    }
+
+
+def _build_iterative_sampled_data_and_predictions_payload(
+    *,
+    iteration_results: Sequence[Dict[str, Any]],
+    final_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not iteration_results:
+        return final_payload
+    return {
+        **copy.deepcopy(final_payload),
+        "num_iterations": len(iteration_results),
+        "iterations": [
+            {
+                "iteration_index": iteration_result["iteration_index"],
+                **_build_sampled_data_and_predictions_payload(
+                    sampling=iteration_result["sampling_payload"],
+                    sampled_examples=iteration_result["sampled_examples"],
+                    prompt_editing_payload=iteration_result["prompt_editing_payload"],
+                ),
+            }
+            for iteration_result in iteration_results
+        ],
     }
 
 
@@ -1985,210 +2157,6 @@ def _run_region_candidate_beam_search(
         "beam_search_steps": beam_search_steps,
         "generated_prompt_variants": final_variants,
     }
-
-
-def _generate_region_candidate_combinations(
-    *,
-    instruction_prompt: str,
-    region_details: Dict[str, Any],
-    region_candidates: Sequence[Dict[str, Any]],
-    num_generated_prompts: int,
-    model,
-    tokenizer,
-    max_new_tokens: int,
-    batch_size: int,
-    use_chat_template: bool,
-) -> Dict[str, Any]:
-    if num_generated_prompts <= 0:
-        return {
-            "meta_prompt": None,
-            "raw_output": "",
-            "candidate_combinations": [],
-        }
-
-    meta_prompt = _build_region_candidate_combination_prompt(
-        instruction_prompt=instruction_prompt,
-        region_details=region_details,
-        region_candidates=region_candidates,
-        num_generated_prompts=num_generated_prompts,
-    )
-    print("[agent_gradient_eval_debug] combination meta prompt:")
-    print(meta_prompt)
-    raw_output = run_prompts(
-        [meta_prompt],
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=max_new_tokens,
-        batch_size=batch_size,
-        use_chat_template=use_chat_template,
-        add_generation_prompt=True,
-        enable_thinking=False,
-        do_sample=True,
-        do_log=True,
-        log_label="agent_gradient_eval_debug_region_combinations",
-    )[0]
-    print("[agent_gradient_eval_debug] combination raw output:")
-    print(raw_output)
-
-    try:
-        parsed_output = extract_json_object(raw_output)
-    except (ValueError, TypeError):
-        parsed_output = {}
-
-    candidate_combinations: List[Dict[str, Any]] = []
-    seen_signatures: set[Tuple[Tuple[int, str], ...]] = set()
-    if isinstance(parsed_output, dict):
-        ordered_items = sorted(parsed_output.items(), key=lambda item: _sort_key_with_numeric_suffix(item[0]))
-        for combination_key, replacement_payload in ordered_items:
-            if not isinstance(replacement_payload, dict):
-                continue
-            selected_replacements: Dict[int, str] = {}
-            is_valid = True
-            for region in region_details["selected_regions"]:
-                region_rank = int(region["region_rank"])
-                replacement_text = _normalize_span_replacement_text(
-                    replacement_payload.get(f"span_{region_rank}", "")
-                )
-                if not replacement_text:
-                    is_valid = False
-                    break
-                selected_replacements[region_rank] = replacement_text
-            if not is_valid:
-                continue
-            signature = tuple(
-                (region_rank, selected_replacements[region_rank])
-                for region_rank in sorted(selected_replacements)
-            )
-            if signature in seen_signatures:
-                continue
-            seen_signatures.add(signature)
-            candidate_combinations.append(
-                {
-                    "combination_key": str(combination_key),
-                    "selected_replacements": selected_replacements,
-                    "num_changed_spans": sum(
-                        1
-                        for region in region_details["selected_regions"]
-                        if selected_replacements[int(region["region_rank"])] != region["region_text"]
-                    ),
-                }
-            )
-
-    print("[agent_gradient_eval_debug] parsed candidate combinations detail:")
-    if candidate_combinations:
-        for combination in candidate_combinations:
-            print(
-                json.dumps(
-                    combination,
-                    indent=2,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                )
-            )
-    else:
-        print("[]")
-
-    return {
-        "meta_prompt": meta_prompt,
-        "raw_output": raw_output,
-        "candidate_combinations": candidate_combinations,
-    }
-
-
-def _generate_prompt_variants_from_region_combinations(
-    *,
-    instruction_prompt: str,
-    region_details: Dict[str, Any],
-    candidate_combinations: Sequence[Dict[str, Any]],
-    model,
-    tokenizer,
-    max_new_tokens: int,
-    batch_size: int,
-    use_chat_template: bool,
-) -> Dict[str, Any]:
-    if not candidate_combinations:
-        return {
-            "meta_prompts": [],
-            "raw_outputs": [],
-            "generated_prompt_variants": [],
-        }
-
-    meta_prompts = [
-        _build_region_candidate_synthesis_prompt(
-            instruction_prompt=instruction_prompt,
-            region_details=region_details,
-            selected_replacements=combination["selected_replacements"],
-        )
-        for combination in candidate_combinations
-    ]
-    print("[agent_gradient_eval_debug] synthesis meta prompts:")
-    for generation_index, meta_prompt in enumerate(meta_prompts):
-        print(f"[synthesis_meta_prompt {generation_index}]")
-        print(meta_prompt)
-    raw_outputs = run_prompts(
-        meta_prompts,
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=max_new_tokens,
-        batch_size=batch_size,
-        use_chat_template=use_chat_template,
-        add_generation_prompt=True,
-        enable_thinking=False,
-        do_sample=True,
-        do_log=True,
-        log_label="agent_gradient_eval_debug_region_synthesis",
-    )
-
-    variants: List[Dict[str, Any]] = []
-    seen_prompts: set[str] = set()
-    for generation_index, (combination, meta_prompt, raw_output) in enumerate(
-        zip(candidate_combinations, meta_prompts, raw_outputs)
-    ):
-        revised_prompt = extract_tagged_text(raw_output, "<p>", "</p>")
-        normalized_prompt = _strip_region_markup(revised_prompt)
-        is_duplicate = bool(normalized_prompt) and normalized_prompt in seen_prompts
-        if normalized_prompt:
-            seen_prompts.add(normalized_prompt)
-        print(
-            "[agent_gradient_eval_debug] synthesis raw output:",
-            f"generation_index={generation_index}",
-            f"combination_key={combination['combination_key']}",
-        )
-        print(raw_output)
-        print(
-            "[agent_gradient_eval_debug] synthesized prompt:",
-            f"generation_index={generation_index}",
-            f"combination_key={combination['combination_key']}",
-            f"changed={bool(normalized_prompt) and normalized_prompt != instruction_prompt}",
-            f"duplicate_prompt={is_duplicate}",
-        )
-        print(normalized_prompt)
-        variants.append(
-            {
-                "generation_index": generation_index,
-                "combination_key": combination["combination_key"],
-                "selected_replacements": [
-                    {
-                        "region_rank": int(region["region_rank"]),
-                        "region_text": region["region_text"],
-                        "replacement_text": combination["selected_replacements"][int(region["region_rank"])],
-                    }
-                    for region in region_details["selected_regions"]
-                ],
-                "num_changed_spans": combination["num_changed_spans"],
-                "meta_prompt": meta_prompt,
-                "raw_output": raw_output,
-                "revised_prompt": normalized_prompt,
-                "changed": bool(normalized_prompt) and normalized_prompt != instruction_prompt,
-                "duplicate_prompt": is_duplicate,
-            }
-        )
-    return {
-        "meta_prompts": meta_prompts,
-        "raw_outputs": raw_outputs,
-        "generated_prompt_variants": variants,
-    }
-
 
 def build_full_binary_pairs(
     *,
@@ -2739,6 +2707,242 @@ def _run_lm_probability_candidate_suggestion(
         tokenizer=tokenizer,
     )
 
+
+def _run_candidate_suggestion_iteration(
+    *,
+    args: argparse.Namespace,
+    iteration_index: int,
+    instruction_prompt: str,
+    train_samples: Dict[str, Any],
+    train_sample_index: Dict[str, dict],
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    model,
+    tokenizer,
+) -> Dict[str, Any]:
+    print(
+        "[agent_gradient_eval_debug] starting optimization iteration:",
+        f"iteration={iteration_index}",
+        f"Q={args.Q}",
+    )
+    print("[agent_gradient_eval_debug] iteration input prompt:")
+    print(instruction_prompt)
+
+    iteration_rng = random.Random(args.seed + iteration_index - 1)
+    train_feedback_samples = sample_feedback_fn(
+        train_samples,
+        k=args.train_gradient_sample_size,
+        rng=iteration_rng,
+    )
+    train_d_pair_pool = _build_binary_pairs_from_feedback_samples(
+        feedback_samples=train_feedback_samples,
+        shots_by_id=train_sample_index,
+        dataset_type=args.dataset_type,
+    )
+    print(
+        "[agent_gradient_eval_debug] train D sample built:",
+        f"iteration={iteration_index}",
+        f"D={len(train_d_pair_pool)}",
+    )
+
+    train_d_prompts, train_d_target_labels = _build_binary_prompts_for_instruction(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=train_d_pair_pool,
+    )
+    train_d_predicted_labels = run_binary_inference(
+        train_d_prompts,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=args.validation_batch_size,
+        use_chat_template=not args.disable_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        log_label=f"train_gradient_collection_iter_{iteration_index}",
+    )
+    train_d_pairs = _attach_predictions_to_pairs(
+        pairs=train_d_pair_pool,
+        predicted_labels=train_d_predicted_labels,
+    )
+    train_d_report = {
+        "confusion_matrix": _build_confusion_matrix_counts(
+            predicted_labels=train_d_predicted_labels,
+            target_labels=train_d_target_labels,
+        ),
+        "prf": _build_prf_scores(
+            predicted_labels=train_d_predicted_labels,
+            target_labels=train_d_target_labels,
+        ),
+    }
+    sampled_pairs, bucket_stats = _sample_balanced_pairs_from_bucketed_pool(
+        bucketed_pairs=train_d_pairs,
+        seed=args.seed,
+    )
+    sampled_examples = [dict(pair) for pair in sampled_pairs]
+    sampled_indices = {
+        "correct_indices": [
+            pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"tp", "tn"}
+        ],
+        "mistake_indices": [
+            pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"fp", "fn"}
+        ],
+        "bucket_stats": bucket_stats,
+    }
+    train_gradient_collection = {
+        "iteration_index": iteration_index,
+        "gradient_split": "train",
+        "evaluation_split": args.full_eval_split,
+        "train_gradient_sample_size": args.train_gradient_sample_size,
+        "train_d_pair_indices": [pair["pair_index"] for pair in train_d_pairs],
+        "train_d_bucket_stats": {
+            "available": bucket_stats["available"],
+            "selected_for_gradients": bucket_stats["selected"],
+        },
+        "train_d_evaluation_original_prompt": train_d_report,
+    }
+    print(
+        "[agent_gradient_eval_debug] train D pair pool:",
+        f"iteration={iteration_index}",
+        f"available_tp={bucket_stats['available']['tp']}",
+        f"available_tn={bucket_stats['available']['tn']}",
+        f"available_fp={bucket_stats['available']['fp']}",
+        f"available_fn={bucket_stats['available']['fn']}",
+        f"selected_tp={bucket_stats['selected']['tp']}",
+        f"selected_tn={bucket_stats['selected']['tn']}",
+        f"selected_fp={bucket_stats['selected']['fp']}",
+        f"selected_fn={bucket_stats['selected']['fn']}",
+    )
+    print(
+        "[agent_gradient_eval_debug] train gradient batch built:",
+        f"iteration={iteration_index}",
+        f"pairs={len(sampled_pairs)}",
+    )
+
+    print(
+        "[agent_gradient_eval_debug] running gradient analysis",
+        f"iteration={iteration_index}",
+    )
+    gradient_results = analyze_relation_extraction_binary_pairs(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=sampled_pairs,
+        model=model,
+        tokenizer=tokenizer,
+        dataset_type=args.dataset_type,
+        gradient_batch_size=args.gradient_batch_size,
+        num_candidates=args.num_candidates,
+        candidate_mode=args.candidate_mode,
+        max_regions=args.max_regions,
+        max_total_region_tokens=args.max_total_region_tokens,
+        region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
+        embedding_step_size=args.embedding_step_size,
+        use_chat_template=not args.disable_chat_template,
+    )
+    print(
+        "[agent_gradient_eval_debug] gradient analysis done:",
+        f"iteration={iteration_index}",
+        f"instances={gradient_results['num_instances']}",
+        f"candidate_mode={args.candidate_mode}",
+        f"token_gradients={len(gradient_results['token_gradients'])}",
+        f"top_regions={len(gradient_results['top_regions'])}",
+    )
+
+    baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
+    baseline_confusion_matrix = _build_confusion_matrix_counts(
+        predicted_labels=baseline_score_payload["predicted_labels"],
+        target_labels=baseline_score_payload["target_labels"],
+    )
+    baseline_prf = _build_prf_scores(
+        predicted_labels=baseline_score_payload["predicted_labels"],
+        target_labels=baseline_score_payload["target_labels"],
+    )
+    baseline_validation = _summarize_validation_by_bucket(
+        sampled_pairs=sampled_pairs,
+        score_payload=baseline_score_payload,
+    )
+    print(
+        "[agent_gradient_eval_debug] baseline validation:",
+        f"iteration={iteration_index}",
+        _format_prf_for_log(baseline_prf),
+        f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
+        f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
+        f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
+    )
+
+    if args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
+        prompt_editing_payload = _run_llm_candidate_suggestion(
+            args=args,
+            instruction_prompt=instruction_prompt,
+            sampled_pairs=sampled_pairs,
+            full_eval_pairs=full_eval_pairs,
+            gradient_results=gradient_results,
+            baseline_validation=baseline_validation,
+            baseline_confusion_matrix=baseline_confusion_matrix,
+            model=model,
+            tokenizer=tokenizer,
+        )
+    else:
+        prompt_editing_payload = _run_lm_probability_candidate_suggestion(
+            args=args,
+            instruction_prompt=instruction_prompt,
+            sampled_pairs=sampled_pairs,
+            full_eval_pairs=full_eval_pairs,
+            gradient_results=gradient_results,
+            baseline_validation=baseline_validation,
+            baseline_confusion_matrix=baseline_confusion_matrix,
+            model=model,
+            tokenizer=tokenizer,
+        )
+
+    selected_variant = _select_best_variant(
+        prompt_editing_payload=prompt_editing_payload,
+    )
+    selected_prompt = _build_selected_prompt_summary(
+        iteration_index=iteration_index,
+        input_prompt=instruction_prompt,
+        selected_variant=selected_variant,
+    )
+    next_prompt = selected_prompt["prompt"]
+    print(
+        "[agent_gradient_eval_debug] selected prompt for next iteration:",
+        f"iteration={iteration_index}",
+        f"changed={selected_prompt['changed_vs_input']}",
+    )
+    print(next_prompt)
+
+    sampling_summary = {
+        "iteration_index": iteration_index,
+        "gradient_split": "train",
+        "evaluation_split": args.full_eval_split,
+        "train_gradient_sample_size": args.train_gradient_sample_size,
+        "train_d_pair_pool_size": len(train_d_pairs),
+        "sampled_pair_count": len(sampled_pairs),
+        "full_eval_pair_count": len(full_eval_pairs),
+        "bucket_stats": copy.deepcopy(bucket_stats),
+        "baseline_bucket_validation": copy.deepcopy(baseline_validation),
+        "baseline_confusion_matrix": copy.deepcopy(baseline_confusion_matrix),
+    }
+    sampling_payload = {
+        "seed": args.seed,
+        "iteration_index": iteration_index,
+        "correct_pair_indices": sampled_indices["correct_indices"],
+        "mistake_pair_indices": sampled_indices["mistake_indices"],
+        "bucket_stats": sampled_indices.get("bucket_stats", {}),
+    }
+    return {
+        "iteration_index": iteration_index,
+        "input_prompt": instruction_prompt,
+        "gradient_analysis": gradient_results,
+        "train_gradient_collection": train_gradient_collection,
+        "baseline_prf": baseline_prf,
+        "baseline_confusion_matrix": baseline_confusion_matrix,
+        "baseline_validation": baseline_validation,
+        "sampling_summary": sampling_summary,
+        "sampling_payload": sampling_payload,
+        "sampled_examples": sampled_examples,
+        "prompt_editing_payload": prompt_editing_payload,
+        "selected_prompt": selected_prompt,
+        "next_prompt": next_prompt,
+    }
+
+
 # todo: optimize GPU usage
 def main() -> None:
     args = _parse_args()
@@ -2769,12 +2973,15 @@ def main() -> None:
         if args.mode == MODE_DIRECT_CANDIDATE_GENERATION
         else args.model
     )
+    if args.mode == MODE_DIRECT_CANDIDATE_GENERATION and args.Q != 1:
+        raise ValueError("--Q is currently supported only for candidate-suggestion modes.")
+    if args.mode in {
+        MODE_LLM_CANDIDATE_SUGGESTION,
+        MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
+    } and args.Q <= 0:
+        raise ValueError("--Q must be positive.")
 
-    sampled_indices: Dict[str, Any] = {}
-    sampled_pairs: List[Dict[str, Any]] = []
-    sampled_examples: List[Dict[str, Any]] = []
     full_eval_pairs: List[Dict[str, Any]] = []
-    train_d_pairs: List[Dict[str, Any]] = []
     if args.train_gradient_sample_size is None or args.train_gradient_sample_size <= 0:
         raise ValueError("--train-gradient-sample-size must be set to a positive integer.")
 
@@ -2787,91 +2994,6 @@ def main() -> None:
         "[agent_gradient_eval_debug] train samples loaded:",
         f"relations={len(train_samples)}",
         f"dataset_type={args.dataset_type}",
-    )
-    rng = random.Random(args.seed)
-    train_feedback_samples = sample_feedback_fn(
-        train_samples,
-        k=args.train_gradient_sample_size,
-        rng=rng,
-    )
-    train_d_pairs = _build_binary_pairs_from_feedback_samples(
-        feedback_samples=train_feedback_samples,
-        shots_by_id=train_sample_index,
-        dataset_type=args.dataset_type,
-    )
-    print(
-        "[agent_gradient_eval_debug] train D sample built:",
-        f"D={len(train_d_pairs)}",
-    )
-
-    train_d_prompts, train_d_target_labels = _build_binary_prompts_for_instruction(
-        instruction_prompt=instruction_prompt,
-        binary_pairs=train_d_pairs,
-    )
-    train_d_predicted_labels = run_binary_inference(
-        train_d_prompts,
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=args.validation_batch_size,
-        use_chat_template=not args.disable_chat_template,
-        add_generation_prompt=True,
-        enable_thinking=False,
-        log_label="train_gradient_collection",
-    )
-
-    train_d_pairs = _attach_predictions_to_pairs(
-        pairs=train_d_pairs,
-        predicted_labels=train_d_predicted_labels,
-    )
-    train_d_report = {
-        "confusion_matrix": _build_confusion_matrix_counts(
-            predicted_labels=train_d_predicted_labels,
-            target_labels=train_d_target_labels,
-        ),
-        "prf": _build_prf_scores(
-            predicted_labels=train_d_predicted_labels,
-            target_labels=train_d_target_labels,
-        ),
-    }
-    sampled_pairs, bucket_stats = _sample_balanced_pairs_from_bucketed_pool(
-        bucketed_pairs=train_d_pairs,
-        seed=args.seed,
-    )
-    sampled_examples = [dict(pair) for pair in sampled_pairs]
-    sampled_indices = {
-        "correct_indices": [
-            pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"tp", "tn"}
-        ],
-        "mistake_indices": [
-            pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"fp", "fn"}
-        ],
-        "bucket_stats": bucket_stats,
-    }
-    train_gradient_collection = {
-        "gradient_split": "train",
-        "evaluation_split": args.full_eval_split,
-        "train_gradient_sample_size": args.train_gradient_sample_size,
-        "train_d_pair_indices": [pair["pair_index"] for pair in train_d_pairs],
-        "train_d_bucket_stats": {
-            "available": bucket_stats["available"],
-            "selected_for_gradients": bucket_stats["selected"],
-        },
-        "train_d_evaluation_original_prompt": train_d_report,
-    }
-    print(
-        "[agent_gradient_eval_debug] train D pair pool:",
-        f"available_tp={bucket_stats['available']['tp']}",
-        f"available_tn={bucket_stats['available']['tn']}",
-        f"available_fp={bucket_stats['available']['fp']}",
-        f"available_fn={bucket_stats['available']['fn']}",
-        f"selected_tp={bucket_stats['selected']['tp']}",
-        f"selected_tn={bucket_stats['selected']['tn']}",
-        f"selected_fp={bucket_stats['selected']['fp']}",
-        f"selected_fn={bucket_stats['selected']['fn']}",
-    )
-    print(
-        "[agent_gradient_eval_debug] train gradient batch built:",
-        f"pairs={len(sampled_pairs)}",
     )
 
     full_eval_dataset = load_split_episodes(
@@ -2889,65 +3011,158 @@ def main() -> None:
         dataset_type=args.dataset_type,
         query_index=args.query_index,
     )
-
-    print("[agent_gradient_eval_debug] running gradient analysis")
-    gradient_results = analyze_relation_extraction_binary_pairs(
-        instruction_prompt=instruction_prompt,
-        binary_pairs=sampled_pairs,
-        model=model,
-        tokenizer=tokenizer,
-        dataset_type=args.dataset_type,
-        gradient_batch_size=args.gradient_batch_size,
-        num_candidates=args.num_candidates,
-        candidate_mode=args.candidate_mode,
-        max_regions=args.max_regions,
-        max_total_region_tokens=args.max_total_region_tokens,
-        region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
-        embedding_step_size=args.embedding_step_size,
-        use_chat_template=not args.disable_chat_template,
-    )
-    print(
-        "[agent_gradient_eval_debug] gradient analysis done:",
-        f"instances={gradient_results['num_instances']}",
-        f"candidate_mode={args.candidate_mode}",
-        f"token_gradients={len(gradient_results['token_gradients'])}",
-        f"top_regions={len(gradient_results['top_regions'])}",
-    )
-
-    baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
-    baseline_confusion_matrix = _build_confusion_matrix_counts(
-        predicted_labels=baseline_score_payload["predicted_labels"],
-        target_labels=baseline_score_payload["target_labels"],
-    )
-    baseline_prf = _build_prf_scores(
-        predicted_labels=baseline_score_payload["predicted_labels"],
-        target_labels=baseline_score_payload["target_labels"],
-    )
-    baseline_validation = _summarize_validation_by_bucket(
-        sampled_pairs=sampled_pairs,
-        score_payload=baseline_score_payload,
-    )
-    print(
-        "[agent_gradient_eval_debug] baseline validation:",
-        _format_prf_for_log(baseline_prf),
-        f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
-        f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
-        f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
-    )
     original_dev_prf = _extract_prf_from_prompt_info(prompt_info)
-    sampling_summary = {
-        "gradient_split": "train",
-        "evaluation_split": args.full_eval_split,
-        "train_gradient_sample_size": args.train_gradient_sample_size,
-        "train_d_pair_pool_size": len(train_d_pairs),
-        "sampled_pair_count": len(sampled_pairs),
-        "full_eval_pair_count": len(full_eval_pairs),
-        "bucket_stats": copy.deepcopy(bucket_stats),
-        "baseline_bucket_validation": copy.deepcopy(baseline_validation),
-        "baseline_confusion_matrix": copy.deepcopy(baseline_confusion_matrix),
-    }
+
+    iteration_results: List[Dict[str, Any]] = []
+    sampled_examples: List[Dict[str, Any]] = []
+    sampling_payload: Dict[str, Any] = {}
+    sampling_summary: Dict[str, Any] = {}
+    baseline_prf: Dict[str, float] = {}
+    baseline_confusion_matrix: Dict[str, int] = {}
+    gradient_results: Dict[str, Any] = {}
+    train_gradient_collection: Dict[str, Any] = {}
 
     if args.mode == MODE_DIRECT_CANDIDATE_GENERATION:
+        rng = random.Random(args.seed)
+        train_feedback_samples = sample_feedback_fn(
+            train_samples,
+            k=args.train_gradient_sample_size,
+            rng=rng,
+        )
+        train_d_pair_pool = _build_binary_pairs_from_feedback_samples(
+            feedback_samples=train_feedback_samples,
+            shots_by_id=train_sample_index,
+            dataset_type=args.dataset_type,
+        )
+        print(
+            "[agent_gradient_eval_debug] train D sample built:",
+            f"D={len(train_d_pair_pool)}",
+        )
+        train_d_prompts, train_d_target_labels = _build_binary_prompts_for_instruction(
+            instruction_prompt=instruction_prompt,
+            binary_pairs=train_d_pair_pool,
+        )
+        train_d_predicted_labels = run_binary_inference(
+            train_d_prompts,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.validation_batch_size,
+            use_chat_template=not args.disable_chat_template,
+            add_generation_prompt=True,
+            enable_thinking=False,
+            log_label="train_gradient_collection",
+        )
+
+        train_d_pairs = _attach_predictions_to_pairs(
+            pairs=train_d_pair_pool,
+            predicted_labels=train_d_predicted_labels,
+        )
+        train_d_report = {
+            "confusion_matrix": _build_confusion_matrix_counts(
+                predicted_labels=train_d_predicted_labels,
+                target_labels=train_d_target_labels,
+            ),
+            "prf": _build_prf_scores(
+                predicted_labels=train_d_predicted_labels,
+                target_labels=train_d_target_labels,
+            ),
+        }
+        sampled_pairs, bucket_stats = _sample_balanced_pairs_from_bucketed_pool(
+            bucketed_pairs=train_d_pairs,
+            seed=args.seed,
+        )
+        sampled_examples = [dict(pair) for pair in sampled_pairs]
+        sampled_indices = {
+            "correct_indices": [
+                pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"tp", "tn"}
+            ],
+            "mistake_indices": [
+                pair["pair_index"] for pair in sampled_pairs if pair["confusion_bucket"] in {"fp", "fn"}
+            ],
+            "bucket_stats": bucket_stats,
+        }
+        train_gradient_collection = {
+            "gradient_split": "train",
+            "evaluation_split": args.full_eval_split,
+            "train_gradient_sample_size": args.train_gradient_sample_size,
+            "train_d_pair_indices": [pair["pair_index"] for pair in train_d_pairs],
+            "train_d_bucket_stats": {
+                "available": bucket_stats["available"],
+                "selected_for_gradients": bucket_stats["selected"],
+            },
+            "train_d_evaluation_original_prompt": train_d_report,
+        }
+        print(
+            "[agent_gradient_eval_debug] train D pair pool:",
+            f"available_tp={bucket_stats['available']['tp']}",
+            f"available_tn={bucket_stats['available']['tn']}",
+            f"available_fp={bucket_stats['available']['fp']}",
+            f"available_fn={bucket_stats['available']['fn']}",
+            f"selected_tp={bucket_stats['selected']['tp']}",
+            f"selected_tn={bucket_stats['selected']['tn']}",
+            f"selected_fp={bucket_stats['selected']['fp']}",
+            f"selected_fn={bucket_stats['selected']['fn']}",
+        )
+        print(
+            "[agent_gradient_eval_debug] train gradient batch built:",
+            f"pairs={len(sampled_pairs)}",
+        )
+
+        print("[agent_gradient_eval_debug] running gradient analysis")
+        gradient_results = analyze_relation_extraction_binary_pairs(
+            instruction_prompt=instruction_prompt,
+            binary_pairs=sampled_pairs,
+            model=model,
+            tokenizer=tokenizer,
+            dataset_type=args.dataset_type,
+            gradient_batch_size=args.gradient_batch_size,
+            num_candidates=args.num_candidates,
+            candidate_mode=args.candidate_mode,
+            max_regions=args.max_regions,
+            max_total_region_tokens=args.max_total_region_tokens,
+            region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
+            embedding_step_size=args.embedding_step_size,
+            use_chat_template=not args.disable_chat_template,
+        )
+        print(
+            "[agent_gradient_eval_debug] gradient analysis done:",
+            f"instances={gradient_results['num_instances']}",
+            f"candidate_mode={args.candidate_mode}",
+            f"token_gradients={len(gradient_results['token_gradients'])}",
+            f"top_regions={len(gradient_results['top_regions'])}",
+        )
+
+        baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
+        baseline_confusion_matrix = _build_confusion_matrix_counts(
+            predicted_labels=baseline_score_payload["predicted_labels"],
+            target_labels=baseline_score_payload["target_labels"],
+        )
+        baseline_prf = _build_prf_scores(
+            predicted_labels=baseline_score_payload["predicted_labels"],
+            target_labels=baseline_score_payload["target_labels"],
+        )
+        baseline_validation = _summarize_validation_by_bucket(
+            sampled_pairs=sampled_pairs,
+            score_payload=baseline_score_payload,
+        )
+        print(
+            "[agent_gradient_eval_debug] baseline validation:",
+            _format_prf_for_log(baseline_prf),
+            f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
+            f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
+            f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
+        )
+        sampling_summary = {
+            "gradient_split": "train",
+            "evaluation_split": args.full_eval_split,
+            "train_gradient_sample_size": args.train_gradient_sample_size,
+            "train_d_pair_pool_size": len(train_d_pairs),
+            "sampled_pair_count": len(sampled_pairs),
+            "full_eval_pair_count": len(full_eval_pairs),
+            "bucket_stats": copy.deepcopy(bucket_stats),
+            "baseline_bucket_validation": copy.deepcopy(baseline_validation),
+            "baseline_confusion_matrix": copy.deepcopy(baseline_confusion_matrix),
+        }
         prompt_editing_payload = _run_direct_candidate_generation(
             args=args,
             instruction_prompt=instruction_prompt,
@@ -2959,41 +3174,63 @@ def main() -> None:
             model=model,
             tokenizer=tokenizer,
         )
-    elif args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
-        prompt_editing_payload = _run_llm_candidate_suggestion(
-            args=args,
-            instruction_prompt=instruction_prompt,
-            sampled_pairs=sampled_pairs,
-            full_eval_pairs=full_eval_pairs,
-            gradient_results=gradient_results,
-            baseline_validation=baseline_validation,
-            baseline_confusion_matrix=baseline_confusion_matrix,
-            model=model,
-            tokenizer=tokenizer,
-        )
+        sampling_payload = {
+            "seed": args.seed,
+            "correct_pair_indices": sampled_indices["correct_indices"],
+            "mistake_pair_indices": sampled_indices["mistake_indices"],
+            "bucket_stats": sampled_indices.get("bucket_stats", {}),
+        }
     else:
-        prompt_editing_payload = _run_lm_probability_candidate_suggestion(
-            args=args,
-            instruction_prompt=instruction_prompt,
-            sampled_pairs=sampled_pairs,
-            full_eval_pairs=full_eval_pairs,
-            gradient_results=gradient_results,
-            baseline_validation=baseline_validation,
-            baseline_confusion_matrix=baseline_confusion_matrix,
-            model=model,
-            tokenizer=tokenizer,
-        )
+        current_prompt = instruction_prompt
+        for iteration_index in range(1, args.Q + 1):
+            iteration_result = _run_candidate_suggestion_iteration(
+                args=args,
+                iteration_index=iteration_index,
+                instruction_prompt=current_prompt,
+                train_samples=train_samples,
+                train_sample_index=train_sample_index,
+                full_eval_pairs=full_eval_pairs,
+                model=model,
+                tokenizer=tokenizer,
+            )
+            iteration_results.append(iteration_result)
+            current_prompt = iteration_result["next_prompt"]
 
-    sampling_payload = {
-        "seed": args.seed,
-        "correct_pair_indices": sampled_indices["correct_indices"],
-        "mistake_pair_indices": sampled_indices["mistake_indices"],
-        "bucket_stats": sampled_indices.get("bucket_stats", {}),
-    }
-    sampled_data_and_predictions_payload = _build_sampled_data_and_predictions_payload(
+        final_iteration_result = iteration_results[-1]
+        initial_iteration_result = iteration_results[0]
+        prompt_editing_payload = final_iteration_result["prompt_editing_payload"]
+        sampled_examples = final_iteration_result["sampled_examples"]
+        sampling_payload = final_iteration_result["sampling_payload"]
+        sampling_summary = initial_iteration_result["sampling_summary"]
+        baseline_prf = initial_iteration_result["baseline_prf"]
+        baseline_confusion_matrix = initial_iteration_result["baseline_confusion_matrix"]
+        gradient_results = final_iteration_result["gradient_analysis"]
+        train_gradient_collection = final_iteration_result["train_gradient_collection"]
+        prompt_editing_payload["iterations"] = [
+            {
+                "iteration_index": iteration_result["iteration_index"],
+                "input_prompt": iteration_result["input_prompt"],
+                "selected_prompt": copy.deepcopy(iteration_result["selected_prompt"]),
+                "train_gradient_collection": copy.deepcopy(
+                    iteration_result["train_gradient_collection"]
+                ),
+                "sampling_summary": copy.deepcopy(iteration_result["sampling_summary"]),
+                "gradient_analysis": copy.deepcopy(iteration_result["gradient_analysis"]),
+                "prompt_region_editing": _strip_prediction_arrays_from_prompt_editing_payload(
+                    prompt_editing_payload=iteration_result["prompt_editing_payload"],
+                ),
+            }
+            for iteration_result in iteration_results
+        ]
+
+    final_sampled_data_and_predictions_payload = _build_sampled_data_and_predictions_payload(
         sampling=sampling_payload,
         sampled_examples=sampled_examples,
         prompt_editing_payload=prompt_editing_payload,
+    )
+    sampled_data_and_predictions_payload = _build_iterative_sampled_data_and_predictions_payload(
+        iteration_results=iteration_results,
+        final_payload=final_sampled_data_and_predictions_payload,
     )
     payload = {
         "args": _namespace_to_json_dict(args),
@@ -3006,11 +3243,28 @@ def main() -> None:
         "dataset_split": "train",
         "prompt_source_path": str(args.prompt_source_path),
         "prompt_info": prompt_info,
+        "num_iterations": max(len(iteration_results), 1),
         "gradient_analysis": gradient_results,
         "train_gradient_collection": train_gradient_collection,
         "prompt_region_editing": _strip_prediction_arrays_from_prompt_editing_payload(
             prompt_editing_payload=prompt_editing_payload,
         ),
+        "iterations": [
+            {
+                "iteration_index": iteration_result["iteration_index"],
+                "input_prompt": iteration_result["input_prompt"],
+                "selected_prompt": copy.deepcopy(iteration_result["selected_prompt"]),
+                "train_gradient_collection": copy.deepcopy(
+                    iteration_result["train_gradient_collection"]
+                ),
+                "sampling_summary": copy.deepcopy(iteration_result["sampling_summary"]),
+                "gradient_analysis": copy.deepcopy(iteration_result["gradient_analysis"]),
+                "prompt_region_editing": _strip_prediction_arrays_from_prompt_editing_payload(
+                    prompt_editing_payload=iteration_result["prompt_editing_payload"],
+                ),
+            }
+            for iteration_result in iteration_results
+        ],
         "external_data_files": {
             "sampled_data_and_predictions": "sampled_data_and_predictions.json",
         },
@@ -3022,6 +3276,7 @@ def main() -> None:
         baseline_confusion_matrix=baseline_confusion_matrix,
         original_dev_prf=original_dev_prf,
         sampling_summary=sampling_summary,
+        iteration_results=iteration_results,
     )
     run_dir = _create_output_run_dir(
         output_root_dir=args.output_root_dir,
@@ -3039,11 +3294,23 @@ def main() -> None:
         MODE_LLM_CANDIDATE_SUGGESTION,
         MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
     }:
+        combination_payload = _build_combination_generated_prompts_payload(
+            prompt_editing_payload=prompt_editing_payload,
+        )
+        if iteration_results:
+            combination_payload["num_iterations"] = len(iteration_results)
+            combination_payload["iterations"] = [
+                {
+                    "iteration_index": iteration_result["iteration_index"],
+                    **_build_combination_generated_prompts_payload(
+                        prompt_editing_payload=iteration_result["prompt_editing_payload"],
+                    ),
+                }
+                for iteration_result in iteration_results
+            ]
         _save_json(
             run_dir / "combination_generated_prompts.json",
-            _build_combination_generated_prompts_payload(
-                prompt_editing_payload=prompt_editing_payload,
-            ),
+            combination_payload,
         )
     _save_prompt_eval_outputs(
         eval_outputs_dir=eval_outputs_dir,

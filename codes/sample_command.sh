@@ -794,6 +794,581 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "llm_cand_sugg_beam3real_20260301_030139_node11_region3s_qwen4_lambda_tune" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
 
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.0 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3real_px_0.0_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_px_0.0_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.1 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3real_px_0.1_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_px_0.1_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.4 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3real_px_0.4_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_px_0.4_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3real_px_0.5_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_px_0.5_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 1.0 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3real_px_1.0_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_px_1.0_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 5 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.3 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3real_Q1_px_0.3_r3_20260301_030139_node11_region3s_qwen4_region_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3real_Q1_px_0.3_r3_20260301_030139_node11_region3s_qwen4_region_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_px_0.2_r5_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_px_0.2_r5_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 7 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_px_0.2_r7_20260301_030139_node11_region3s_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_px_0.2_r7_20260301_030139_node11_region3s_qwen4_lambda_tune.out 2>&1 &
+
+## iteration based lambda tuning***
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.2 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.2_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.2_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.0 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.0_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.0_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.1 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.1_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.1_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.3 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.3_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.3_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.5_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.5_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.4 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.4_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.4_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.6 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.6_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.6_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.7 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.7_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.7_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.8 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.8_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.8_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.9 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_0.9_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_0.9_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+# todo run
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 1.0 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q5_px_1.0_r5_20260301_030139_node11_qwen4_lambda_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q5_px_1.0_r5_20260301_030139_node11_qwen4_lambda_tune.out 2>&1 &
+
+## iteration based region 7 tuning***
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 7 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.1 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q1_px_0.1_r7_20260301_030139_node11_region3s_qwen4_region_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q1_px_0.1_r7_20260301_030139_node11_region3s_qwen4_region_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 7 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.0 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q1_px_0.0_r7_20260301_030139_node11_region3s_qwen4_region_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q1_px_0.0_r7_20260301_030139_node11_region3s_qwen4_region_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 7 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.3 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q1_px_0.3_r7_20260301_030139_node11_region3s_qwen4_region_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q1_px_0.3_r7_20260301_030139_node11_region3s_qwen4_region_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 7 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q1_px_0.5_r7_20260301_030139_node11_region3s_qwen4_region_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q1_px_0.5_r7_20260301_030139_node11_region3s_qwen4_region_tune.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260301_030139_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 11 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 7 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.4 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5real_Q1_px_0.4_r7_20260301_030139_node11_region3s_qwen4_region_tune" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5real_Q1_px_0.4_r7_20260301_030139_node11_region3s_qwen4_region_tune.out 2>&1 &
+
+
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
