@@ -115,6 +115,7 @@ def main() -> None:
         search = EvolutionarySearch(
             root=root,
             max_iterations=args.max_iterations,
+            population_size=args.population_size,
             feedback_sample_size=args.feedback_sample_size,
             population_sampling_temperature=args.population_sampling_temperature,
             feedback_prompt=feedback_prompt,
@@ -127,7 +128,7 @@ def main() -> None:
 
         print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
 
-        best_node, population = search.run(
+        best_node, population_history = search.run(
             sample_feedback_fn=sample_feedback,
             run_inference_fn=run_inference,
             generate_feedback_fn=generate_feedback,
@@ -143,13 +144,19 @@ def main() -> None:
         print("[core_trainer] evaluating best on test")
         best_test_metrics = best_node.val_score #evaluate(best_node, "test")
 
-        save_population(run_dir, population, best_node)
+        save_population(
+            run_dir,
+            population_history,
+            best_node,
+            final_population=search.population,
+        )
 
         summary = {
             "run_dir": run_dir,
             "best_val_score": best_node.val_score,
             "best_test_metrics": best_test_metrics,
-            "population_size": len(population),
+            "population_size": len(search.population),
+            "population_history_size": len(population_history),
         }
         save_summary(run_dir, summary)
 

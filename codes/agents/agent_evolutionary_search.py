@@ -30,6 +30,7 @@ class EvolutionarySearch:
         self,
         root: GraphNode,
         max_iterations: int = 20,
+        population_size: Optional[int] = None,
         feedback_sample_size: int = 100,
         population_sampling_temperature: float = 1.0,
         feedback_prompt: str = "",
@@ -40,8 +41,12 @@ class EvolutionarySearch:
         rng: Optional[random.Random] = None,
     ):
         self.root = root
+        if population_size is not None and population_size <= 0:
+            raise ValueError("population_size must be > 0 when provided")
         self.population: List[GraphNode] = [root]
+        self.population_history: List[GraphNode] = [root]
         self.max_iterations = max_iterations
+        self.population_size = population_size
         self.feedback_sample_size = feedback_sample_size
         self.population_sampling_temperature = population_sampling_temperature
         self.feedback_prompt = feedback_prompt
@@ -62,6 +67,24 @@ class EvolutionarySearch:
         if self.root.node_id is None:
             self.root.node_id = 0
         self._next_node_id = self.root.node_id + 1
+
+    def _prune_population(self) -> None:
+        if self.population_size is None or len(self.population) <= self.population_size:
+            return
+        self.population.sort(
+            key=lambda node: (
+                score_node_or_neg_inf(node),
+                node.node_id if node.node_id is not None else -1,
+            ),
+            reverse=True,
+        )
+        removed_nodes = self.population[self.population_size :]
+        self.population = self.population[: self.population_size]
+        removed_node_ids = [node.node_id for node in removed_nodes]
+        print(
+            "[agent_evolutionary_search] pruned active population to "
+            f"{self.population_size}; removed node_ids={removed_node_ids}"
+        )
 
     def _format_feedback_text(self, feedback_samples: FeedbackSamples) -> str:
         feedback_texts = getattr(feedback_samples, "feedback_texts", None)
@@ -120,7 +143,7 @@ class EvolutionarySearch:
         )
 
     def best_node(self) -> GraphNode:
-        return max(self.population, key=score_node_or_neg_inf)
+        return max(self.population_history, key=score_node_or_neg_inf)
 
     def run(
         self,
@@ -255,6 +278,8 @@ class EvolutionarySearch:
             _log_step("[agent_evolutionary_search] update graph")
             parent.add_child_from_feedback(feedback_samples, child)
             self.population.append(child)
+            self.population_history.append(child)
+            self._prune_population()
 
             if on_iteration_end is not None:
                 _log_step("[agent_evolutionary_search] on_iteration_end hook")
@@ -286,4 +311,4 @@ class EvolutionarySearch:
                 f"overall {overall_elapsed:.2f}s)"
             )
         
-        return self.best_node(), self.population
+        return self.best_node(), self.population_history

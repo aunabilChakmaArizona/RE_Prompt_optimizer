@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from agents.agent_graph_node import GraphNode
 from agents.agent_feedback_samples import FeedbackSample, FeedbackSamples
@@ -147,7 +147,11 @@ def serialize_feedback_samples(samples: FeedbackSamples) -> Dict[str, object]:
     }
 
 
-def serialize_node(node: GraphNode) -> Dict[str, object]:
+def serialize_node(
+    node: GraphNode,
+    *,
+    final_population_node_ids: Optional[Set[int]] = None,
+) -> Dict[str, object]:
     data_entries: List[Dict[str, Optional[object]]] = []
     for feedback_samples, child in node.data:
         data_entries.append(
@@ -181,19 +185,37 @@ def serialize_node(node: GraphNode) -> Dict[str, object]:
         "differentiation": node.differentiation,
         "val_score": node.val_score,
         "test_score": node.test_score,
+        "is_in_final_population": (
+            node.node_id in final_population_node_ids
+            if final_population_node_ids is not None and node.node_id is not None
+            else False
+        ),
         "data": data_entries,
     }
 
 
 def save_population(
-    run_dir: str, population: Iterable[GraphNode], best_node: GraphNode
+    run_dir: str,
+    population: Iterable[GraphNode],
+    best_node: GraphNode,
+    final_population: Optional[Iterable[GraphNode]] = None,
 ) -> None:
-    population_data = [serialize_node(node) for node in population]
-    best_node_data = serialize_node(best_node)
+    final_population_node_ids = {
+        node.node_id for node in (final_population or []) if node.node_id is not None
+    }
+    population_data = [
+        serialize_node(node, final_population_node_ids=final_population_node_ids)
+        for node in population
+    ]
+    best_node_data = serialize_node(
+        best_node,
+        final_population_node_ids=final_population_node_ids,
+    )
     with open(os.path.join(run_dir, "population.json"), "w", encoding="utf-8") as handle:
         json.dump(
             {
                 "best_node_id": best_node.node_id,
+                "final_population_node_ids": sorted(final_population_node_ids),
                 "population": population_data,
                 "best_node": best_node_data,
             },

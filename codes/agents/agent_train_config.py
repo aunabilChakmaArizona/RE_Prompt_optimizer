@@ -43,6 +43,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-ep-end", type=int, default=None)
     parser.add_argument("--query-index", type=int, default=0)
     parser.add_argument("--max-iterations", type=int, default=20)
+    parser.add_argument(
+        "--population-size",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of active prompts kept in the evolutionary population. "
+            "If omitted, the population grows without a limit."
+        ),
+    )
     parser.add_argument("--feedback-sample-size", type=int, default=100)
     parser.add_argument("--num-shots", type=int, default=1, help="Number of examples in prompt")
     parser.add_argument(
