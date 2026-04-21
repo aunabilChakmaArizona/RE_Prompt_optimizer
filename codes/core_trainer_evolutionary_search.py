@@ -15,6 +15,7 @@ from agents.agent_prompts import (
 from agents.agent_train_config import parse_args, resolve_data_dir
 from agents.agent_train_io import (
     create_run_dir,
+    load_initial_population,
     load_initial_prompt_node,
     restore_logging,
     save_population,
@@ -89,31 +90,59 @@ def main() -> None:
         mutation_prompt = mutation_prompts[0]
 
         initial_prompt_node = None
-        if args.initial_prompt_source_path:
-            initial_prompt_node, initial_prompt_population_path = load_initial_prompt_node(
-                args.initial_prompt_source_path,
-                args.initial_prompt_node_id,
-                args.inference_mode,
-            )
-            print(
-                "[core_trainer] initial prompt source:",
+        initial_population = None
+        if args.load_population:
+            if not args.initial_prompt_source_path:
+                raise ValueError(
+                    "--load-population requires --initial-prompt-source-path"
+                )
+            if args.initial_prompt_node_id is not None:
+                raise ValueError(
+                    "--load-population cannot be combined with --initial-prompt-node-id"
+                )
+            (
+                initial_population,
+                root,
                 initial_prompt_population_path,
+            ) = load_initial_population(
+                args.initial_prompt_source_path,
+                expected_inference_mode=args.inference_mode,
+                feedback_prompt=feedback_prompt,
+                mutation_prompt=mutation_prompt,
+                example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
             )
+            print("[core_trainer] initial population source:", initial_prompt_population_path)
             print(
-                "[core_trainer] initial prompt node_id:",
-                initial_prompt_node.get("node_id"),
+                "[core_trainer] initial population node_ids:",
+                [node.node_id for node in initial_population],
             )
+        else:
+            if args.initial_prompt_source_path:
+                initial_prompt_node, initial_prompt_population_path = load_initial_prompt_node(
+                    args.initial_prompt_source_path,
+                    args.initial_prompt_node_id,
+                    args.inference_mode,
+                )
+                print(
+                    "[core_trainer] initial prompt source:",
+                    initial_prompt_population_path,
+                )
+                print(
+                    "[core_trainer] initial prompt node_id:",
+                    initial_prompt_node.get("node_id"),
+                )
 
-        root = build_root_node(
-            feedback_prompt=feedback_prompt,
-            mutation_prompt=mutation_prompt,
-            inference_mode=args.inference_mode,
-            example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
-            initial_prompt_node=initial_prompt_node,
-        )
+            root = build_root_node(
+                feedback_prompt=feedback_prompt,
+                mutation_prompt=mutation_prompt,
+                inference_mode=args.inference_mode,
+                example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+                initial_prompt_node=initial_prompt_node,
+            )
 
         search = EvolutionarySearch(
             root=root,
+            initial_population=initial_population,
             max_iterations=args.max_iterations,
             population_size=args.population_size,
             feedback_sample_size=args.feedback_sample_size,

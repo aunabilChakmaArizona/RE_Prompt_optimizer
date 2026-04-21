@@ -72,6 +72,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--load-population",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Load the full final survivor population from --initial-prompt-source-path "
+            "instead of seeding the search with a single prompt."
+        ),
+    )
+    parser.add_argument(
         "--update-mode",
         type=str,
         default="feedback",

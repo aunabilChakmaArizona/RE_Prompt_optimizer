@@ -29,6 +29,7 @@ class EvolutionarySearch:
     def __init__(
         self,
         root: GraphNode,
+        initial_population: Optional[List[GraphNode]] = None,
         max_iterations: int = 20,
         population_size: Optional[int] = None,
         feedback_sample_size: int = 100,
@@ -43,8 +44,15 @@ class EvolutionarySearch:
         self.root = root
         if population_size is not None and population_size <= 0:
             raise ValueError("population_size must be > 0 when provided")
-        self.population: List[GraphNode] = [root]
-        self.population_history: List[GraphNode] = [root]
+        initial_nodes = list(initial_population) if initial_population is not None else [root]
+        if not initial_nodes:
+            raise ValueError("initial_population must contain at least one node")
+        if population_size is not None and len(initial_nodes) > population_size:
+            raise ValueError(
+                "population_size must be >= the number of initially loaded population nodes"
+            )
+        self.population: List[GraphNode] = initial_nodes
+        self.population_history: List[GraphNode] = list(initial_nodes)
         self.max_iterations = max_iterations
         self.population_size = population_size
         self.feedback_sample_size = feedback_sample_size
@@ -64,9 +72,11 @@ class EvolutionarySearch:
             raise ValueError("mutation_prompt_keys and mutation_prompts must have same length")
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
+        existing_node_ids = [node.node_id for node in initial_nodes if node.node_id is not None]
         if self.root.node_id is None:
-            self.root.node_id = 0
-        self._next_node_id = self.root.node_id + 1
+            self.root.node_id = (max(existing_node_ids) + 1) if existing_node_ids else 0
+            existing_node_ids.append(self.root.node_id)
+        self._next_node_id = (max(existing_node_ids) + 1) if existing_node_ids else 0
 
     def _prune_population(self) -> None:
         if self.population_size is None or len(self.population) <= self.population_size:

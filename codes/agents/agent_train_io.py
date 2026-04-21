@@ -85,15 +85,110 @@ def _resolve_population_path(source_path: str) -> str:
     return population_path
 
 
+def _load_population_payload(source_path: str) -> Tuple[Dict[str, object], str]:
+    population_path = _resolve_population_path(source_path)
+    with open(population_path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return payload, population_path
+
+
+def _validate_node_inference_mode(
+    node_payload: Dict[str, object],
+    *,
+    expected_inference_mode: str,
+    population_path: str,
+) -> None:
+    node_inference_mode = node_payload.get("inference_mode")
+    if node_inference_mode != expected_inference_mode:
+        raise ValueError(
+            "Initial prompt inference_mode mismatch: "
+            f"source={node_inference_mode!r}, requested={expected_inference_mode!r}, "
+            f"population_path={population_path!r}"
+        )
+
+
+def _infer_final_population_node_ids(
+    payload: Dict[str, object],
+    *,
+    population: List[Dict[str, object]],
+    population_path: str,
+) -> Set[int]:
+    final_population_node_ids = payload.get("final_population_node_ids")
+    if isinstance(final_population_node_ids, list):
+        return {
+            int(node_id)
+            for node_id in final_population_node_ids
+            if node_id is not None
+        }
+
+    marked_node_ids = {
+        int(node.get("node_id"))
+        for node in population
+        if node.get("node_id") is not None and node.get("is_in_final_population")
+    }
+    if marked_node_ids:
+        return marked_node_ids
+
+    args_path = os.path.join(os.path.dirname(population_path), "args.json")
+    if os.path.isfile(args_path):
+        with open(args_path, "r", encoding="utf-8") as handle:
+            args_payload = json.load(handle)
+        if args_payload.get("population_size") is None:
+            return {
+                int(node.get("node_id"))
+                for node in population
+                if node.get("node_id") is not None
+            }
+
+    raise ValueError(
+        "Could not determine the final survivor population from the source run. "
+        "Expected final_population_node_ids / is_in_final_population markers, or an "
+        "uncapped legacy run with population_size unset."
+    )
+
+
+def _deserialize_node(
+    node_payload: Dict[str, object],
+    *,
+    feedback_prompt_override: str,
+    mutation_prompt_override: str,
+    example_generation_prompt_override: str,
+) -> GraphNode:
+    node = GraphNode(
+        inference_prompt=node_payload.get("inference_prompt", ""),
+        inference_mode=node_payload.get("inference_mode", ""),
+        inference_instruction_prompt=node_payload.get("inference_instruction_prompt", ""),
+        inference_answer_instruction_prompt=node_payload.get(
+            "inference_answer_instruction_prompt", ""
+        ),
+        inference_example_prompt=node_payload.get("inference_example_prompt", ""),
+        inference_input_prompt=node_payload.get("inference_input_prompt", ""),
+        feedback=node_payload.get("feedback", ""),
+        raw_feedback_texts=list(node_payload.get("raw_feedback_texts", [])),
+        feedback_prompts_used=list(node_payload.get("feedback_prompts_used", [])),
+        feedback_prompt=feedback_prompt_override,
+        mutation_prompt=mutation_prompt_override,
+        example_generation_prompt=example_generation_prompt_override,
+        mutation_prompt_used=node_payload.get("mutation_prompt_used", ""),
+        raw_mutation_response=node_payload.get("raw_mutation_response"),
+        differentiation_prompt_used=node_payload.get("differentiation_prompt_used", ""),
+        raw_differentiation_response=node_payload.get("raw_differentiation_response"),
+        differentiation=node_payload.get("differentiation", ""),
+        node_id=node_payload.get("node_id"),
+        val_score=node_payload.get("val_score"),
+        test_score=node_payload.get("test_score"),
+    )
+    node.is_dead = bool(node_payload.get("is_dead", False))
+    node.mutation_failures = int(node_payload.get("mutation_failures", 0))
+    return node
+
+
 def load_initial_prompt_node(
     source_path: str,
     prompt_node_id: int | None,
     expected_inference_mode: str,
 ) -> Tuple[Dict[str, object], str]:
-    population_path = _resolve_population_path(source_path)
-    with open(population_path, "r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
+    payload, population_path = _load_population_payload(source_path)
     population = payload.get("population", [])
     selected_node_id = (
         prompt_node_id if prompt_node_id is not None else payload.get("best_node_id")
@@ -112,14 +207,97 @@ def load_initial_prompt_node(
             f"Could not find node_id={selected_node_id} in '{population_path}'"
         )
 
-    node_inference_mode = selected_node.get("inference_mode")
-    if node_inference_mode != expected_inference_mode:
-        raise ValueError(
-            "Initial prompt inference_mode mismatch: "
-            f"source={node_inference_mode!r}, requested={expected_inference_mode!r}"
-        )
+    _validate_node_inference_mode(
+        selected_node,
+        expected_inference_mode=expected_inference_mode,
+        population_path=population_path,
+    )
 
     return selected_node, population_path
+
+
+def load_initial_population(
+    source_path: str,
+    *,
+    expected_inference_mode: str,
+    feedback_prompt: str,
+    mutation_prompt: str,
+    example_generation_prompt: str,
+) -> Tuple[List[GraphNode], GraphNode, str]:
+    payload, population_path = _load_population_payload(source_path)
+    population = payload.get("population", [])
+    final_population_node_ids = _infer_final_population_node_ids(
+        payload,
+        population=population,
+        population_path=population_path,
+    )
+
+    selected_payloads = [
+        node
+        for node in population
+        if node.get("node_id") in final_population_node_ids
+    ]
+    if not selected_payloads:
+        raise ValueError(
+            f"No nodes from final_population_node_ids were found in '{population_path}'"
+        )
+
+    for node_payload in selected_payloads:
+        _validate_node_inference_mode(
+            node_payload,
+            expected_inference_mode=expected_inference_mode,
+            population_path=population_path,
+        )
+
+    nodes_by_id: Dict[int, GraphNode] = {}
+    for node_payload in selected_payloads:
+        node_id = node_payload.get("node_id")
+        if node_id is None:
+            raise ValueError(
+                f"Encountered a final-population node without node_id in '{population_path}'"
+            )
+        nodes_by_id[int(node_id)] = _deserialize_node(
+            node_payload,
+            feedback_prompt_override=feedback_prompt,
+            mutation_prompt_override=mutation_prompt,
+            example_generation_prompt_override=example_generation_prompt,
+        )
+
+    for node_payload in selected_payloads:
+        node_id = int(node_payload["node_id"])
+        parent_id = node_payload.get("parent_id")
+        if parent_id is None:
+            continue
+        parent = nodes_by_id.get(int(parent_id))
+        if parent is None:
+            continue
+        child = nodes_by_id[node_id]
+        child.parent = parent
+        parent.children.append(child)
+
+    sorted_nodes = sorted(
+        nodes_by_id.values(),
+        key=lambda node: node.node_id if node.node_id is not None else -1,
+    )
+    best_node = None
+    best_node_id = payload.get("best_node_id")
+    if best_node_id is not None:
+        best_node = nodes_by_id.get(int(best_node_id))
+    if best_node is None:
+        best_node = max(
+            sorted_nodes,
+            key=lambda node: (
+                (
+                    float(node.val_score.get("f1_mean"))
+                    if isinstance(node.val_score, dict)
+                    and node.val_score.get("f1_mean") is not None
+                    else float("-inf")
+                ),
+                node.node_id if node.node_id is not None else -1,
+            ),
+        )
+
+    return sorted_nodes, best_node, population_path
 
 
 def serialize_feedback_sample(sample: FeedbackSample) -> Dict[str, object]:
