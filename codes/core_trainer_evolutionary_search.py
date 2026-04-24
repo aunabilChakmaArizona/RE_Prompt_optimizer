@@ -93,6 +93,7 @@ def main() -> None:
 
         initial_prompt_node = None
         initial_population = None
+        initial_population_history = None
         resume_next_node_id = None
         if args.load_population:
             if not args.initial_prompt_source_path:
@@ -106,6 +107,7 @@ def main() -> None:
             (
                 initial_population,
                 root,
+                initial_population_history,
                 initial_prompt_population_path,
             ) = load_initial_population(
                 args.initial_prompt_source_path,
@@ -159,6 +161,7 @@ def main() -> None:
         search = EvolutionarySearch(
             root=root,
             initial_population=initial_population,
+            initial_population_history=initial_population_history,
             next_node_id=resume_next_node_id,
             max_iterations=args.max_iterations,
             population_size=args.population_size,

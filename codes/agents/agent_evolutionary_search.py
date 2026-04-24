@@ -30,6 +30,7 @@ class EvolutionarySearch:
         self,
         root: GraphNode,
         initial_population: Optional[List[GraphNode]] = None,
+        initial_population_history: Optional[List[GraphNode]] = None,
         next_node_id: Optional[int] = None,
         max_iterations: int = 20,
         population_size: Optional[int] = None,
@@ -53,7 +54,16 @@ class EvolutionarySearch:
                 "population_size must be >= the number of initially loaded population nodes"
             )
         self.population: List[GraphNode] = initial_nodes
-        self.population_history: List[GraphNode] = list(initial_nodes)
+        if initial_population_history is None:
+            self.population_history = list(initial_nodes)
+        else:
+            self.population_history = list(initial_population_history)
+            history_node_ids = {
+                node.node_id for node in self.population_history if node.node_id is not None
+            }
+            for node in initial_nodes:
+                if node.node_id is None or node.node_id not in history_node_ids:
+                    self.population_history.append(node)
         self.max_iterations = max_iterations
         self.population_size = population_size
         self.feedback_sample_size = feedback_sample_size
@@ -73,7 +83,9 @@ class EvolutionarySearch:
             raise ValueError("mutation_prompt_keys and mutation_prompts must have same length")
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
-        existing_node_ids = [node.node_id for node in initial_nodes if node.node_id is not None]
+        existing_node_ids = [
+            node.node_id for node in self.population_history if node.node_id is not None
+        ]
         if self.root.node_id is None:
             self.root.node_id = (max(existing_node_ids) + 1) if existing_node_ids else 0
             existing_node_ids.append(self.root.node_id)

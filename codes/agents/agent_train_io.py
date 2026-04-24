@@ -194,6 +194,91 @@ def _deserialize_node(
     return node
 
 
+def _deserialize_feedback_sample(sample_payload: Dict[str, object]) -> FeedbackSample:
+    sample = FeedbackSample(
+        id_1shot=sample_payload.get("id_1shot", 0),
+        id_query=sample_payload.get("id_query", 0),
+        inference=str(sample_payload.get("inference", "")),
+        label=str(sample_payload.get("label", "")),
+    )
+    sample.relation = str(sample_payload.get("relation", ""))
+    sample.support_sentence = str(sample_payload.get("support_sentence", ""))
+    sample.query_sentence = str(sample_payload.get("query_sentence", ""))
+    sample.feedback_prompt = str(sample_payload.get("feedback_prompt", ""))
+    sample.raw_feedback_text = str(sample_payload.get("raw_feedback_text", ""))
+    sample.feedback_text = str(sample_payload.get("feedback_text", ""))
+    return sample
+
+
+def _deserialize_feedback_samples(samples_payload: Dict[str, object]) -> FeedbackSamples:
+    samples = FeedbackSamples()
+    for sample_payload in samples_payload.get("all_samples", []):
+        samples.add_to_all_samples(_deserialize_feedback_sample(sample_payload))
+    for sample_payload in samples_payload.get("selected_samples", []):
+        samples.add_to_selected_samples(_deserialize_feedback_sample(sample_payload))
+    samples.feedback_prompts = list(samples_payload.get("feedback_prompts", []))
+    samples.raw_feedback_texts = list(samples_payload.get("raw_feedback_texts", []))
+    samples.feedback_texts = list(samples_payload.get("feedback_texts", []))
+    return samples
+
+
+def _load_population_graph(
+    source_path: str,
+    *,
+    expected_inference_mode: str,
+    feedback_prompt: str,
+    mutation_prompt: str,
+    example_generation_prompt: str,
+) -> Tuple[Dict[int, GraphNode], Dict[str, object], str]:
+    payload, population_path = _load_population_payload(source_path)
+    population = payload.get("population", [])
+
+    nodes_by_id: Dict[int, GraphNode] = {}
+    for node_payload in population:
+        node_id = node_payload.get("node_id")
+        if node_id is None:
+            raise ValueError(
+                f"Encountered a node without node_id in '{population_path}'"
+            )
+        _validate_node_inference_mode(
+            node_payload,
+            expected_inference_mode=expected_inference_mode,
+            population_path=population_path,
+        )
+        nodes_by_id[int(node_id)] = _deserialize_node(
+            node_payload,
+            feedback_prompt_override=feedback_prompt,
+            mutation_prompt_override=mutation_prompt,
+            example_generation_prompt_override=example_generation_prompt,
+        )
+
+    for node_payload in population:
+        node_id = int(node_payload["node_id"])
+        parent_id = node_payload.get("parent_id")
+        if parent_id is None:
+            continue
+        parent = nodes_by_id.get(int(parent_id))
+        if parent is None:
+            continue
+        child = nodes_by_id[node_id]
+        child.parent = parent
+        parent.children.append(child)
+
+    for node_payload in population:
+        node = nodes_by_id[int(node_payload["node_id"])]
+        for data_entry in node_payload.get("data", []):
+            feedback_samples = _deserialize_feedback_samples(
+                data_entry.get("feedback_samples", {})
+            )
+            child_id = data_entry.get("child_id")
+            child = None
+            if child_id is not None:
+                child = nodes_by_id.get(int(child_id))
+            node.data.append((feedback_samples, child))
+
+    return nodes_by_id, payload, population_path
+
+
 def load_initial_prompt_node(
     source_path: str,
     prompt_node_id: int | None,
@@ -234,8 +319,14 @@ def load_initial_population(
     feedback_prompt: str,
     mutation_prompt: str,
     example_generation_prompt: str,
-) -> Tuple[List[GraphNode], GraphNode, str]:
-    payload, population_path = _load_population_payload(source_path)
+) -> Tuple[List[GraphNode], GraphNode, List[GraphNode], str]:
+    nodes_by_id, payload, population_path = _load_population_graph(
+        source_path,
+        expected_inference_mode=expected_inference_mode,
+        feedback_prompt=feedback_prompt,
+        mutation_prompt=mutation_prompt,
+        example_generation_prompt=example_generation_prompt,
+    )
     population = payload.get("population", [])
     final_population_node_ids = _infer_final_population_node_ids(
         payload,
@@ -243,50 +334,16 @@ def load_initial_population(
         population_path=population_path,
     )
 
-    selected_payloads = [
-        node
-        for node in population
-        if node.get("node_id") in final_population_node_ids
-    ]
-    if not selected_payloads:
+    selected_node_ids = sorted(
+        node_id for node_id in final_population_node_ids if node_id in nodes_by_id
+    )
+    if not selected_node_ids:
         raise ValueError(
             f"No nodes from final_population_node_ids were found in '{population_path}'"
         )
 
-    for node_payload in selected_payloads:
-        _validate_node_inference_mode(
-            node_payload,
-            expected_inference_mode=expected_inference_mode,
-            population_path=population_path,
-        )
-
-    nodes_by_id: Dict[int, GraphNode] = {}
-    for node_payload in selected_payloads:
-        node_id = node_payload.get("node_id")
-        if node_id is None:
-            raise ValueError(
-                f"Encountered a final-population node without node_id in '{population_path}'"
-            )
-        nodes_by_id[int(node_id)] = _deserialize_node(
-            node_payload,
-            feedback_prompt_override=feedback_prompt,
-            mutation_prompt_override=mutation_prompt,
-            example_generation_prompt_override=example_generation_prompt,
-        )
-
-    for node_payload in selected_payloads:
-        node_id = int(node_payload["node_id"])
-        parent_id = node_payload.get("parent_id")
-        if parent_id is None:
-            continue
-        parent = nodes_by_id.get(int(parent_id))
-        if parent is None:
-            continue
-        child = nodes_by_id[node_id]
-        child.parent = parent
-        parent.children.append(child)
-
-    sorted_nodes = sorted(
+    selected_nodes = [nodes_by_id[node_id] for node_id in selected_node_ids]
+    all_nodes = sorted(
         nodes_by_id.values(),
         key=lambda node: node.node_id if node.node_id is not None else -1,
     )
@@ -296,7 +353,7 @@ def load_initial_population(
         best_node = nodes_by_id.get(int(best_node_id))
     if best_node is None:
         best_node = max(
-            sorted_nodes,
+            all_nodes,
             key=lambda node: (
                 (
                     float(node.val_score.get("f1_mean"))
@@ -308,7 +365,7 @@ def load_initial_population(
             ),
         )
 
-    return sorted_nodes, best_node, population_path
+    return selected_nodes, best_node, all_nodes, population_path
 
 
 def serialize_feedback_sample(sample: FeedbackSample) -> Dict[str, object]:
