@@ -1476,7 +1476,7 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 --load-population --initial-prompt-source-path "../trainings/20260421_085850_Qwen-Qwen3-4B" \
 > nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_10_itr_10_resume_from_20260421_085850.out 2>&1 &
 
-## resume textual runs for 10 more addtl. iterations
+## resume textual runs for 20 more addtl. iterations
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" \
 --max-iterations 20 --population-size 3 --mutation-group-id "group_2" \
 --load-population --initial-prompt-source-path "../trainings/20260422_010538_Qwen-Qwen3-4B" \
@@ -1496,6 +1496,28 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 --max-iterations 20 --population-size 10 --mutation-group-id "group_2" \
 --load-population --initial-prompt-source-path "../trainings/20260422_083500_Qwen-Qwen3-4B" \
 > nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_10_itr_20_resume_from_20260422_083500.out 2>&1 &
+
+
+## resume textual runs for 30 more addtl. iterations
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" \
+--max-iterations 30 --population-size 3 --mutation-group-id "group_2" \
+--load-population --initial-prompt-source-path "../trainings/20260422_202830_Qwen-Qwen3-4B" \
+> nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_3_itr_30_resume_from_20260422_202830.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" \
+--max-iterations 30 --population-size 5 --mutation-group-id "group_2" \
+--load-population --initial-prompt-source-path "../trainings/20260422_202858_Qwen-Qwen3-4B" \
+> nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_5_itr_30_resume_from_20260422_202858.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" \
+--max-iterations 30 --population-size 7 --mutation-group-id "group_2" \
+--load-population --initial-prompt-source-path "../trainings/20260422_202907_Qwen-Qwen3-4B" \
+> nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_7_itr_30_resume_from_20260422_202907.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" \
+--max-iterations 30 --population-size 10 --mutation-group-id "group_2" \
+--load-population --initial-prompt-source-path "../trainings/20260422_202923_Qwen-Qwen3-4B" \
+> nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_10_itr_30_resume_from_20260422_202923.out 2>&1 &
 
 ##################################################
 # tags custom

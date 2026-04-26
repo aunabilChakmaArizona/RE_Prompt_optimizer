@@ -1,0 +1,31 @@
+Textual Evolutionary vs Gradient-Based Prompt Optimization Tradeoffs
+
+| Dimension | Textual evolutionary approach | Gradient-based approach |
+|---|---|---|
+| Main signal | Natural-language feedback, mutation, differentiation | Token gradients, CE/perplexity, beam scoring |
+| Reasoning use | Heavy: feedback generation, mutation, differentiation often rely on LLM textual reasoning | Mostly none: gradient analysis and scoring are numeric; LLM candidate generation can run with thinking disabled |
+| Search style | One semantically rich edit per iteration | Many localized edits explored per iteration |
+| Cost profile | Fewer candidates, but each candidate may require expensive reasoning/generation | More candidates internally, but mostly cheap scoring/inference once gradients are available |
+| Interpretability | High: feedback explains why prompt should change | Medium: regions and scores are interpretable, but gradient signal is less human-readable |
+| Edit scope | Can make broad conceptual changes to the whole prompt | Usually localized to high-gradient regions unless you explicitly allow broader synthesis |
+| Stability | More stochastic and sensitive to generation quality | More deterministic if sampling is off; still sensitive to gradient sample and candidate generation |
+| Failure mode | LLM may hallucinate bad feedback or rewrite prompt in a harmful broad way | May optimize local tokens without capturing the higher-level task instruction problem |
+| Model dependency | Can use black-box-ish LLM generation | Needs access to model gradients/logits for the main method |
+| Scaling | Reasoning cost grows with number of iterations and feedback samples | Beam/scoring cost grows with regions * candidates * beam_width, but is more controllable |
+
+Summary:
+
+Textual evolutionary search is a reasoning-driven optimizer. It asks the model to inspect examples, explain behavior, and propose a better prompt. That gives it semantic flexibility: it can add missing rules, restructure instructions, or fix conceptual ambiguity. But it is expensive and noisy because every major step depends on generated text.
+
+Gradient-based search is a signal-driven optimizer. It asks which prompt tokens are most responsible for the current errors, edits those regions, and ranks candidates by model-side scores. That avoids reasoning in the core loop. Even in LLM_CANDIDATE_SUGGESTION, the LLM is only used to propose rewrite candidates; the selection is still numeric. Candidate-generation reasoning/thinking can be disabled.
+
+Practical framing:
+
+- If the prompt needs conceptual repair, textual evolution may find better changes.
+- If the prompt is mostly good but needs localized wording improvements, gradient search is more efficient.
+- If GPU time is the bottleneck, textual evolution creates fewer dev-evaluated prompts.
+- If LLM reasoning/generation time is the bottleneck, gradient search is cleaner because most work is scoring, not reasoning.
+- If reproducibility matters, gradient search is usually easier to control.
+- If human-readable rationales matter, textual evolution gives better artifacts.
+
+For the specific comparison: evolutionary group_2 is low-width, high-reasoning. Gradient beam is high-width, low-reasoning.
