@@ -38,6 +38,7 @@ Answer:
 class PromptRecord:
     px: float
     folder: str
+    summary_path: Path
     prompt: str
     validation_f1: float | None
     dev_f1: float | None
@@ -129,6 +130,7 @@ def load_prompt_record(summary_path: Path) -> PromptRecord:
     return PromptRecord(
         px=extract_px(folder_name),
         folder=folder_name,
+        summary_path=summary_path,
         prompt=selected["prompt"],
         validation_f1=balanced_train_prf.get("f1"),
         dev_f1=dev_prf.get("f1"),
@@ -398,6 +400,18 @@ def render_demo_input_prompt(example: DemoPromptExample) -> str:
     return rendered
 
 
+def load_prompt_lineage(summary_path: Path) -> List[tuple[int, str]]:
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    iterations = payload.get("iterations") or []
+    lineage: List[tuple[int, str]] = []
+    for iteration in iterations:
+        selected_prompt = (iteration.get("selected_prompt") or {}).get("prompt")
+        iteration_index = iteration.get("iteration_index")
+        if selected_prompt and iteration_index is not None:
+            lineage.append((int(iteration_index), selected_prompt))
+    return lineage
+
+
 def build_cover_page(example: DemoPromptExample) -> str:
     page_width = 612
     page_height = 792
@@ -508,6 +522,34 @@ def write_metrics_report(path: Path, pairs: Sequence[PromptPair], seed: int) -> 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_parent_prompt_report(path: Path, pairs: Sequence[PromptPair]) -> None:
+    pair_occurrences: dict[tuple[float, str], List[str]] = {}
+    unique_records: dict[tuple[float, str], PromptRecord] = {}
+    for pair_index, pair in enumerate(pairs, start=1):
+        for side, record in (("left", pair.left), ("right", pair.right)):
+            key = (record.px, record.folder)
+            pair_occurrences.setdefault(key, []).append(f"pair_{pair_index}_{side}")
+            unique_records[key] = record
+
+    lines: List[str] = []
+    for key in sorted(unique_records, key=lambda item: item[0]):
+        record = unique_records[key]
+        lineage = load_prompt_lineage(record.summary_path)
+        lines.append(f"lambda = {record.px:.2f}")
+        lines.append(f"used_in = {', '.join(pair_occurrences[key])}")
+        lines.append(f"final_selected_prompt_folder = {record.folder}")
+        lines.append("")
+        for iteration_index, prompt_text in lineage:
+            lines.append(f"Iteration {iteration_index}")
+            lines.append(prompt_text)
+            lines.append("")
+        lines.append("=" * 80)
+        lines.append("")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     records = collect_prompt_records(args.root, args.pattern)
@@ -515,15 +557,18 @@ def main() -> None:
     demo_example = load_demo_prompt_example(args.root, args.pattern)
     pdf_path = args.output_dir / f"{args.output_stem}.pdf"
     txt_path = args.output_dir / f"{args.output_stem}_metrics.txt"
+    parent_txt_path = args.output_dir / f"{args.output_stem}_parent_prompts.txt"
 
     pair_pages = build_pdf_pages(pairs)
     write_simple_pdf(pdf_path, [build_cover_page(demo_example), *pair_pages])
     write_metrics_report(txt_path, pairs, args.seed)
+    write_parent_prompt_report(parent_txt_path, pairs)
 
     print(f"selected_px_runs={len(records)}")
     print(f"pairs_written={len(pairs)}")
     print(f"pdf={pdf_path}")
     print(f"metrics_txt={txt_path}")
+    print(f"parent_prompts_txt={parent_txt_path}")
 
 
 if __name__ == "__main__":
