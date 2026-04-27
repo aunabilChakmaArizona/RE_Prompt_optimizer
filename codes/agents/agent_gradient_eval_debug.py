@@ -60,6 +60,12 @@ LM_PROBABILITY_SUBMODE_CHOICES = [
     LM_PROBABILITY_SUBMODE_NO_CONTEXT,
     LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT,
 ]
+BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS = "LLM_SYNTHESIS"
+BEAM_REPLACEMENT_MODE_DIRECT_REPLACEMENT = "DIRECT_REPLACEMENT"
+BEAM_REPLACEMENT_MODE_CHOICES = [
+    BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS,
+    BEAM_REPLACEMENT_MODE_DIRECT_REPLACEMENT,
+]
 MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
     MODE_LLM_CANDIDATE_SUGGESTION,
@@ -239,6 +245,16 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Candidate-suggestion modes only. Beam width used while expanding regions "
             "one at a time. The final beam is also the final top-k prompt set."
+        ),
+    )
+    parser.add_argument(
+        "--beam-replacement-mode",
+        choices=BEAM_REPLACEMENT_MODE_CHOICES,
+        default=BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS,
+        help=(
+            "Candidate-suggestion modes only. LLM_SYNTHESIS applies each selected "
+            "replacement set through the multi-region synthesis meta prompt. "
+            "DIRECT_REPLACEMENT preserves the legacy exact span splice."
         ),
     )
     parser.add_argument(
@@ -815,7 +831,8 @@ def _build_selected_replacement_blocks(
                 [
                     f"Span {region_rank}",
                     f"Text: ```{region['region_text']}```",
-                    f"Replace with: ```{selected_replacements[region_rank]}```",
+                    "Replace with: "
+                    f"```{selected_replacements.get(region_rank, region['region_text'])}```",
                 ]
             )
         )
@@ -927,6 +944,164 @@ def _build_prompt_from_region_replacements( #todo: we should prompt to build the
             + revised_prompt[region["end_char"] :]
         )
     return revised_prompt
+
+
+def _normalize_synthesized_prompt_output(raw_output: str) -> str:
+    text = raw_output.strip()
+    fenced_match = re.fullmatch(r"```(?:[A-Za-z0-9_-]+)?\s*(.*?)\s*```", text, re.DOTALL)
+    if fenced_match:
+        text = fenced_match.group(1).strip()
+    return _strip_region_markup(text)
+
+
+def _build_complete_region_replacements(
+    *,
+    selected_regions: Sequence[Dict[str, Any]],
+    selected_replacements: Dict[int, str],
+) -> Dict[int, str]:
+    return {
+        int(region["region_rank"]): selected_replacements.get(
+            int(region["region_rank"]),
+            region["region_text"],
+        )
+        for region in selected_regions
+    }
+
+
+def _run_multi_region_candidate_synthesis(
+    *,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    selected_replacements: Dict[int, str],
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+    use_chat_template: bool,
+) -> Dict[str, Any]:
+    complete_replacements = _build_complete_region_replacements(
+        selected_regions=region_details["selected_regions"],
+        selected_replacements=selected_replacements,
+    )
+    meta_prompt = _build_region_candidate_synthesis_prompt(
+        instruction_prompt=instruction_prompt,
+        region_details=region_details,
+        selected_replacements=complete_replacements,
+    )
+    raw_output = run_prompts(
+        [meta_prompt],
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        batch_size=batch_size,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        do_sample=True,
+        do_log=True,
+        log_label="agent_gradient_eval_debug_region_synthesis",
+    )[0]
+    revised_prompt = _normalize_synthesized_prompt_output(raw_output)
+    fallback_reason = None
+    if not revised_prompt:
+        fallback_reason = "empty_synthesis_output"
+        revised_prompt = _build_prompt_from_region_replacements(
+            instruction_prompt=instruction_prompt,
+            selected_regions=region_details["selected_regions"],
+            selected_replacements=selected_replacements,
+        )
+
+    return {
+        "revised_prompt": revised_prompt,
+        "meta_prompt": meta_prompt,
+        "raw_output": raw_output,
+        "used_fallback": fallback_reason is not None,
+        "fallback_reason": fallback_reason,
+        "complete_replacements": complete_replacements,
+    }
+
+
+def _build_beam_candidate_prompt(
+    *,
+    replacement_mode: str,
+    instruction_prompt: str,
+    region_details: Dict[str, Any],
+    selected_replacements: Dict[int, str],
+    region_rank: int,
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    batch_size: int,
+    use_chat_template: bool,
+    synthesis_cache: Dict[Tuple[Tuple[int, str], ...], Dict[str, Any]],
+) -> Dict[str, Any]:
+    metadata: Dict[str, Any] = {
+        "replacement_mode": replacement_mode,
+        "region_rank": region_rank,
+        "used_fallback": False,
+        "fallback_reason": None,
+        "meta_prompt": None,
+        "raw_output": None,
+        "complete_replacements": _build_complete_region_replacements(
+            selected_regions=region_details["selected_regions"],
+            selected_replacements=selected_replacements,
+        ),
+    }
+
+    if not selected_replacements:
+        return {
+            "revised_prompt": instruction_prompt,
+            "replacement_metadata": {
+                **metadata,
+                "no_op": True,
+            },
+        }
+
+    if replacement_mode == BEAM_REPLACEMENT_MODE_DIRECT_REPLACEMENT:
+        revised_prompt = _build_prompt_from_region_replacements(
+            instruction_prompt=instruction_prompt,
+            selected_regions=region_details["selected_regions"],
+            selected_replacements=selected_replacements,
+        )
+        return {
+            "revised_prompt": revised_prompt,
+            "replacement_metadata": {
+                **metadata,
+                "no_op": False,
+            },
+        }
+
+    if replacement_mode != BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS:
+        raise ValueError(f"Unsupported beam replacement mode: {replacement_mode}")
+
+    cache_key = tuple(sorted((int(rank), text) for rank, text in selected_replacements.items()))
+    cached_synthesis = synthesis_cache.get(cache_key)
+    if cached_synthesis is None:
+        cached_synthesis = _run_multi_region_candidate_synthesis(
+            instruction_prompt=instruction_prompt,
+            region_details=region_details,
+            selected_replacements=selected_replacements,
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+            batch_size=batch_size,
+            use_chat_template=use_chat_template,
+        )
+        synthesis_cache[cache_key] = copy.deepcopy(cached_synthesis)
+
+    revised_prompt = cached_synthesis["revised_prompt"]
+    return {
+        "revised_prompt": revised_prompt,
+        "replacement_metadata": {
+            **metadata,
+            "no_op": False,
+            "complete_replacements": cached_synthesis.get("complete_replacements"),
+            "meta_prompt": cached_synthesis.get("meta_prompt"),
+            "raw_output": cached_synthesis.get("raw_output"),
+            "used_fallback": bool(cached_synthesis.get("used_fallback")),
+            "fallback_reason": cached_synthesis.get("fallback_reason"),
+        },
+    }
 
 
 def _build_selected_replacements_payload(
@@ -1609,6 +1784,7 @@ def _build_summary_payload(
             "region_candidate_meta_prompts", []
         ),
         "beam_width": prompt_editing_payload.get("beam_width"),
+        "beam_replacement_mode": prompt_editing_payload.get("beam_replacement_mode"),
         "beam_search_steps": prompt_editing_payload.get("beam_search_steps", []),
         "combination_meta_prompt": prompt_editing_payload.get("combination_meta_prompt"),
         "synthesis_meta_prompt": prompt_editing_payload.get("synthesis_meta_prompt"),
@@ -1959,12 +2135,14 @@ def _run_region_candidate_beam_search(
         int(item["region_rank"]): item for item in prepared_region_candidates
     }
     prompt_result_cache: Dict[str, Dict[str, Any]] = {}
+    synthesis_cache: Dict[Tuple[Tuple[int, str], ...], Dict[str, Any]] = {}
     beam_nodes: List[Dict[str, Any]] = [
         {
             "beam_index": 0,
             "parent_beam_index": None,
             "selected_replacements": {},
             "revised_prompt": instruction_prompt,
+            "replacement_steps": [],
             "selection_metrics": None,
             "changed": False,
             "duplicate_prompt": False,
@@ -1996,11 +2174,20 @@ def _run_region_candidate_beam_search(
                 else:
                     selected_replacements[region_rank] = candidate_text
 
-                revised_prompt = _build_prompt_from_region_replacements(
+                prompt_build = _build_beam_candidate_prompt(
+                    replacement_mode=args.beam_replacement_mode,
                     instruction_prompt=instruction_prompt,
-                    selected_regions=region_details["selected_regions"],
+                    region_details=region_details,
                     selected_replacements=selected_replacements,
+                    region_rank=region_rank,
+                    model=model,
+                    tokenizer=tokenizer,
+                    max_new_tokens=args.meta_prompt_max_new_tokens,
+                    batch_size=args.meta_prompt_batch_size,
+                    use_chat_template=not args.disable_chat_template,
+                    synthesis_cache=synthesis_cache,
                 )
+                revised_prompt = prompt_build["revised_prompt"]
                 cached_result = _score_instruction_prompt_for_candidate_selection(
                     instruction_prompt=revised_prompt,
                     sampled_pairs=sampled_pairs,
@@ -2018,6 +2205,8 @@ def _run_region_candidate_beam_search(
                     "candidate_position": candidate_position,
                     "selected_replacements": selected_replacements,
                     "revised_prompt": revised_prompt,
+                    "replacement_steps": parent_node.get("replacement_steps", [])
+                    + [prompt_build["replacement_metadata"]],
                     "selection_metrics": cached_result["selection_metrics"],
                     "changed": revised_prompt != instruction_prompt,
                     "duplicate_prompt": False,
@@ -2105,6 +2294,11 @@ def _run_region_candidate_beam_search(
                         ),
                         "num_changed_spans": node["num_changed_spans"],
                         "prompt": node["revised_prompt"],
+                        "replacement_metadata": copy.deepcopy(
+                            node["replacement_steps"][-1]
+                            if node.get("replacement_steps")
+                            else None
+                        ),
                         "selection_metrics": copy.deepcopy(node["selection_metrics"]),
                         "retained_in_beam": node["revised_prompt"] in retained_prompt_to_beam_index,
                     }
@@ -2120,6 +2314,7 @@ def _run_region_candidate_beam_search(
                         ),
                         "num_changed_spans": node["num_changed_spans"],
                         "prompt": node["revised_prompt"],
+                        "replacement_steps": copy.deepcopy(node.get("replacement_steps", [])),
                         "selection_metrics": copy.deepcopy(node["selection_metrics"]),
                     }
                     for node in beam_nodes
@@ -2141,6 +2336,8 @@ def _run_region_candidate_beam_search(
                 "meta_prompt": None,
                 "raw_output": None,
                 "revised_prompt": node["revised_prompt"],
+                "replacement_mode": args.beam_replacement_mode,
+                "replacement_steps": copy.deepcopy(node.get("replacement_steps", [])),
                 "changed": node["changed"],
                 "duplicate_prompt": False,
                 "selection_metrics": copy.deepcopy(node["selection_metrics"]),
@@ -2153,8 +2350,23 @@ def _run_region_candidate_beam_search(
 
     return {
         "beam_width": args.beam_width,
+        "beam_replacement_mode": args.beam_replacement_mode,
         "region_candidates": prepared_region_candidates,
         "beam_search_steps": beam_search_steps,
+        "synthesis_meta_prompts": [
+            {
+                "selected_replacements": [
+                    {"region_rank": region_rank, "replacement_text": replacement_text}
+                    for region_rank, replacement_text in cache_key
+                ],
+                "complete_replacements": synthesis_payload.get("complete_replacements"),
+                "meta_prompt": synthesis_payload["meta_prompt"],
+                "raw_output": synthesis_payload["raw_output"],
+                "used_fallback": synthesis_payload["used_fallback"],
+                "fallback_reason": synthesis_payload["fallback_reason"],
+            }
+            for cache_key, synthesis_payload in synthesis_cache.items()
+        ],
         "generated_prompt_variants": final_variants,
     }
 
@@ -2467,6 +2679,7 @@ def _build_region_candidate_prompt_editing_payload(
         "region_candidate_meta_prompts": [],
         "region_candidates": [],
         "beam_width": None,
+        "beam_replacement_mode": None,
         "beam_search_steps": [],
         "combination_meta_prompt": None,
         "combination_raw_output": "",
@@ -2568,12 +2781,16 @@ def _build_and_evaluate_region_candidate_prompts(
     ]
     prompt_editing_payload["region_candidates"] = list(beam_payload["region_candidates"])
     prompt_editing_payload["beam_width"] = beam_payload["beam_width"]
+    prompt_editing_payload["beam_replacement_mode"] = beam_payload["beam_replacement_mode"]
     prompt_editing_payload["beam_search_steps"] = beam_payload["beam_search_steps"]
     prompt_editing_payload["combination_meta_prompt"] = None
     prompt_editing_payload["combination_raw_output"] = ""
     prompt_editing_payload["candidate_combinations"] = []
     prompt_editing_payload["synthesis_meta_prompt"] = None
-    prompt_editing_payload["synthesis_meta_prompts"] = []
+    prompt_editing_payload["synthesis_meta_prompts"] = beam_payload.get(
+        "synthesis_meta_prompts",
+        [],
+    )
     prompt_editing_payload["generated_prompt_variants"] = scored_variants
     prompt_editing_payload["retained_top_k_prompts"] = [
         {

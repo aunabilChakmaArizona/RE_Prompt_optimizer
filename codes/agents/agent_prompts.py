@@ -321,7 +321,7 @@ Output only the combinations in the following JSON format:
 GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
-The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object entities.
 
 You are given the current instruction prompt with targeted spans below:
 ```
@@ -339,9 +339,30 @@ Do not modify any other parts of the prompt (but remove the span tags).
 *** Remove the span tags (e.g., <span_1>...</span_1>, <span_2>...</span_2>, and so on.) from the revised prompt. ***
 
 Output only the revised prompt.
+'''
+
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_SINGLE_REGION_V1 = '''You are an expert prompt generator for a relation extraction inference task.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object entities.
+
+You are given the current instruction prompt with a targeted span below:
+```
+#MARKED_PROMPT#
+```
+
+Replacement for the target span is given below:
+#SELECTED_REPLACEMENT#
+
+Your task is to generate a revised instruction prompt by applying the given replacement to the targeted span.
+Use the replacement exactly as provided, except for minimal local adjustments if necessary for spelling and grammatical correctness or coherence.
+Do not modify any other parts of the prompt (but remove the target span tags).
+
+*** Remove the target span tags (<target>...</target>) from the revised prompt. ***
 
 Output only the revised prompt.
 '''
+
 # Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
 # Use the replacements exactly as provided.
 # Do not modify any other parts of the prompt, except for minimal local adjustments if necessary for grammatical correctness or coherence.
