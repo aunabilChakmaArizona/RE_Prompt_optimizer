@@ -412,6 +412,27 @@ def load_prompt_lineage(summary_path: Path) -> List[tuple[int, str]]:
     return lineage
 
 
+def load_summary_payload(summary_path: Path) -> dict:
+    return json.loads(summary_path.read_text(encoding="utf-8"))
+
+
+def load_all_data_payload(summary_path: Path) -> dict:
+    return json.loads((summary_path.parent / "all_data.json").read_text(encoding="utf-8"))
+
+
+def collect_pair_occurrences(
+    pairs: Sequence[PromptPair],
+) -> tuple[dict[tuple[float, str], List[str]], dict[tuple[float, str], PromptRecord]]:
+    pair_occurrences: dict[tuple[float, str], List[str]] = {}
+    unique_records: dict[tuple[float, str], PromptRecord] = {}
+    for pair_index, pair in enumerate(pairs, start=1):
+        for side, record in (("left", pair.left), ("right", pair.right)):
+            key = (record.px, record.folder)
+            pair_occurrences.setdefault(key, []).append(f"pair_{pair_index}_{side}")
+            unique_records[key] = record
+    return pair_occurrences, unique_records
+
+
 def build_cover_page(example: DemoPromptExample) -> str:
     page_width = 612
     page_height = 792
@@ -523,13 +544,7 @@ def write_metrics_report(path: Path, pairs: Sequence[PromptPair], seed: int) -> 
 
 
 def write_parent_prompt_report(path: Path, pairs: Sequence[PromptPair]) -> None:
-    pair_occurrences: dict[tuple[float, str], List[str]] = {}
-    unique_records: dict[tuple[float, str], PromptRecord] = {}
-    for pair_index, pair in enumerate(pairs, start=1):
-        for side, record in (("left", pair.left), ("right", pair.right)):
-            key = (record.px, record.folder)
-            pair_occurrences.setdefault(key, []).append(f"pair_{pair_index}_{side}")
-            unique_records[key] = record
+    pair_occurrences, unique_records = collect_pair_occurrences(pairs)
 
     lines: List[str] = []
     for key in sorted(unique_records, key=lambda item: item[0]):
@@ -550,6 +565,159 @@ def write_parent_prompt_report(path: Path, pairs: Sequence[PromptPair]) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
+def _lookup_replacement_text(
+    selected_replacements: Sequence[dict],
+    region_rank: int,
+) -> str:
+    for item in selected_replacements:
+        if int(item.get("region_rank", -1)) == region_rank:
+            return str(item.get("replacement_text", ""))
+    return ""
+
+
+def write_beam_parent_candidate_report(path: Path, pairs: Sequence[PromptPair]) -> None:
+    pair_occurrences, unique_records = collect_pair_occurrences(pairs)
+    lines: List[str] = []
+
+    for key in sorted(unique_records, key=lambda item: item[0]):
+        record = unique_records[key]
+        payload = load_summary_payload(record.summary_path)
+        iterations = payload.get("iterations") or []
+
+        lines.append(f"lambda = {record.px:.2f}")
+        lines.append(f"used_in = {', '.join(pair_occurrences[key])}")
+        lines.append(f"final_selected_prompt_folder = {record.folder}")
+        lines.append("")
+
+        for iteration in iterations:
+            iteration_index = iteration.get("iteration_index")
+            input_prompt = (iteration.get("input_prompt") or {}).get("prompt", "")
+            selected_prompt = (iteration.get("selected_prompt") or {}).get("prompt", "")
+            region_candidates = {
+                int(item["region_rank"]): list(item.get("candidates", []))
+                for item in iteration.get("region_candidates", [])
+            }
+
+            lines.append(f"Iteration {iteration_index}")
+            lines.append("Input prompt:")
+            lines.append(input_prompt)
+            lines.append("")
+
+            previous_retained_nodes = [{"beam_index": 0, "prompt": input_prompt}]
+            for step in iteration.get("beam_search_steps", []):
+                step_index = int(step.get("step_index", 0))
+                region_rank = int(step.get("region_rank", 0))
+                region_text = str(step.get("region_text", ""))
+                candidates = region_candidates.get(region_rank, [])
+                parent_prompt_by_beam_index = {
+                    int(node["beam_index"]): str(node["prompt"])
+                    for node in previous_retained_nodes
+                    if node.get("beam_index") is not None
+                }
+
+                lines.append(
+                    f"Beam step {step_index} | region_rank = {region_rank} | region_text = {region_text!r}"
+                )
+                lines.append("Candidates:")
+                for candidate_position, candidate_text in enumerate(candidates):
+                    lines.append(f"  [{candidate_position}] {candidate_text}")
+                lines.append("")
+
+                for expanded_index, node in enumerate(step.get("expanded_unique_nodes", []), start=1):
+                    parent_beam_index = node.get("parent_beam_index")
+                    candidate_position = node.get("candidate_position")
+                    candidate_text = (
+                        candidates[candidate_position]
+                        if isinstance(candidate_position, int) and 0 <= candidate_position < len(candidates)
+                        else ""
+                    )
+                    selected_replacements = node.get("selected_replacements", [])
+                    replacement_text = _lookup_replacement_text(selected_replacements, region_rank)
+
+                    lines.append(f"Expanded prompt {expanded_index}")
+                    lines.append(f"retained_in_beam = {node.get('retained_in_beam')}")
+                    lines.append(f"beam_index = {node.get('beam_index')}")
+                    lines.append(f"parent_beam_index = {parent_beam_index}")
+                    lines.append(f"candidate_position = {candidate_position}")
+                    lines.append(f"candidate_text = {candidate_text}")
+                    lines.append(f"applied_replacement_text = {replacement_text}")
+                    lines.append("Parent prompt:")
+                    lines.append(parent_prompt_by_beam_index.get(parent_beam_index, ""))
+                    lines.append("")
+                    lines.append("Result prompt:")
+                    lines.append(str(node.get("prompt", "")))
+                    lines.append("")
+
+                previous_retained_nodes = step.get("retained_beam_nodes", [])
+
+            lines.append("Selected prompt for next iteration:")
+            lines.append(selected_prompt)
+            lines.append("")
+            lines.append("=" * 80)
+            lines.append("")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def write_selected_candidates_report(path: Path, pairs: Sequence[PromptPair]) -> None:
+    pair_occurrences, unique_records = collect_pair_occurrences(pairs)
+    lines: List[str] = []
+
+    for key in sorted(unique_records, key=lambda item: item[0]):
+        record = unique_records[key]
+        payload = load_all_data_payload(record.summary_path)
+        iterations = payload.get("iterations") or []
+
+        lines.append(f"lambda = {record.px:.2f}")
+        lines.append(f"used_in = {', '.join(pair_occurrences[key])}")
+        lines.append(f"final_selected_prompt_folder = {record.folder}")
+        lines.append("")
+
+        for iteration in iterations:
+            iteration_index = iteration.get("iteration_index")
+            input_prompt = str(iteration.get("input_prompt", ""))
+            selected_prompt = iteration.get("selected_prompt") or {}
+            selected_beam_index = selected_prompt.get("beam_index")
+            variants = (iteration.get("prompt_region_editing") or {}).get("generated_prompt_variants", [])
+
+            selected_variant = None
+            for variant in variants:
+                if variant.get("beam_index") == selected_beam_index:
+                    selected_variant = variant
+                    break
+
+            lines.append(f"Iteration {iteration_index}")
+            lines.append("Core parent prompt:")
+            lines.append(input_prompt)
+            lines.append("")
+
+            if selected_variant is None:
+                lines.append("Selected candidates per region: NA")
+                lines.append("")
+                continue
+
+            lines.append("Selected candidates per region:")
+            for item in selected_variant.get("selected_replacements", []):
+                region_rank = int(item.get("region_rank", -1))
+                region_text = str(item.get("region_text", ""))
+                replacement_text = str(item.get("replacement_text", ""))
+                changed = "yes" if replacement_text != region_text else "no"
+                lines.append(
+                    f"- region_{region_rank}: original={region_text!r} | selected={replacement_text!r} | changed={changed}"
+                )
+            lines.append("")
+            lines.append("Selected prompt:")
+            lines.append(str(selected_variant.get("revised_prompt", "")))
+            lines.append("")
+
+        lines.append("=" * 80)
+        lines.append("")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     records = collect_prompt_records(args.root, args.pattern)
@@ -558,17 +726,23 @@ def main() -> None:
     pdf_path = args.output_dir / f"{args.output_stem}.pdf"
     txt_path = args.output_dir / f"{args.output_stem}_metrics.txt"
     parent_txt_path = args.output_dir / f"{args.output_stem}_parent_prompts.txt"
+    beam_txt_path = args.output_dir / f"{args.output_stem}_beam_parent_candidates.txt"
+    selected_candidates_txt_path = args.output_dir / f"{args.output_stem}_selected_candidates.txt"
 
     pair_pages = build_pdf_pages(pairs)
     write_simple_pdf(pdf_path, [build_cover_page(demo_example), *pair_pages])
     write_metrics_report(txt_path, pairs, args.seed)
     write_parent_prompt_report(parent_txt_path, pairs)
+    write_beam_parent_candidate_report(beam_txt_path, pairs)
+    write_selected_candidates_report(selected_candidates_txt_path, pairs)
 
     print(f"selected_px_runs={len(records)}")
     print(f"pairs_written={len(pairs)}")
     print(f"pdf={pdf_path}")
     print(f"metrics_txt={txt_path}")
     print(f"parent_prompts_txt={parent_txt_path}")
+    print(f"beam_parent_candidates_txt={beam_txt_path}")
+    print(f"selected_candidates_txt={selected_candidates_txt_path}")
 
 
 if __name__ == "__main__":

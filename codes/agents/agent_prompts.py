@@ -333,12 +333,22 @@ Replacements for each spans are given below:
 #SELECTED_REPLACEMENTS#
 
 Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
-Use the replacements exactly as provided.
-Do not modify any other parts of the prompt, except for minimal local adjustments if necessary for grammatical correctness or coherence.
-Do not output span labels in the revised prompt.
+Use the replacements exactly as provided, except for minimal local adjustments if necessary for spelling and grammatical correctness or coherence.
+Do not modify any other parts of the prompt (but remove the span tags).
 
-Output only the revised prompt enclosed within the <p> and </p> tags.
+*** Remove the span tags (e.g., <span_1>...</span_1>, <span_2>...</span_2>, and so on.) from the revised prompt. ***
+
+Output only the revised prompt.
+
+Output only the revised prompt.
 '''
+# Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
+# Use the replacements exactly as provided.
+# Do not modify any other parts of the prompt, except for minimal local adjustments if necessary for grammatical correctness or coherence.
+# Do not output span labels in the revised prompt.
+
+# Output only the revised prompt enclosed within the <p> and </p> tags.
+# '''
 
 MUTATION_TRACES_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
 

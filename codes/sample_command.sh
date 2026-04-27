@@ -1519,6 +1519,33 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 --load-population --initial-prompt-source-path "../trainings/20260422_202923_Qwen-Qwen3-4B" \
 > nohup_outs/nohup_v4_ps_tuning_qwen4_group2_mixed_ps_10_itr_30_resume_from_20260422_202923.out 2>&1 &
 
+## final run on gradient based optimization 
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260422_202830_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 7 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final.out 2>&1 &
+
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
