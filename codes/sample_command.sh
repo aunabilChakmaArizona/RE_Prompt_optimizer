@@ -1521,6 +1521,7 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 
 ## final run on gradient based optimization 
 
+# error here: it selected best prompt from the train set score
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -1544,6 +1545,30 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final.out 2>&1 &
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260422_202830_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 12 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 7 \
+  --max-total-region-tokens 15 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final_updated" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final_updated.out 2>&1 &
 
 
 ##################################################

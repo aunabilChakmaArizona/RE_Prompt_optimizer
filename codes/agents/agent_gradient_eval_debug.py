@@ -1627,6 +1627,12 @@ def _select_best_variant(
     *,
     prompt_editing_payload: Dict[str, Any],
 ) -> Dict[str, Any] | None:
+    """Select among retained beam prompts after full evaluation.
+
+    Beam search itself is pruned by sampled train scoring before this point.
+    Once retained prompts have full dev scores, choose the prompt with the best
+    full-evaluation F1 and use sampled train F1 only for fallback/tie-breaks.
+    """
     generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
     ranked_variants = [
         variant
@@ -1639,6 +1645,13 @@ def _select_best_variant(
     return max(
         ranked_variants,
         key=lambda variant: (
+            1 if variant.get("full_evaluation") is not None else 0,
+            float(
+                ((variant.get("full_evaluation") or {}).get("prf") or {}).get(
+                    "f1",
+                    float("-inf"),
+                )
+            ),
             float(variant["validation"]["prf"].get("f1", float("-inf"))),
             float(variant["validation"]["summary"]["overall"].get("accuracy", float("-inf"))),
             int(variant["validation"]["summary"].get("fixes_from_mistakes", 0)),
@@ -1675,7 +1688,9 @@ def _build_selected_prompt_summary(
     revised_prompt = selected_variant.get("revised_prompt") or input_prompt
     return {
         "iteration_index": iteration_index,
-        "selection_strategy": "best_validation_f1",
+        "selection_strategy": (
+            "best_dev_f1" if full_evaluation is not None else "best_train_f1"
+        ),
         "prompt": revised_prompt,
         "changed_vs_input": revised_prompt != input_prompt,
         "generation_index": selected_variant.get("generation_index"),
@@ -3120,6 +3135,19 @@ def _run_candidate_suggestion_iteration(
     print(
         "[agent_gradient_eval_debug] selected prompt for next iteration:",
         f"iteration={iteration_index}",
+        f"strategy={selected_prompt['selection_strategy']}",
+        f"generation_index={selected_prompt['generation_index']}",
+        f"beam_index={selected_prompt['beam_index']}",
+        (
+            f"dev_f1={selected_prompt['dev_prf']['f1']:.2f}"
+            if selected_prompt.get("dev_prf")
+            else "dev_f1=None"
+        ),
+        (
+            f"balanced_train_f1={selected_prompt['balanced_train_prf']['f1']:.2f}"
+            if selected_prompt.get("balanced_train_prf")
+            else "balanced_train_f1=None"
+        ),
         f"changed={selected_prompt['changed_vs_input']}",
     )
     print(next_prompt)
