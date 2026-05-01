@@ -639,6 +639,7 @@ def _build_score_payload_from_pairs(
 
 _LABEL_LITERAL_WORDS = {"yes", "no"}
 _LABEL_LITERAL_STRIP_CHARS = " \t\r\n\"'`.,:;()[]{}<>"
+_LABEL_LITERAL_QUOTE_CHARS = {"\"", "'", "`"}
 
 
 def _has_alphanumeric(text: str) -> bool:
@@ -647,6 +648,11 @@ def _has_alphanumeric(text: str) -> bool:
 
 def _normalized_label_literal(text: str) -> str:
     return text.strip().lower().strip(_LABEL_LITERAL_STRIP_CHARS)
+
+
+def _is_quote_only_span(text: str) -> bool:
+    stripped = text.strip()
+    return bool(stripped) and all(char in _LABEL_LITERAL_QUOTE_CHARS for char in stripped)
 
 
 def _is_protected_yes_no_span(
@@ -699,6 +705,7 @@ def _editable_token_groups_for_region(
 
     editable_groups: List[List[int]] = []
     current_group: List[int] = []
+    remove_token_indices = set()
     for token_index in token_indices:
         start_char = int(offsets[token_index][0])
         end_char = int(offsets[token_index][1])
@@ -707,6 +714,22 @@ def _editable_token_groups_for_region(
             start_char=start_char,
             end_char=end_char,
         ):
+            remove_token_indices.add(token_index)
+            for neighbor_index in (token_index - 1, token_index + 1):
+                if neighbor_index not in token_indices:
+                    continue
+                neighbor_text = instruction_prompt[
+                    int(offsets[neighbor_index][0]):int(offsets[neighbor_index][1])
+                ]
+                if _is_quote_only_span(neighbor_text):
+                    remove_token_indices.add(neighbor_index)
+            while current_group and current_group[-1] in remove_token_indices:
+                current_group.pop()
+            if current_group:
+                editable_groups.append(current_group)
+                current_group = []
+            continue
+        if token_index in remove_token_indices:
             if current_group:
                 editable_groups.append(current_group)
                 current_group = []
@@ -724,6 +747,19 @@ def _editable_token_groups_for_region(
             ]
         )
     ]
+
+
+def _token_gradient_score_by_index(gradient_results: Dict[str, Any]) -> Dict[int, float]:
+    scores: Dict[int, float] = {}
+    for record in gradient_results.get("token_gradients", []):
+        if not isinstance(record, dict):
+            continue
+        token_index = record.get("token_index")
+        gradient_norm = record.get("gradient_norm")
+        if token_index is None or gradient_norm is None:
+            continue
+        scores[int(token_index)] = float(gradient_norm)
+    return scores
 
 
 def _resolve_region_details(
@@ -749,7 +785,8 @@ def _resolve_region_details(
     if not offsets:
         raise ValueError("Instruction prompt produced no tokenizer offsets.")
 
-    selected_regions: List[Dict[str, Any]] = []
+    gradient_scores_by_token = _token_gradient_score_by_index(gradient_results)
+    candidate_regions: List[Dict[str, Any]] = []
     for source_region_rank, region in enumerate(top_regions, start=1):
         editable_groups = _editable_token_groups_for_region(
             region=region,
@@ -761,17 +798,21 @@ def _resolve_region_details(
             end_token = token_group[-1]
             start_char = int(offsets[start_token][0])
             end_char = int(offsets[end_token][1])
-            region_rank = len(selected_regions) + 1
-            selected_regions.append(
+            kept_gradient_scores = [
+                gradient_scores_by_token.get(token_index, 0.0)
+                for token_index in token_group
+            ]
+            candidate_regions.append(
                 {
-                    "region_rank": region_rank,
                     "source_region_rank": source_region_rank,
                     "start_token": start_token,
                     "end_token": end_token,
                     "start_char": start_char,
                     "end_char": end_char,
                     "region_text": instruction_prompt[start_char:end_char],
-                    "region_score": region["score"],
+                    "region_score": max(kept_gradient_scores) if kept_gradient_scores else 0.0,
+                    "region_score_method": "max_kept_token_gradient_norm",
+                    "source_region_score": region["score"],
                     "region_tokens": tokenizer.convert_ids_to_tokens(
                         [input_ids[token_index] for token_index in token_group]
                     ),
@@ -779,15 +820,22 @@ def _resolve_region_details(
                     "protected_yes_no_filter_applied": True,
                 }
             )
-            if len(selected_regions) == num_edit_regions:
-                break
-        if len(selected_regions) == num_edit_regions:
-            break
 
-    if not selected_regions:
+    if not candidate_regions:
         raise ValueError(
             "No editable top_regions remained after protecting yes/no label tokens."
         )
+    candidate_regions.sort(
+        key=lambda item: (
+            item["region_score"],
+            -int(item["source_region_rank"]),
+            -int(item["start_token"]),
+        ),
+        reverse=True,
+    )
+    selected_regions = candidate_regions[:num_edit_regions]
+    for region_rank, region in enumerate(selected_regions, start=1):
+        region["region_rank"] = region_rank
 
     marked_prompt = instruction_prompt
     for region in sorted(selected_regions, key=lambda item: item["start_char"], reverse=True):
