@@ -1582,7 +1582,7 @@ nohup python -u validate_top_population_prompts_final_dev.py \
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
-  --device-map "cuda:0" \
+  --device-map "cuda:1" \
   --prompt-source-path "../trainings/20260430_181825_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 13 \
   --dataset-type "fs_tacred" \
@@ -1602,6 +1602,11 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260430_181825_node13_qwen4_final" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260430_181825_node13_qwen4_final.out 2>&1 &
+
+nohup python -u validate_top_population_prompts_final_dev.py \
+  ../gradients_experiments/20260501_083138_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260430_181825_node13_qwen4_final \
+  5 \
+  --device-map cuda:1 > nohup_outs/nohup_gradient_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260430_181825_node13_qwen4_final_final_dev_step.out 2>&1 &
 
 ##################################################
 # tags custom

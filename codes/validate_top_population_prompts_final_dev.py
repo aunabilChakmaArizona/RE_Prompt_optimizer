@@ -22,19 +22,22 @@ DEFAULT_DATA_DIR = str((CURRENT_DIR.parent / "data").resolve())
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Evaluate the top-k evolutionary-search prompts on the final-step "
-            "FS-TACRED dev episodes."
+            "Evaluate top prompts from an evolutionary-search run or a gradient "
+            "experiment run on the final-step FS-TACRED dev episodes."
         )
     )
     parser.add_argument(
         "run_dir",
         type=Path,
-        help="Output directory from codes/core_trainer_evolutionary_search.py.",
+        help=(
+            "Output directory from codes/core_trainer_evolutionary_search.py or "
+            "codes/agents/agent_gradient_eval_debug.py."
+        ),
     )
     parser.add_argument(
         "top_k",
         type=int,
-        help="Number of top validation-F1 prompts from population.json to evaluate.",
+        help="Number of top validation/dev-F1 prompts to evaluate.",
     )
     parser.add_argument(
         "--data-dir",
@@ -91,6 +94,20 @@ def load_run_args(run_dir: Path) -> Dict[str, Any]:
     return read_json(args_path)
 
 
+def detect_source_type(run_dir: Path) -> str:
+    if (run_dir / "population.json").is_file():
+        return "evolutionary_population"
+    summary_path = run_dir / "summary.json"
+    if summary_path.is_file():
+        summary = read_json(summary_path)
+        if isinstance(summary.get("iterations"), list):
+            return "gradient_experiment"
+    raise FileNotFoundError(
+        "Could not detect supported run type. Expected population.json for "
+        "evolutionary search, or summary.json with iterations for gradient runs."
+    )
+
+
 def f1_score(node_payload: Dict[str, Any]) -> float | None:
     val_score = node_payload.get("val_score")
     if not isinstance(val_score, dict):
@@ -99,6 +116,69 @@ def f1_score(node_payload: Dict[str, Any]) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _gradient_prf_to_val_score(prf: Dict[str, Any] | None) -> Dict[str, float] | None:
+    if not isinstance(prf, dict) or prf.get("f1") is None:
+        return None
+    return {
+        "precision_mean": float(prf.get("precision", 0.0)) / 100.0,
+        "precision_std": 0.0,
+        "recall_mean": float(prf.get("recall", 0.0)) / 100.0,
+        "recall_std": 0.0,
+        "f1_mean": float(prf.get("f1", 0.0)) / 100.0,
+        "f1_std": 0.0,
+    }
+
+
+def gradient_prompt_to_node_payload(prompt_payload: Dict[str, Any]) -> Dict[str, Any]:
+    val_score = _gradient_prf_to_val_score(prompt_payload.get("dev_prf"))
+    if val_score is None:
+        raise ValueError("Gradient prompt is missing dev_prf.f1")
+    iteration_index = prompt_payload.get("iteration_index")
+    return {
+        "node_id": f"gradient_iter_{iteration_index}",
+        "parent_id": None,
+        "children_ids": [],
+        "is_in_final_population": False,
+        "inference_prompt": prompt_payload.get("prompt", ""),
+        "inference_mode": "separate_no_examples",
+        "inference_instruction_prompt": prompt_payload.get("prompt", ""),
+        "inference_answer_instruction_prompt": "",
+        "inference_example_prompt": "",
+        "inference_input_prompt": "",
+        "val_score": val_score,
+        "test_score": None,
+        "gradient_iteration_index": iteration_index,
+        "gradient_generation_index": prompt_payload.get("generation_index"),
+        "gradient_beam_index": prompt_payload.get("beam_index"),
+        "gradient_selection_strategy": prompt_payload.get("selection_strategy"),
+        "gradient_source_prompt": prompt_payload,
+    }
+
+
+def select_gradient_nodes(summary_payload: Dict[str, Any], top_k: int) -> List[Dict[str, Any]]:
+    if top_k <= 0:
+        raise ValueError("top_k must be >= 1")
+
+    candidates: List[Dict[str, Any]] = []
+    for iteration in summary_payload.get("iterations", []):
+        if not isinstance(iteration, dict):
+            continue
+        selected_prompt = iteration.get("selected_prompt")
+        if not isinstance(selected_prompt, dict):
+            continue
+        node_payload = gradient_prompt_to_node_payload(selected_prompt)
+        candidates.append({
+            "node": node_payload,
+            "selection_reason": "gradient_iteration_selected_prompt",
+        })
+
+    if not candidates:
+        raise ValueError("No iteration selected prompts found in gradient summary.json")
+
+    candidates.sort(key=lambda item: f1_score(item["node"]), reverse=True)
+    return candidates[: min(top_k, len(candidates))]
 
 
 def select_validation_nodes(
@@ -265,10 +345,20 @@ def main() -> None:
     args = parse_args()
 
     run_dir = args.run_dir.resolve()
-    population_path = resolve_population_path(run_dir)
+    source_type = detect_source_type(run_dir)
     run_args = load_run_args(run_dir)
-    population_payload = read_json(population_path)
-    selected_nodes = select_validation_nodes(population_payload, args.top_k)
+    population_path = None
+    summary_path = None
+    if source_type == "evolutionary_population":
+        population_path = resolve_population_path(run_dir)
+        population_payload = read_json(population_path)
+        selected_nodes = select_validation_nodes(population_payload, args.top_k)
+    elif source_type == "gradient_experiment":
+        summary_path = run_dir / "summary.json"
+        summary_payload = read_json(summary_path)
+        selected_nodes = select_gradient_nodes(summary_payload, args.top_k)
+    else:
+        raise ValueError(f"Unsupported source_type={source_type!r}")
     config = resolve_config(args, run_args)
     output_dir = create_output_dir(args.output_root_dir, run_dir, args.top_k)
     eval_output_dir = output_dir / "eval_outputs"
@@ -278,7 +368,11 @@ def main() -> None:
     dataset_type = require_config_value(config, "dataset_type")
 
     print("[final_dev_validator] run_dir:", run_dir)
-    print("[final_dev_validator] population:", population_path)
+    print("[final_dev_validator] source_type:", source_type)
+    if population_path is not None:
+        print("[final_dev_validator] population:", population_path)
+    if summary_path is not None:
+        print("[final_dev_validator] gradient_summary:", summary_path)
     print("[final_dev_validator] output_dir:", output_dir)
     print("[final_dev_validator] model:", model_id)
     print("[final_dev_validator] dataset_type:", dataset_type)
@@ -346,6 +440,11 @@ def main() -> None:
                 "children_ids": node_payload.get("children_ids", []),
                 "is_in_final_population": node_payload.get("is_in_final_population", False),
                 "source_validation_score": node_payload.get("val_score"),
+                "gradient_iteration_index": node_payload.get("gradient_iteration_index"),
+                "gradient_generation_index": node_payload.get("gradient_generation_index"),
+                "gradient_beam_index": node_payload.get("gradient_beam_index"),
+                "gradient_selection_strategy": node_payload.get("gradient_selection_strategy"),
+                "gradient_source_prompt": node_payload.get("gradient_source_prompt"),
                 "final_dev_score": final_dev_score,
                 "inference_mode": node_payload.get("inference_mode"),
                 "inference_prompt": node_payload.get("inference_prompt", ""),
@@ -365,13 +464,23 @@ def main() -> None:
 
     payload = {
         "source_run_dir": str(run_dir),
-        "source_population_path": str(population_path),
+        "source_type": source_type,
+        "source_population_path": str(population_path) if population_path is not None else None,
+        "source_gradient_summary_path": str(summary_path) if summary_path is not None else None,
         "top_k": args.top_k,
         "validated_prompt_count": len(selected_nodes),
-        "initial_node_id": 0,
-        "initial_node_always_included": True,
-        "selection_metric": "val_score.f1_mean",
-        "source_validation_split": run_args.get("dev_split", "dev"),
+        "initial_node_id": 0 if source_type == "evolutionary_population" else None,
+        "initial_node_always_included": source_type == "evolutionary_population",
+        "selection_metric": (
+            "val_score.f1_mean"
+            if source_type == "evolutionary_population"
+            else "selected_prompt.dev_prf.f1"
+        ),
+        "source_validation_split": (
+            run_args.get("dev_split", "dev")
+            if source_type == "evolutionary_population"
+            else run_args.get("full_eval_split", "dev")
+        ),
         "final_dev_split": args.final_dev_split,
         "data_dir": str(Path(args.data_dir).resolve()),
         "config": config,
