@@ -191,6 +191,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-regions", type=int, default=5)
     parser.add_argument("--max-total-region-tokens", type=int, default=15)
     parser.add_argument(
+        "--max-region-tokens",
+        type=int,
+        default=None,
+        help=(
+            "Optional cap on tokens selected for each gradient region. Region expansion "
+            "still uses --region-expansion-threshold-ratio, but adds one boundary token "
+            "at a time from the left or right side with the higher gradient."
+        ),
+    )
+    parser.add_argument(
         "--region-expansion-threshold-ratio",
         type=float,
         default=0.6,
@@ -3221,6 +3231,7 @@ def _run_candidate_suggestion_iteration(
         candidate_mode=args.candidate_mode,
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,
+        max_region_tokens=args.max_region_tokens,
         region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
         embedding_step_size=args.embedding_step_size,
         use_chat_template=not args.disable_chat_template,
@@ -3523,6 +3534,7 @@ def main() -> None:
             candidate_mode=args.candidate_mode,
             max_regions=args.max_regions,
             max_total_region_tokens=args.max_total_region_tokens,
+            max_region_tokens=args.max_region_tokens,
             region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
             embedding_step_size=args.embedding_step_size,
             use_chat_template=not args.disable_chat_template,

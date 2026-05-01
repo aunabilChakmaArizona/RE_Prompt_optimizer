@@ -538,9 +538,12 @@ def _select_top_regions(
     *,
     max_regions: int,
     max_total_tokens: int = 5,
+    max_region_tokens: int | None = None,
     expansion_threshold_ratio: float = 0.6,
 ) -> List[TokenRegion]:
     if max_regions <= 0 or max_total_tokens <= 0:
+        return []
+    if max_region_tokens is not None and max_region_tokens <= 0:
         return []
 
     remaining = set(range(len(gradient_scores)))
@@ -560,41 +563,38 @@ def _select_top_regions(
             continue
 
         threshold = peak_score * expansion_threshold_ratio
-        start = peak
-        end = peak
-
-        while start - 1 in remaining and gradient_scores[start - 1] >= threshold:
-            start -= 1
-        while end + 1 in remaining and gradient_scores[end + 1] >= threshold:
-            end += 1
-
-        for idx in range(start, end + 1):
-            remaining.discard(idx)
-
         remaining_token_budget = max_total_tokens - selected_token_count
         if remaining_token_budget <= 0:
             break
 
+        region_token_budget = remaining_token_budget
+        if max_region_tokens is not None:
+            region_token_budget = min(region_token_budget, max_region_tokens)
+
         token_indices = [peak]
         left = peak - 1
         right = peak + 1
-        while len(token_indices) < remaining_token_budget and (left >= start or right <= end):
-            left_score = gradient_scores[left] if left >= start else float("-inf")
-            right_score = gradient_scores[right] if right <= end else float("-inf")
+        while len(token_indices) < region_token_budget:
+            left_available = left in remaining and gradient_scores[left] >= threshold
+            right_available = right in remaining and gradient_scores[right] >= threshold
+            if not left_available and not right_available:
+                break
+
+            left_score = gradient_scores[left] if left_available else float("-inf")
+            right_score = gradient_scores[right] if right_available else float("-inf")
 
             if right_score > left_score:
                 token_indices.append(right)
                 right += 1
             else:
-                if left >= start:
-                    token_indices.insert(0, left)
-                    left -= 1
-                elif right <= end:
-                    token_indices.append(right)
-                    right += 1
+                token_indices.insert(0, left)
+                left -= 1
 
         if not token_indices:
             continue
+
+        for idx in token_indices:
+            remaining.discard(idx)
 
         selected_token_count += len(token_indices)
         regions.append(
@@ -623,6 +623,7 @@ def analyze_relation_extraction_binary_pairs(
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
+    max_region_tokens: int | None = None,
     region_expansion_threshold_ratio: float = 0.6,
     embedding_step_size: float = 1.0,
     candidate_mode: str = TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
@@ -822,6 +823,7 @@ def analyze_relation_extraction_binary_pairs(
         prompt_tokens,
         max_regions=max_regions,
         max_total_tokens=max_total_region_tokens,
+        max_region_tokens=max_region_tokens,
         expansion_threshold_ratio=region_expansion_threshold_ratio,
     )
 
@@ -856,6 +858,7 @@ def analyze_relation_extraction_dataset(
     num_candidates: int = 5,
     max_regions: int = 1,
     max_total_region_tokens: int = 10,
+    max_region_tokens: int | None = None,
     region_expansion_threshold_ratio: float = 0.6,
     embedding_step_size: float = 1.0,
     candidate_mode: str = TOKEN_CANDIDATE_MODE_NEAREST_UPDATED,
@@ -883,6 +886,7 @@ def analyze_relation_extraction_dataset(
         num_candidates=num_candidates,
         max_regions=max_regions,
         max_total_region_tokens=max_total_region_tokens,
+        max_region_tokens=max_region_tokens,
         region_expansion_threshold_ratio=region_expansion_threshold_ratio,
         embedding_step_size=embedding_step_size,
         candidate_mode=candidate_mode,
@@ -911,6 +915,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-candidates", type=int, default=5)
     parser.add_argument("--max-regions", type=int, default=1)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
+    parser.add_argument("--max-region-tokens", type=int, default=None)
     parser.add_argument("--region-expansion-threshold-ratio", type=float, default=0.6)
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
     parser.add_argument(
@@ -953,6 +958,7 @@ def main() -> None:
         num_candidates=args.num_candidates,
         max_regions=args.max_regions,
         max_total_region_tokens=args.max_total_region_tokens,
+        max_region_tokens=args.max_region_tokens,
         region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
         embedding_step_size=args.embedding_step_size,
         candidate_mode=args.candidate_mode,
