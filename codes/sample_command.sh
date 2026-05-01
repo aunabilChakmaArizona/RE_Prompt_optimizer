@@ -1571,6 +1571,11 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   > nohup_outs/nohup_gradient_llm_cand_sugg_final_beam5_Q5_px_0.5_r5_er_0.6_20260422_202830_node12_qwen4_final_updated.out 2>&1 &
 
 
+###################### Completely new run on the heldout set
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" \
+--max-iterations 15 --population-size 10 --mutation-group-id "group_2" > nohup_outs/nohup_v5_final_run_qwen4_group2_mixed_ps_10_itr_15.out 2>&1 &
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"

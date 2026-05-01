@@ -570,8 +570,7 @@ INFERENCE_INSTRUCTION_PROMPT_V1 = f'''You are given a relation name, a descripti
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
 You need to decide whether the relation holds between the Subject and the Object entities in the query sentence.
 
-If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
-'''
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".'''
 
 # INFERENCE_INSTRUCTION_PROMPT_V1 = f'''You are given a relation name, a description of the relation in brackets, a support sentence that exemplifies the relation, and a query sentence.
 
@@ -581,6 +580,7 @@ If the relation holds between the Subject and the Object entities in the query s
 # '''
 
 INFERENCE_ANSWER_INSTRUCTION_PROMPT_V1 = '''
+
 Output only "yes" or "no" as answer, with no explanation or additional text.
 '''
 
