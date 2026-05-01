@@ -637,6 +637,95 @@ def _build_score_payload_from_pairs(
     }
 
 
+_LABEL_LITERAL_WORDS = {"yes", "no"}
+_LABEL_LITERAL_STRIP_CHARS = " \t\r\n\"'`.,:;()[]{}<>"
+
+
+def _has_alphanumeric(text: str) -> bool:
+    return any(char.isalnum() for char in text)
+
+
+def _normalized_label_literal(text: str) -> str:
+    return text.strip().lower().strip(_LABEL_LITERAL_STRIP_CHARS)
+
+
+def _is_protected_yes_no_span(
+    *,
+    instruction_prompt: str,
+    start_char: int,
+    end_char: int,
+) -> bool:
+    token_text = instruction_prompt[start_char:end_char]
+    core = _normalized_label_literal(token_text)
+    if core not in _LABEL_LITERAL_WORDS:
+        return False
+
+    left = instruction_prompt[max(0, start_char - 8):start_char]
+    right = instruction_prompt[end_char:end_char + 8]
+    window = instruction_prompt[max(0, start_char - 24):end_char + 24].lower()
+    left_stripped = left.rstrip().lower()
+    right_stripped = right.lstrip().lower()
+
+    quoted = (
+        left.rstrip().endswith(("\"", "'", "`"))
+        and right.lstrip().startswith(("\"", "'", "`"))
+    )
+    slash_option = (
+        right_stripped.startswith(("/yes", "/no"))
+        or left_stripped.endswith(("yes/", "no/"))
+    )
+    punctuation_option = right_stripped.startswith((".", ",", ":", ";", ")", "]", "}"))
+    local_label_pair = (
+        "yes" in window
+        and "no" in window
+        and (" or " in window or "/" in window)
+    )
+
+    return quoted or slash_option or punctuation_option or local_label_pair
+
+
+def _editable_token_groups_for_region(
+    *,
+    region: Dict[str, Any],
+    offsets: Sequence[Sequence[int]],
+    instruction_prompt: str,
+) -> List[List[int]]:
+    start_token = min(region["start"], len(offsets) - 1)
+    end_token = min(region["end"], len(offsets) - 1)
+    token_indices = [
+        idx for idx in range(start_token, end_token + 1)
+        if int(offsets[idx][1]) > int(offsets[idx][0])
+    ]
+
+    editable_groups: List[List[int]] = []
+    current_group: List[int] = []
+    for token_index in token_indices:
+        start_char = int(offsets[token_index][0])
+        end_char = int(offsets[token_index][1])
+        if _is_protected_yes_no_span(
+            instruction_prompt=instruction_prompt,
+            start_char=start_char,
+            end_char=end_char,
+        ):
+            if current_group:
+                editable_groups.append(current_group)
+                current_group = []
+            continue
+        current_group.append(token_index)
+
+    if current_group:
+        editable_groups.append(current_group)
+
+    return [
+        group for group in editable_groups
+        if _has_alphanumeric(
+            instruction_prompt[
+                int(offsets[group[0]][0]):int(offsets[group[-1]][1])
+            ]
+        )
+    ]
+
+
 def _resolve_region_details(
     *,
     instruction_prompt: str,
@@ -656,27 +745,48 @@ def _resolve_region_details(
         add_special_tokens=False,
     )
     offsets = encoded["offset_mapping"]
+    input_ids = encoded["input_ids"]
     if not offsets:
         raise ValueError("Instruction prompt produced no tokenizer offsets.")
 
     selected_regions: List[Dict[str, Any]] = []
-    for region_rank, region in enumerate(top_regions[:num_edit_regions], start=1):
-        start_token = min(region["start"], len(offsets) - 1)
-        end_token = min(region["end"], len(offsets) - 1)
-        start_char = int(offsets[start_token][0])
-        end_char = int(offsets[end_token][1])
-        selected_regions.append(
-            {
-                "region_rank": region_rank,
-                "start_token": start_token,
-                "end_token": end_token,
-                "start_char": start_char,
-                "end_char": end_char,
-                "region_text": instruction_prompt[start_char:end_char],
-                "region_score": region["score"],
-                "region_tokens": region["tokens"],
-                "region_token_indices": region["token_indices"],
-            }
+    for source_region_rank, region in enumerate(top_regions, start=1):
+        editable_groups = _editable_token_groups_for_region(
+            region=region,
+            offsets=offsets,
+            instruction_prompt=instruction_prompt,
+        )
+        for token_group in editable_groups:
+            start_token = token_group[0]
+            end_token = token_group[-1]
+            start_char = int(offsets[start_token][0])
+            end_char = int(offsets[end_token][1])
+            region_rank = len(selected_regions) + 1
+            selected_regions.append(
+                {
+                    "region_rank": region_rank,
+                    "source_region_rank": source_region_rank,
+                    "start_token": start_token,
+                    "end_token": end_token,
+                    "start_char": start_char,
+                    "end_char": end_char,
+                    "region_text": instruction_prompt[start_char:end_char],
+                    "region_score": region["score"],
+                    "region_tokens": tokenizer.convert_ids_to_tokens(
+                        [input_ids[token_index] for token_index in token_group]
+                    ),
+                    "region_token_indices": token_group,
+                    "protected_yes_no_filter_applied": True,
+                }
+            )
+            if len(selected_regions) == num_edit_regions:
+                break
+        if len(selected_regions) == num_edit_regions:
+            break
+
+    if not selected_regions:
+        raise ValueError(
+            "No editable top_regions remained after protecting yes/no label tokens."
         )
 
     marked_prompt = instruction_prompt
