@@ -1576,6 +1576,9 @@ nohup python -u agents/agent_gradient_eval_debug.py \
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" \
 --max-iterations 15 --population-size 10 --mutation-group-id "group_2" > nohup_outs/nohup_v5_final_run_qwen4_group2_mixed_ps_10_itr_15.out 2>&1 &
 
+nohup python -u validate_top_population_prompts_final_dev.py \
+  ../trainings/20260430_181825_Qwen-Qwen3-4B 5 --device-map cuda:0 > nohup_outs/nohup_v5_final_run_qwen4_group2_mixed_ps_10_itr_15_final_dev_step.out 2>&1 &
+
 ##################################################
 # tags custom
 --feedback-open-tag "[f]" --feedback-close-tag "[/f]" --prompt-open-tag "[p]" --prompt-close-tag "[/p]"
