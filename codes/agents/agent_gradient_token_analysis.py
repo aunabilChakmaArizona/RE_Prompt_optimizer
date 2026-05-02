@@ -915,7 +915,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-candidates", type=int, default=5)
     parser.add_argument("--max-regions", type=int, default=1)
     parser.add_argument("--max-total-region-tokens", type=int, default=10)
-    parser.add_argument("--max-region-tokens", type=int, default=None)
+    parser.add_argument("--max-region-tokens", type=int, default=5)
     parser.add_argument("--region-expansion-threshold-ratio", type=float, default=0.6)
     parser.add_argument("--embedding-step-size", type=float, default=1.0)
     parser.add_argument(

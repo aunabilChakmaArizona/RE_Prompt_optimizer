@@ -364,7 +364,7 @@ def _build_output_payload(
     ensemble_predictions: Sequence[str],
     vote_traces: Sequence[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    ensemble_metrics = compute_prf_stats(ensemble_labels, ensemble_predictions, n_chunks=1)
+    ensemble_metrics = compute_prf_stats(ensemble_labels, ensemble_predictions, n_chunks=3)
     return {
         "method": method_name,
         "requested_q": q,

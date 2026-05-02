@@ -32,7 +32,7 @@ def compute_prf_stats(
     labels: Sequence[str],
     predictions: Sequence[str],
     *,
-    n_chunks: int = 1,
+    n_chunks: int = 3,
 ) -> Dict[str, float]:
     if not labels:
         return {

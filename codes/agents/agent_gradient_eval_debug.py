@@ -426,11 +426,14 @@ def _build_prf_scores(
     mapped_predicted_labels = [
         "relation" if label == "yes" else NO_RELATION for label in predicted_labels
     ]
-    stats = compute_prf_stats(mapped_target_labels, mapped_predicted_labels, n_chunks=1)
+    stats = compute_prf_stats(mapped_target_labels, mapped_predicted_labels, n_chunks=3)
     return {
         "precision": float(stats["precision_mean"] * 100.0),
+        "precision_std": float(stats["precision_std"] * 100.0),
         "recall": float(stats["recall_mean"] * 100.0),
+        "recall_std": float(stats["recall_std"] * 100.0),
         "f1": float(stats["f1_mean"] * 100.0),
+        "f1_std": float(stats["f1_std"] * 100.0),
     }
 
 
@@ -467,11 +470,14 @@ def _build_episode_prf_scores(
         episode_labels.append(gold_relation)
         episode_predictions.append(predicted_relation)
 
-    stats = compute_prf_stats(episode_labels, episode_predictions, n_chunks=1)
+    stats = compute_prf_stats(episode_labels, episode_predictions, n_chunks=3)
     return {
         "precision": float(stats["precision_mean"] * 100.0),
+        "precision_std": float(stats["precision_std"] * 100.0),
         "recall": float(stats["recall_mean"] * 100.0),
+        "recall_std": float(stats["recall_std"] * 100.0),
         "f1": float(stats["f1_mean"] * 100.0),
+        "f1_std": float(stats["f1_std"] * 100.0),
     }
 
 
@@ -491,9 +497,9 @@ def _extract_prf_from_prompt_info(prompt_info: Dict[str, Any]) -> Dict[str, floa
 
 def _format_prf_for_log(prf: Dict[str, float]) -> str:
     return (
-        f"precision={prf['precision']:.2f}, "
-        f"recall={prf['recall']:.2f}, "
-        f"f1={prf['f1']:.2f}"
+        f"precision={prf['precision'] * 100:.2f} ± {prf['precision_std'] * 100:.2f}, "
+        f"recall={prf['recall'] * 100:.2f} ± {prf['recall_std'] * 100:.2f}, "
+        f"f1={prf['f1'] * 100:.2f} ± {prf['f1_std'] * 100:.2f}"
     )
 
 

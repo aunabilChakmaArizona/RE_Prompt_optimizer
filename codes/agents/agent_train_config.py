@@ -175,7 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--inference-batch-size", type=int, default=8)
     parser.add_argument("--feedback-batch-size", type=int, default=4)
     parser.add_argument("--eval-batch-size", type=int, default=8)
-    parser.add_argument("--eval-n-chunks", type=int, default=1)
+    parser.add_argument("--eval-n-chunks", type=int, default=3)
     parser.add_argument(
         "--feedback-max-new-tokens",
         type=int,

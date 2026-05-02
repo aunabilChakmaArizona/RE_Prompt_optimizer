@@ -49,7 +49,7 @@ def evaluate_fn(
     shots: Dict,
     query_index: int = 0,
     batch_size: int = 8,
-    n_chunks: int = 1,
+    n_chunks: int = 3,
     eval_id: str | int | None = None,
     output_dir: str | None = None,
     yes_token_id: int | None = None,
