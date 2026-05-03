@@ -509,9 +509,20 @@ def _extract_prf_from_prompt_info(prompt_info: Dict[str, Any]) -> Dict[str, floa
 
 def _format_prf_for_log(prf: Dict[str, float]) -> str:
     return (
-        f"precision={prf['precision'] * 100:.2f} ± {prf['precision_std'] * 100:.2f}, "
-        f"recall={prf['recall'] * 100:.2f} ± {prf['recall_std'] * 100:.2f}, "
-        f"f1={prf['f1'] * 100:.2f} ± {prf['f1_std'] * 100:.2f}"
+        f"precision={prf.get('precision', 0.0):.2f} ± {prf.get('precision_std', 0.0):.2f}, "
+        f"recall={prf.get('recall', 0.0):.2f} ± {prf.get('recall_std', 0.0):.2f}, "
+        f"f1={prf.get('f1', 0.0):.2f} ± {prf.get('f1_std', 0.0):.2f}"
+    )
+
+
+def _format_stable_f1_for_log(
+    prf: Dict[str, float],
+    *,
+    f1_std_penalty: float,
+) -> str:
+    return (
+        f"stable_f1={stable_prf_score_or_neg_inf(prf, std_multiplier=f1_std_penalty):.2f} "
+        f"(k={f1_std_penalty:g})"
     )
 
 
@@ -2635,6 +2646,7 @@ def _evaluate_prompt_variant(
     tokenizer,
     validation_batch_size: int,
     use_chat_template: bool,
+    f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
     log_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     eval_start = time.perf_counter()
@@ -2677,6 +2689,10 @@ def _evaluate_prompt_variant(
         f"fixes_from_mistakes={validation_summary['fixes_from_mistakes']}, "
         f"regressions_from_correct={validation_summary['regressions_from_correct']}"
     )
+    print(
+        "[agent_gradient_eval_debug] prompt validation:",
+        f"{context_prefix}{_format_stable_f1_for_log(validation_prf, f1_std_penalty=f1_std_penalty)}",
+    )
 
     full_eval_start = time.perf_counter()
     full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
@@ -2701,6 +2717,10 @@ def _evaluate_prompt_variant(
         f"[agent_gradient_eval_debug] prompt full evaluation: {context_prefix}"
         f"split={full_eval_split} done in {full_eval_elapsed:.2f}s, "
         f"{_format_prf_for_log(full_evaluation['prf'])}"
+    )
+    print(
+        "[agent_gradient_eval_debug] prompt full evaluation:",
+        f"{context_prefix}{_format_stable_f1_for_log(full_evaluation['prf'], f1_std_penalty=f1_std_penalty)}",
     )
 
     validation_payload = {
@@ -2856,6 +2876,7 @@ def _run_direct_candidate_generation(
                 tokenizer=tokenizer,
                 validation_batch_size=args.validation_batch_size,
                 use_chat_template=not args.disable_chat_template,
+                f1_std_penalty=args.selection_f1_std_penalty,
                 log_context={
                     "generation_index": variant.get("generation_index"),
                 },
@@ -2960,6 +2981,7 @@ def _build_and_evaluate_region_candidate_prompts(
                 tokenizer=tokenizer,
                 validation_batch_size=args.validation_batch_size,
                 use_chat_template=not args.disable_chat_template,
+                f1_std_penalty=args.selection_f1_std_penalty,
                 log_context={
                     "generation_index": variant.get("generation_index"),
                     "beam_index": variant.get("beam_index"),
@@ -3294,6 +3316,14 @@ def _run_candidate_suggestion_iteration(
         f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
         f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
     )
+    print(
+        "[agent_gradient_eval_debug] baseline validation:",
+        f"iteration={iteration_index}",
+        _format_stable_f1_for_log(
+            baseline_prf,
+            f1_std_penalty=args.selection_f1_std_penalty,
+        ),
+    )
 
     if args.mode == MODE_LLM_CANDIDATE_SUGGESTION:
         prompt_editing_payload = _run_llm_candidate_suggestion(
@@ -3597,6 +3627,13 @@ def main() -> None:
             f"overall_accuracy={baseline_validation['overall']['accuracy']:.4f}",
             f"fixes_from_mistakes={baseline_validation['fixes_from_mistakes']}",
             f"regressions_from_correct={baseline_validation['regressions_from_correct']}",
+        )
+        print(
+            "[agent_gradient_eval_debug] baseline validation:",
+            _format_stable_f1_for_log(
+                baseline_prf,
+                f1_std_penalty=args.selection_f1_std_penalty,
+            ),
         )
         sampling_summary = {
             "gradient_split": "train",
