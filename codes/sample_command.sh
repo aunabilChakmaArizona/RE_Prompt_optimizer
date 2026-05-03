@@ -1739,7 +1739,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "llm_cand_sugg_beam3_Q1_px_0.5_r5_er_0.6_mt5_20260430_181825_node13_qwen4_v6test" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam3_Q1_px_0.5_r5_er_0.6_mt5_20260430_181825_node13_qwen4_v6test.out 2>&1 &
 
-#
+# test on node 10
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -1764,3 +1764,38 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "llm_cand_sugg_beam3_Q1_px_0.5_r5_er_0.6_mt5_20260501_232502_node10_qwen4_v6test" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam3_Q1_px_0.5_r5_er_0.6_mt5_20260501_232502_node10_qwen4_v6test.out 2>&1 &
+
+# n_chunk 3 + new scoring formula
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:1" \
+--max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/nohup_v6_final_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.5.out 2>&1 &
+
+
+# test on node 3
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260501_232502_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 10000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 5 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 3 \
+  --selection-perplexity-lambda 0.5 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.5 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam3_Q1_px_0.5_r5_er_0.6_mt5_20260501_232502_node3_qwen4_v6test" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam3_Q1_px_0.5_r5_er_0.6_mt5_20260501_232502_node3_qwen4_v6test.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --validation-f1-std-penalty 2.0 \
+--max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/nohup_v6_final_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &

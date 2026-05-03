@@ -9,6 +9,7 @@ from agents.agent_prompts import (
     INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
     MUTATION_PROMPT_GROUP_MAP,
 )
+from agents.agent_utils import DEFAULT_F1_STABILITY_STD_MULTIPLIER
 from agents.agent_evolutionary_search import PARENT_SELECTION_MODE_CHOICES
 from agents.agent_cluster_search import CLUSTER_SELECTION_MODE_CHOICES
 
@@ -100,6 +101,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--population-sampling-temperature", type=float, default=1.0)
+    parser.add_argument(
+        "--validation-f1-std-penalty",
+        type=float,
+        default=DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+        help=(
+            "Rank validation prompts by f1_mean minus this multiplier times f1_std "
+            "for parent sampling, population pruning, and best-node selection. "
+            "Defaults to 2.5."
+        ),
+    )
     parser.add_argument(
         "--do-sample",
         action=argparse.BooleanOptionalAction,

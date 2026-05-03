@@ -3,10 +3,52 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Mapping, Sequence
 
 from agents.agent_llm_prompting import run_prompt
 from agents.agent_prompts import DIFFERENTIATE_PROMPT
+
+DEFAULT_F1_STABILITY_STD_MULTIPLIER = 2.5
+
+
+def stable_f1_score_or_neg_inf(
+    score: Mapping[str, Any] | None,
+    *,
+    mean_key: str = "f1_mean",
+    std_key: str = "f1_std",
+    std_multiplier: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+) -> float:
+    if not isinstance(score, Mapping):
+        return float("-inf")
+    f1_mean = score.get(mean_key)
+    if f1_mean is None:
+        return float("-inf")
+    f1_std = score.get(std_key, 0.0) or 0.0
+    return float(f1_mean) - std_multiplier * float(f1_std)
+
+
+def stable_prf_score_or_neg_inf(
+    prf: Mapping[str, Any] | None,
+    *,
+    std_multiplier: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+) -> float:
+    return stable_f1_score_or_neg_inf(
+        prf,
+        mean_key="f1",
+        std_key="f1_std",
+        std_multiplier=std_multiplier,
+    )
+
+
+def stable_node_score_or_neg_inf(
+    node,
+    *,
+    std_multiplier: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+) -> float:
+    return stable_f1_score_or_neg_inf(
+        getattr(node, "val_score", None),
+        std_multiplier=std_multiplier,
+    )
 
 
 def score_node_or_neg_inf(node) -> float:

@@ -220,6 +220,7 @@ def build_training_functions(
             output_dir=eval_output_dir,
             yes_token_id=yes_token_id,
             no_token_id=no_token_id,
+            stable_f1_std_penalty=args.validation_f1_std_penalty,
             log_every=args.log_every,
             evolution_iteration=evolution_iteration,
             evolution_max_iterations=evolution_max_iterations,

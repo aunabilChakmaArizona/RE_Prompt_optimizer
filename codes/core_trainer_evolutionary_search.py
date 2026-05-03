@@ -29,9 +29,12 @@ from agents.agent_train_pipeline import build_root_node, load_model_and_data
 
 # TODO: the "\r" and model and other inline loading must not do to log file (it too much printing in the log file) need to track so that I can see upto which step it is running but it can't go to log file.
 
+
 def main() -> None:
     overall_start = time.monotonic()
     args = parse_args()
+    if args.validation_f1_std_penalty < 0:
+        raise ValueError("--validation-f1-std-penalty must be non-negative.")
 
     data_dir = resolve_data_dir(args.data_dir)
     run_dir = create_run_dir(args.trainings_dir, args.model)
@@ -173,6 +176,7 @@ def main() -> None:
             mutation_prompt_keys=mutation_prompt_keys,
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
             rng=rng,
+            validation_std_penalty=args.validation_f1_std_penalty,
         )
 
         print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (before search)")

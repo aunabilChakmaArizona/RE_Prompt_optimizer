@@ -7,7 +7,10 @@ from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
 from agents.agent_prompts import INFERENCE_MODE_NON_SEPARATE
 from agents.agent_select_feedback import select_feedback_samples
-from agents.agent_utils import score_node_or_neg_inf
+from agents.agent_utils import (
+    DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+    stable_node_score_or_neg_inf,
+)
 
 
 SampleFeedbackFn = Callable[[int], FeedbackSamples]
@@ -42,6 +45,7 @@ class EvolutionarySearch:
         mutation_prompt_keys: Optional[List[str]] = None,
         example_generation_prompt: str = "",
         rng: Optional[random.Random] = None,
+        validation_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
     ):
         self.root = root
         if population_size is not None and population_size <= 0:
@@ -83,6 +87,7 @@ class EvolutionarySearch:
             raise ValueError("mutation_prompt_keys and mutation_prompts must have same length")
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
+        self.validation_std_penalty = validation_std_penalty
         existing_node_ids = [
             node.node_id for node in self.population_history if node.node_id is not None
         ]
@@ -98,12 +103,32 @@ class EvolutionarySearch:
             next_node_id if next_node_id is not None else default_next_node_id
         )
 
+    def _node_stable_f1_score(self, node: GraphNode) -> float:
+        return stable_node_score_or_neg_inf(
+            node,
+            std_multiplier=self.validation_std_penalty,
+        )
+
+    def _node_f1_mean(self, node: GraphNode) -> float:
+        val_score = getattr(node, "val_score", None)
+        if not isinstance(val_score, dict) or val_score.get("f1_mean") is None:
+            return float("-inf")
+        return float(val_score["f1_mean"])
+
+    def _node_f1_std_for_sort(self, node: GraphNode) -> float:
+        val_score = getattr(node, "val_score", None)
+        if not isinstance(val_score, dict):
+            return float("inf")
+        return float(val_score.get("f1_std", 0.0) or 0.0)
+
     def _prune_population(self) -> None:
         if self.population_size is None or len(self.population) <= self.population_size:
             return
         self.population.sort(
             key=lambda node: (
-                score_node_or_neg_inf(node),
+                self._node_stable_f1_score(node),
+                self._node_f1_mean(node),
+                -self._node_f1_std_for_sort(node),
                 node.node_id if node.node_id is not None else -1,
             ),
             reverse=True,
@@ -149,11 +174,11 @@ class EvolutionarySearch:
             raise RuntimeError("No active nodes available for mutation")
         scores = []
         for node in alive_nodes:
-            val_score = node.val_score
-            if val_score is None:
+            stable_score = self._node_stable_f1_score(node)
+            if stable_score == float("-inf"):
                 scores.append(None)
             else:
-                scores.append(val_score.get("f1_mean"))
+                scores.append(stable_score)
         weights = self._softmax_weights(scores)
         return self.rng.choices(alive_nodes, weights=weights, k=1)[0]
 
@@ -173,7 +198,15 @@ class EvolutionarySearch:
         )
 
     def best_node(self) -> GraphNode:
-        return max(self.population_history, key=score_node_or_neg_inf)
+        return max(
+            self.population_history,
+            key=lambda node: (
+                self._node_stable_f1_score(node),
+                self._node_f1_mean(node),
+                -self._node_f1_std_for_sort(node),
+                node.node_id if node.node_id is not None else -1,
+            ),
+        )
 
     def run(
         self,

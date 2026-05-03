@@ -45,10 +45,12 @@ from agents.agent_sample_feedback import sample_feedback_fn
 from agents.agent_scorer import NO_RELATION
 from agents.agent_token_cluster import select_centroid_token_ids
 from agents.agent_utils import (
+    DEFAULT_F1_STABILITY_STD_MULTIPLIER,
     extract_json_object,
     extract_tagged_text,
     get_sentence_with_tags,
     load_json_file,
+    stable_prf_score_or_neg_inf,
 )
 
 MODE_DIRECT_CANDIDATE_GENERATION = "DIRECT_CANDIDATE_GENERATION"
@@ -283,6 +285,16 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Candidate-suggestion modes only. Combined score = task cross_entropy + "
             "lambda * prompt fluency perplexity."
+        ),
+    )
+    parser.add_argument(
+        "--selection-f1-std-penalty",
+        type=float,
+        default=DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+        help=(
+            "Candidate-suggestion modes only. Retained beam prompts are ranked by "
+            "full-evaluation F1 mean minus this multiplier times F1 std. "
+            "Defaults to 2.5."
         ),
     )
     parser.add_argument(
@@ -1800,12 +1812,15 @@ def _build_summary_variants(
 def _select_best_variant(
     *,
     prompt_editing_payload: Dict[str, Any],
+    f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
 ) -> Dict[str, Any] | None:
     """Select among retained beam prompts after full evaluation.
 
     Beam search itself is pruned by sampled train scoring before this point.
     Once retained prompts have full dev scores, choose the prompt with the best
-    full-evaluation F1 and use sampled train F1 only for fallback/tie-breaks.
+    conservative full-evaluation F1 score:
+        f1 - f1_std_penalty * f1_std
+    sampled train scores are used only for fallback/tie-breaks.
     """
     generated_variants = prompt_editing_payload.get("generated_prompt_variants", [])
     ranked_variants = [
@@ -1820,13 +1835,18 @@ def _select_best_variant(
         ranked_variants,
         key=lambda variant: (
             1 if variant.get("full_evaluation") is not None else 0,
-            float(
-                ((variant.get("full_evaluation") or {}).get("prf") or {}).get(
-                    "f1",
-                    float("-inf"),
-                )
+            stable_prf_score_or_neg_inf(
+                ((variant.get("full_evaluation") or {}).get("prf") or {}),
+                std_multiplier=f1_std_penalty,
+            ),
+            float(((variant.get("full_evaluation") or {}).get("prf") or {}).get("f1", float("-inf"))),
+            -float(((variant.get("full_evaluation") or {}).get("prf") or {}).get("f1_std", 0.0) or 0.0),
+            stable_prf_score_or_neg_inf(
+                variant["validation"]["prf"],
+                std_multiplier=f1_std_penalty,
             ),
             float(variant["validation"]["prf"].get("f1", float("-inf"))),
+            -float(variant["validation"]["prf"].get("f1_std", 0.0) or 0.0),
             float(variant["validation"]["summary"]["overall"].get("accuracy", float("-inf"))),
             int(variant["validation"]["summary"].get("fixes_from_mistakes", 0)),
             -int(variant["validation"]["summary"].get("regressions_from_correct", 0)),
@@ -1863,7 +1883,9 @@ def _build_selected_prompt_summary(
     return {
         "iteration_index": iteration_index,
         "selection_strategy": (
-            "best_dev_f1" if full_evaluation is not None else "best_train_f1"
+            "best_dev_stable_f1"
+            if full_evaluation is not None
+            else "best_train_stable_f1"
         ),
         "prompt": revised_prompt,
         "changed_vs_input": revised_prompt != input_prompt,
@@ -3300,6 +3322,7 @@ def _run_candidate_suggestion_iteration(
 
     selected_variant = _select_best_variant(
         prompt_editing_payload=prompt_editing_payload,
+        f1_std_penalty=args.selection_f1_std_penalty,
     )
     selected_prompt = _build_selected_prompt_summary(
         iteration_index=iteration_index,
@@ -3367,6 +3390,8 @@ def _run_candidate_suggestion_iteration(
 def main() -> None:
     args = _parse_args()
     print("[agent_gradient_eval_debug] starting")
+    if args.selection_f1_std_penalty < 0:
+        raise ValueError("--selection-f1-std-penalty must be non-negative.")
 
     instruction_prompt, prompt_info = resolve_instruction_prompt(
         args.prompt_source_path,

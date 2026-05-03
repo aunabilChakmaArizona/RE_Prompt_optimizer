@@ -11,7 +11,13 @@ from agents.agent_prompts import compose_inference_prompt
 from agents.agent_metrics import compute_prf_stats
 from agents.agent_scorer import NO_RELATION
 from agents.agent_relation_utils import get_relation_description
-from agents.agent_utils import build_support_block, get_sentence_with_tags, resolve_way_shots
+from agents.agent_utils import (
+    DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+    build_support_block,
+    get_sentence_with_tags,
+    resolve_way_shots,
+    stable_f1_score_or_neg_inf,
+)
 
 
 def _build_inference_prompt(
@@ -54,6 +60,7 @@ def evaluate_fn(
     output_dir: str | None = None,
     yes_token_id: int | None = None,
     no_token_id: int | None = None,
+    stable_f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
     log_every: int = 100,
     evolution_iteration: int | None = None,
     evolution_max_iterations: int | None = None,
@@ -143,6 +150,10 @@ def evaluate_fn(
         f"precision={metrics['precision_mean'] * 100:.2f}±{metrics['precision_std'] * 100:.2f}, "
         f"recall={metrics['recall_mean'] * 100:.2f}±{metrics['recall_std'] * 100:.2f}, "
         f"f1={metrics['f1_mean'] * 100:.2f}±{metrics['f1_std'] * 100:.2f}"
+    )
+    print(
+        "[agent_evaluate] evaluate_fn: "
+        f"stable_f1={stable_f1_score_or_neg_inf(metrics, std_multiplier=stable_f1_std_penalty) * 100:.2f}"
     )
 
     if output_dir:
