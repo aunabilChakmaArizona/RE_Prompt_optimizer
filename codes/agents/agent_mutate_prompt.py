@@ -13,7 +13,7 @@ from agents.agent_prompts import (
     MUTATION_TRACES_PROMPT_SEGMENT_V1,
 )
 from agents.agent_relation_utils import get_relation_description
-from agents.agent_utils import differentiate_prompts, extract_tagged_text
+from agents.agent_utils import extract_tagged_text
 
 
 def _pad_list(items: List[str], size: int) -> List[str]:
@@ -162,18 +162,9 @@ def mutate_prompt_fn(
             )
             continue
         candidate = extract_tagged_text(raw_response, prompt_open_tag, prompt_close_tag)
-        (
-            raw_differentiation_response,
-            core_difference,
-            differentiate_prompt,
-        ) = differentiate_prompts(
-            node.inference_prompt,
-            candidate,
-            model=model,
-            tokenizer=tokenizer,
-            max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-        )
+        raw_differentiation_response = ""
+        differentiate_prompt = ""
+        core_difference = ""
 
         if node.inference_mode != INFERENCE_MODE_NON_SEPARATE:
             print(f"[agent_mutate_prompt] new inference prompt:\n{candidate}")
