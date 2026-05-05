@@ -179,7 +179,7 @@ Feedback: #FEEDBACK_3#
 ```
 
 Carefully read the inputs, outputs, and feedback to identify problems with the current prompt. 
-Your task is to generate a revised form of the prompt so that the other LLM can improve the model’s generalization when using the prompt. 
+Your task is to generate a revised version of the prompt that helps the other LLM generalize better when using it.
 You may modify, add to, or remove any instructions or content in the current prompt in order to improve the prediction and enhance generalization.
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
