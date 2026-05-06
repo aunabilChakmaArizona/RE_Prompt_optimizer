@@ -5,8 +5,10 @@ import os
 from typing import Optional
 
 from agents.agent_prompts import (
+    FEEDBACK_PROMPT_MAP,
     INFERENCE_MODE_CHOICES,
     INFERENCE_MODE_SEPARATE_NO_EXAMPLES,
+    MUTATION_PROMPT_MAP,
     MUTATION_PROMPT_GROUP_MAP,
 )
 from agents.agent_utils import DEFAULT_F1_STABILITY_STD_MULTIPLIER
@@ -121,20 +123,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--feedback-prompt",
         default="correct_and_mistakes_v1",
-        choices=["correct_and_mistakes_v1", "correct_v1", "mistakes_v1"],
+        choices=list(FEEDBACK_PROMPT_MAP.keys()),
         help="Feedback inference prompt variant",
     )
     parser.add_argument(
         "--mutation-prompt",
         default="v1",
-        choices=[
-            "v1",
-            "random_v1",
-            "random_v2",
-            "no_feedback_v1",
-            "traces_v1",
-            "traces_differences_v1",
-        ],
+        choices=list(MUTATION_PROMPT_MAP.keys()),
         help="Mutation prompt variant",
     )
     parser.add_argument(

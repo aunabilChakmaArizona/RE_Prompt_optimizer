@@ -29,6 +29,43 @@ LLM Inference: #INFERENCE#
 Please reason through the problem, but provide your final feedback only within the <f> and </f> tags.
 '''
 
+FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1_GEMMA = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing feedback explaining why a relation extraction system arrived at a particular yes/no decision, for both correct and incorrect predictions.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given an input instance for relation inference below that contains:
+- A relation and its description
+- A support instance (an example where the relation holds)
+- A query sentence
+- A ground-truth label (yes/no)
+- A yes/no inference made by another LLM on this instance
+
+The ground-truth label indicates whether the LLM inference was correct or incorrect and is provided only as contextual information. The feedback model’s task is to explain the most likely reasoning process that led to the model’s answer, not to re-evaluate, judge, or correct the prediction. In particular:
+- If the prediction matches the label, explain what cues or evidence likely led to that choice.
+- If it does not match, explain what misunderstanding, missing evidence, or heuristic likely caused the prediction.
+
+Instance:
+```
+Relation: #RELATION#
+Relation Description: #RELATION_DESCRIPTION#
+Support Instance: #SUPPORT_INSTANCE#
+
+Query: #QUERY#
+
+Label: #LABEL#
+LLM Inference: #INFERENCE#
+```
+
+Please reason through the problem first, and then provide your final feedback enclosed within the <f> and </f> tags.
+'''
+
+# original
+# Please reason through the problem, but provide your final feedback only within the <f> and </f> tags.
+
+# gemma special
+# Please reason through the problem first, and then provide your final feedback enclosed within the <f> and </f> tags.
+
 FEEDBACK_INFERENCE_PROMPT_CORRECT_V1 = '''You are an expert feedback model for a relation extraction inference task. Specifically, you are skilled at providing feedback explaining why a relation extraction system arrived at this correct prediction.
 
 A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
@@ -184,6 +221,65 @@ You may modify, add to, or remove any instructions or content in the current pro
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
+
+MUTATION_PROMPT_V2_GEMMA = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising and improving prompts based on feedback from previous model predictions.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object.
+
+You are given below a prompt that is used by another LLM to make an inference for the task:
+```
+#INFERENCE_PROMPT#
+```
+
+Using this prompt, another LLM was tested on three instances of the task. Below, you are given the inputs, the inference made by the other LLM, and feedback for each task.
+```
+Task 1
+Relation: #RELATION_1#
+Relation Description: #RELATION_DESCRIPTION_1#
+Support Instance: #SUPPORT_INSTANCE_1#
+Query Sentence: #QUERY_1#
+Ground-Truth Label: #LABEL_1#
+LLM Inference: #INFERENCE_1#
+Feedback: #FEEDBACK_1#
+
+Task 2
+Relation: #RELATION_2#
+Relation Description: #RELATION_DESCRIPTION_2#
+Support Instance: #SUPPORT_INSTANCE_2#
+Query Sentence: #QUERY_2#
+Ground-Truth Label: #LABEL_2#
+LLM Inference: #INFERENCE_2#
+Feedback: #FEEDBACK_2#
+
+Task 3
+Relation: #RELATION_3#
+Relation Description: #RELATION_DESCRIPTION_3#
+Support Instance: #SUPPORT_INSTANCE_3#
+Query Sentence: #QUERY_3#
+Ground-Truth Label: #LABEL_3#
+LLM Inference: #INFERENCE_3#
+Feedback: #FEEDBACK_3#
+```
+
+Analyze the inputs, outputs, and feedback to identify prompt weaknesses.
+Revise the prompt with proper instructions so that it improves.
+
+Please reason through the problem first, and then output the revised prompt enclosed within the <p> and </p> tags.
+'''
+
+# Analyze the inputs, outputs, and feedback to identify prompt weaknesses, then revise the prompt so it generalizes better.
+
+# Please reason through the problem first, and then output the revised prompt enclosed within the <p> and </p> tags.
+
+
+# original
+# Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
+
+# gemma special
+# Use the relation name and description as the main definition; treat the support sentence as only one example, not a template the query must closely match.
+
+# Please reason through the problem first, and then output the revised prompt enclosed within the <p> and </p> tags.
 
 MUTATION_NO_FEEDBACK_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task. You specialize in revising prompts to improve generalization.
 
@@ -632,12 +728,14 @@ N: your Nth example sentence
 
 FEEDBACK_PROMPT_MAP = {
     "correct_and_mistakes_v1": FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1,
+    "correct_and_mistakes_v1_gemma": FEEDBACK_INFERENCE_PROMPT_CORRECT_AND_MISTAKES_V1_GEMMA,
     "correct_v1": FEEDBACK_INFERENCE_PROMPT_CORRECT_V1,
     "mistakes_v1": FEEDBACK_INFERENCE_PROMPT_MISTAKES_V1,
 }
 
 MUTATION_PROMPT_MAP = {
     "v1": MUTATION_PROMPT_V2,
+    "v1_gemma": MUTATION_PROMPT_V2_GEMMA,
     "random_v1": MUTATION_RANDOM_PROMPT_V3,
     "random_v2": MUTATION_RANDOM_PROMPT_V4,
     "no_feedback_v1": MUTATION_NO_FEEDBACK_PROMPT_V2,
@@ -656,6 +754,7 @@ MUTATION_PROMPT_GROUP_MAP = {
     "group_8": ["traces_differences_v1"],
     "group_9": ["no_feedback_v1", "traces_differences_v1"],
     "group_10": ["v1", "traces_differences_v1"],
+    "group_gemma": ["v1_gemma"],
 }
 
 INFERENCE_MODE_SEPARATE_NO_EXAMPLES = "separate_no_examples"
