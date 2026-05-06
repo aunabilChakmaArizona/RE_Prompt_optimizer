@@ -80,7 +80,21 @@ def extract_json_object(text: str) -> Dict[str, Any]:
     end = candidate_text.rfind("}")
     if start < 0 or end < start:
         raise ValueError("No JSON object found in model output.")
-    return json.loads(candidate_text[start : end + 1])
+    json_text = candidate_text[start : end + 1]
+    try:
+        return json.loads(json_text)
+    except json.JSONDecodeError:
+        normalized_json_text = json_text.translate(
+            str.maketrans(
+                {
+                    "\u201c": '"',
+                    "\u201d": '"',
+                    "\u2018": "'",
+                    "\u2019": "'",
+                }
+            )
+        )
+        return json.loads(normalized_json_text)
 
 
 def load_json_file(path: str | Path) -> Any:

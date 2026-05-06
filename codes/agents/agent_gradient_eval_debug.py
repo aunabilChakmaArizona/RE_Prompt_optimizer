@@ -677,20 +677,32 @@ def _build_score_payload_from_pairs(
 
 
 _LABEL_LITERAL_WORDS = {"yes", "no"}
-_LABEL_LITERAL_STRIP_CHARS = " \t\r\n\"'`.,:;()[]{}<>"
-_LABEL_LITERAL_QUOTE_CHARS = {"\"", "'", "`"}
+_SMART_QUOTE_TRANSLATION = str.maketrans(
+    {
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2018": "'",
+        "\u2019": "'",
+    }
+)
+_LABEL_LITERAL_STRIP_CHARS = " \t\r\n\"'`.,:;()[]{}<>\u201c\u201d\u2018\u2019"
+_LABEL_LITERAL_QUOTE_CHARS = {"\"", "'", "`", "\u201c", "\u201d", "\u2018", "\u2019"}
 
 
 def _has_alphanumeric(text: str) -> bool:
     return any(char.isalnum() for char in text)
 
 
+def _normalize_quote_chars(text: Any) -> str:
+    return str(text).translate(_SMART_QUOTE_TRANSLATION)
+
+
 def _normalized_label_literal(text: str) -> str:
-    return text.strip().lower().strip(_LABEL_LITERAL_STRIP_CHARS)
+    return _normalize_quote_chars(text).strip().lower().strip(_LABEL_LITERAL_STRIP_CHARS)
 
 
 def _is_quote_only_span(text: str) -> bool:
-    stripped = text.strip()
+    stripped = _normalize_quote_chars(text).strip()
     return bool(stripped) and all(char in _LABEL_LITERAL_QUOTE_CHARS for char in stripped)
 
 
@@ -705,9 +717,11 @@ def _is_protected_yes_no_span(
     if core not in _LABEL_LITERAL_WORDS:
         return False
 
-    left = instruction_prompt[max(0, start_char - 8):start_char]
-    right = instruction_prompt[end_char:end_char + 8]
-    window = instruction_prompt[max(0, start_char - 24):end_char + 24].lower()
+    left = _normalize_quote_chars(instruction_prompt[max(0, start_char - 8):start_char])
+    right = _normalize_quote_chars(instruction_prompt[end_char:end_char + 8])
+    window = _normalize_quote_chars(
+        instruction_prompt[max(0, start_char - 24):end_char + 24]
+    ).lower()
     left_stripped = left.rstrip().lower()
     right_stripped = right.lstrip().lower()
 
@@ -1083,6 +1097,8 @@ def _prepare_region_candidates_for_beam_search(
             normalized = _normalize_span_replacement_text(candidate_text)
             if not normalized:
                 continue
+            if _normalized_label_literal(normalized) in _LABEL_LITERAL_WORDS:
+                continue
             aligned_candidate = _align_replacement_whitespace_to_region(
                 region_text=original_text,
                 replacement_text=normalized,
@@ -1323,7 +1339,7 @@ def _build_selected_replacements_payload(
 
 
 def _normalize_span_replacement_text(value: Any) -> str:
-    text = str(value).strip()
+    text = _normalize_quote_chars(value).strip()
     if text.startswith("```") and text.endswith("```") and len(text) >= 6:
         text = text[3:-3].strip()
     elif text.startswith("`") and text.endswith("`") and len(text) >= 2:
