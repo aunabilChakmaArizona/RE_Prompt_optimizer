@@ -135,7 +135,6 @@ def _build_instruction_token_map(
     rendered_prompt: str,
     tokenizer,
 ) -> Dict[str, Any]:
-    instruction_ids = tokenizer.encode(instruction_prompt, add_special_tokens=False)
     encoded_rendered = tokenizer(
         rendered_prompt,
         return_tensors="pt",
@@ -153,42 +152,16 @@ def _build_instruction_token_map(
         raise ValueError("Instruction prompt text not found within rendered prompt.")
     end_char = start_char + len(instruction_prompt)
 
-    try:
-        instruction_start = _find_subsequence(
-            rendered_ids,
-            instruction_ids,
-            start_index=0,
-        )
-        instruction_end = instruction_start + len(instruction_ids)
-        instruction_positions = list(range(instruction_start, instruction_end))
-    except ValueError:
-        if len(instruction_ids) < 2:
-            _log_alignment_failure()
-            raise
-
-        prefix_ids = instruction_ids[:-1]
-        try:
-            instruction_start = _find_subsequence(
-                rendered_ids,
-                prefix_ids,
-                start_index=0,
-            )
-        except ValueError:
-            _log_alignment_failure()
-            raise
-
-        instruction_positions = list(
-            range(instruction_start, instruction_start + len(prefix_ids))
-        )
-        candidate_index = instruction_start + len(prefix_ids)
-        if candidate_index < len(offset_mapping):
-            token_start, token_end = offset_mapping[candidate_index]
-            if token_start < end_char and token_end > token_start:
-                instruction_positions.append(candidate_index)
-
-        if not instruction_positions:
-            _log_alignment_failure()
-            raise ValueError("Unable to recover instruction token positions.")
+    instruction_positions = [
+        index
+        for index, (token_start, token_end) in enumerate(offset_mapping)
+        if token_end > token_start
+        and token_start < end_char
+        and token_end > start_char
+    ]
+    if not instruction_positions:
+        _log_alignment_failure()
+        raise ValueError("Unable to recover instruction token positions.")
 
     return {
         "prompt_token_ids": [rendered_ids[idx] for idx in instruction_positions],
@@ -758,26 +731,26 @@ def analyze_relation_extraction_binary_pairs(
         loss.backward()
 
         gradients = inputs_embeds.grad
-        prompt_position_lists = [
-            payload["prompt_token_positions"] for payload in chunk_payloads
-        ]
-        rendered_prompt_ids_list = [
-            payload["rendered_prompt_ids"] for payload in chunk_payloads
-        ]
+        prompt_position_lists = []
+        for batch_index, payload in enumerate(chunk_payloads):
+            formatted_prompt_token_map = _build_instruction_token_map(
+                instruction_prompt=instruction_prompt,
+                rendered_prompt=encoded_inputs[batch_index]["formatted_prompt"],
+                tokenizer=tokenizer,
+            )
+            if formatted_prompt_token_map["prompt_tokens"] != prompt_tokens:
+                raise ValueError(
+                    "Instruction prompt tokenization changed after chat-template rendering."
+                )
+            prompt_position_lists.append(
+                formatted_prompt_token_map["prompt_token_positions"]
+            )
 
         seq_len = input_ids.size(1)
         for batch_index, positions in enumerate(prompt_position_lists):
-            formatted_ids = encoded_inputs[batch_index]["input_ids"][0].tolist()
-            rendered_prompt_start = _find_subsequence(
-                formatted_ids,
-                rendered_prompt_ids_list[batch_index],
-                start_index=0,
-            )
-            rendered_length = len(formatted_ids)
+            rendered_length = encoded_inputs[batch_index]["input_ids"].size(1)
             left_pad = seq_len - rendered_length
-            shifted_positions = [
-                left_pad + rendered_prompt_start + position for position in positions
-            ]
+            shifted_positions = [left_pad + position for position in positions]
             prompt_gradient_sums += gradients[batch_index, shifted_positions, :]
             prompt_embedding_sums += inputs_embeds.detach()[batch_index, shifted_positions, :]
 
