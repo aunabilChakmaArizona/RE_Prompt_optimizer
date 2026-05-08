@@ -3759,7 +3759,9 @@ cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.9_r3_er_0.6
 cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.4_r3_er_0.6_mt3_sz20000_20260505_163211_node1_qwen4_v6test.out  | grep "prompt full evaluat"
 cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.5_r3_er_0.6_mt3_sz20000_20260505_163211_node1_qwen4_v6test.out  | grep "prompt full evaluat"
 
-
+cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q5_stdp2.0_px_0.7_r3_er_0.6_mt3_sz5000_20260505_163211_node1_qwen4_v6test.out | grep "prompt full evaluat"
+cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q5_stdp2.0_px_0.7_r3_er_0.6_mt3_sz15000_20260505_163211_node1_qwen4_v6test.out | grep "prompt full evaluat"
+cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q5_stdp2.0_px_0.7_r3_er_0.6_mt3_sz10000_20260505_163211_node1_qwen4_v6test.out  | grep "prompt full evaluat"
 
 cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.08_r5_er_0.6_mt5_sz10000_20260505_220303_google-gemma-3-4b-it_node5_v6test.out | grep "prompt full evaluat"
 cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.1_r5_er_0.6_mt5_sz10000_20260505_220303_google-gemma-3-4b-it_node5_v6test.out | grep "prompt full evaluat"
@@ -3783,14 +3785,18 @@ cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.5_r5_er_0.6
 cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.125_r5_er_0.6_mt5_sz30000_20260505_220303_google-gemma-3-4b-it_node5_v6test.out | grep "prompt full evaluat"
 cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.4_r5_er_0.6_mt5_sz30000_20260505_220303_google-gemma-3-4b-it_node5_v6test.out | grep "prompt full evaluat" # best so far
 
-
+cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.0_r5_er_0.6_mt5_sz30000_20260505_220303_google-gemma-3-4b-it_node5_v6test.out | grep "prompt full evaluat" 
+cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.05_r5_er_0.6_mt5_sz30000_20260505_220303_google-gemma-3-4b-it_node5_v6test.out | grep "prompt full evaluat" # best so far ***
 ### final runs (bullshit!!!)
 
+## final
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
 
+## almost final
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_gemma" --feedback-prompt correct_and_mistakes_v1_gemma > nohup_outs/super_final_nohup_v10.0_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
+
 
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 --seed 7 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_gemma" --feedback-prompt correct_and_mistakes_v1_gemma > nohup_outs/super_final_nohup_v10.1_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
@@ -3800,3 +3806,7 @@ nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-i
 
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 --seed 7 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.1_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
+
+##
+nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
+--train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_normal.out 2>&1 &

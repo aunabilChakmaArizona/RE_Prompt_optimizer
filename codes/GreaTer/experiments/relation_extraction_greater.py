@@ -100,6 +100,25 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--start-position", type=int, default=0)
     parser.add_argument("--proposal-top-k", type=int, default=32)
     parser.add_argument(
+        "--proposal-example-size",
+        type=int,
+        default=16,
+        help=(
+            "Number of balanced train examples D_q used for per-example candidate "
+            "proposal/intersection at each step. Set <=0 to use all balanced pairs."
+        ),
+    )
+    parser.add_argument(
+        "--proposal-min-candidates",
+        type=int,
+        default=3,
+        help=(
+            "Minimum candidate count, including the current token. If the strict "
+            "intersection is smaller, fall back to frequent candidates from the "
+            "per-example top-k sets."
+        ),
+    )
+    parser.add_argument(
         "--selection-top-mu",
         type=int,
         default=3,
@@ -248,40 +267,43 @@ def _is_allowed_token(tokenizer, token_id: int, allow_non_ascii: bool) -> bool:
     return True
 
 
-def _build_proposal_header(example_pair: Dict[str, Any] | None = None) -> str:
-    header = (
-        "You are optimizing an instruction prompt for a binary relation extraction "
-        "classifier.\n\n"
-        "The final classifier input appears after the instruction and has this schema:\n\n"
-        "Relation name: <relation name> (<relation definition>)\n"
-        "Support Sentence: <sentence with subject/object tags>\n"
-        "Query Sentence: <sentence with subject/object tags>\n\n"
-        "The classifier should answer whether the target relation is expressed "
-        "between the Subject and Object entities in the query sentence.\n"
+def _build_proposal_header(example_pair: Dict[str, Any]) -> str:
+    support = example_pair["support"]
+
+    return (
+        "You are optimizing an instruction prompt for a binary relation extraction  classifier.\n\n"
+
+        "The instruction prompt will appear before the classifier input.\n"
+        "Later, the classifier will receive an input similar to the following example "
+        "and must decide whether the target relation is expressed between the "
+        "Subject and Object entities in the query sentence.\n\n"
+
+        "The classifier must answer with exactly one token: \"yes\" or \"no\".\n\n"
+
+        "Example classifier input:\n\n"
+
+        f"Relation name: {support['relation']} ({example_pair['relation_description']})\n"
+        f"Support Sentence: {example_pair['support_sentence']}\n"
+        f"Query Sentence: {example_pair['query_sentence']}\n\n"
+
+        "Write a concise instruction prompt that should appear before this type of input and help the classifier solve the relation extraction problem.\n\n"
+
+        "Instruction:\n"
     )
-    if example_pair is not None:
-        support = example_pair["support"]
-        header += (
-            "\nExample relation input:\n"
-            f"Relation name: {support['relation']} "
-            f"({example_pair['relation_description']})\n"
-            f"Support Sentence: {example_pair['support_sentence']}\n"
-            f"Query Sentence: {example_pair['query_sentence']}\n"
-        )
-    return header + "\nWrite the instruction that should appear before the input.\n\nInstruction:\n"
 
 
 @torch.inference_mode()
-def _proposal_candidates_for_position(
+def _proposal_candidate_set_for_example(
     *,
     instruction_token_ids: Sequence[int],
     position: int,
-    proposal_header: str,
+    example_pair: Dict[str, Any],
     model,
     tokenizer,
     top_k: int,
     allow_non_ascii: bool,
-) -> List[int]:
+) -> Tuple[List[int], str]:
+    proposal_header = _build_proposal_header(example_pair)
     prefix = _decode_instruction(tokenizer, instruction_token_ids[:position])
     context = proposal_header + prefix
     model_inputs = tokenizer(context, return_tensors="pt", add_special_tokens=False)
@@ -313,9 +335,116 @@ def _proposal_candidates_for_position(
         deduped.append(token_id)
         if len(deduped) >= top_k + 1:
             break
-    if current_token not in deduped:
-        deduped.insert(0, current_token)
-    return deduped
+    return deduped, proposal_header
+
+
+def _sample_proposal_examples(
+    *,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    proposal_example_size: int,
+    seed: int,
+) -> List[Dict[str, Any]]:
+    if proposal_example_size <= 0 or proposal_example_size >= len(sampled_pairs):
+        return list(sampled_pairs)
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {"tp": [], "tn": [], "fp": [], "fn": []}
+    for pair in sampled_pairs:
+        bucket_name = pair.get("confusion_bucket")
+        if bucket_name in buckets:
+            buckets[bucket_name].append(pair)
+
+    rng = random.Random(seed)
+    selected: List[Dict[str, Any]] = []
+    nonempty_buckets = [name for name, bucket in buckets.items() if bucket]
+    per_bucket = max(1, proposal_example_size // max(1, len(nonempty_buckets)))
+    for bucket_name in nonempty_buckets:
+        bucket = buckets[bucket_name]
+        selected.extend(rng.sample(bucket, min(per_bucket, len(bucket))))
+
+    remaining = proposal_example_size - len(selected)
+    if remaining > 0:
+        selected_ids = {id(pair) for pair in selected}
+        rest = [pair for pair in sampled_pairs if id(pair) not in selected_ids]
+        selected.extend(rng.sample(rest, min(remaining, len(rest))))
+
+    rng.shuffle(selected)
+    return selected[:proposal_example_size]
+
+
+def _proposal_candidates_for_examples(
+    *,
+    instruction_token_ids: Sequence[int],
+    position: int,
+    proposal_examples: Sequence[Dict[str, Any]],
+    model,
+    tokenizer,
+    top_k: int,
+    min_candidates: int,
+    allow_non_ascii: bool,
+) -> Tuple[List[int], Dict[str, Any]]:
+    current_token = int(instruction_token_ids[position])
+    if not proposal_examples:
+        raise ValueError("proposal_examples must not be empty.")
+
+    candidate_sets: List[List[int]] = []
+    proposal_headers: List[str] = []
+    for example_pair in proposal_examples:
+        candidate_ids, proposal_header = _proposal_candidate_set_for_example(
+            instruction_token_ids=instruction_token_ids,
+            position=position,
+            example_pair=example_pair,
+            model=model,
+            tokenizer=tokenizer,
+            top_k=top_k,
+            allow_non_ascii=allow_non_ascii,
+        )
+        candidate_sets.append(candidate_ids)
+        proposal_headers.append(proposal_header)
+
+    strict_intersection = set(candidate_sets[0])
+    for candidate_ids in candidate_sets[1:]:
+        strict_intersection &= set(candidate_ids)
+
+    candidate_counts: Dict[int, int] = {}
+    for candidate_ids in candidate_sets:
+        for token_id in candidate_ids:
+            candidate_counts[int(token_id)] = candidate_counts.get(int(token_id), 0) + 1
+
+    ranked_by_frequency = sorted(
+        candidate_counts,
+        key=lambda token_id: (
+            token_id in strict_intersection,
+            candidate_counts[token_id],
+            -candidate_sets[0].index(token_id) if token_id in candidate_sets[0] else -10**9,
+        ),
+        reverse=True,
+    )
+
+    selected: List[int] = []
+    for token_id in [current_token] + ranked_by_frequency:
+        if token_id in selected:
+            continue
+        if token_id in strict_intersection or len(strict_intersection) < min_candidates:
+            selected.append(int(token_id))
+        if len(selected) >= max(min_candidates, len(strict_intersection), 1):
+            break
+
+    if current_token not in selected:
+        selected.insert(0, current_token)
+
+    metadata = {
+        "proposal_example_count": len(proposal_examples),
+        "per_example_candidate_counts": [len(candidate_ids) for candidate_ids in candidate_sets],
+        "strict_intersection_size": len(strict_intersection),
+        "strict_intersection": sorted(int(token_id) for token_id in strict_intersection),
+        "used_frequency_fallback": len(strict_intersection) < min_candidates,
+        "candidate_counts": {
+            str(token_id): count
+            for token_id, count in sorted(candidate_counts.items(), key=lambda item: item[0])
+        },
+        "proposal_headers": proposal_headers,
+    }
+    return selected, metadata
 
 
 def _format_real_prompt(
@@ -351,6 +480,8 @@ def _candidate_one_hot_gradient(
     no_token_id: int,
     batch_size: int,
     use_chat_template: bool,
+    fluency_lambda: float,
+    fluency_scope: str,
 ) -> torch.Tensor:
     current_token = int(instruction_token_ids[position])
     if current_token not in candidate_token_ids:
@@ -378,7 +509,7 @@ def _candidate_one_hot_gradient(
     original_padding_side = getattr(tokenizer, "padding_side", "left")
     tokenizer.padding_side = "left"
     try:
-        for chunk in _batched(list(sampled_pairs), batch_size):
+        for chunk_index, chunk in enumerate(_batched(list(sampled_pairs), batch_size)):
             prompts, target_labels = _build_binary_prompts_for_instruction(
                 instruction_prompt=instruction_prompt,
                 binary_pairs=chunk,
@@ -452,6 +583,17 @@ def _candidate_one_hot_gradient(
                 target_class_indices,
                 reduction="sum",
             ) / total_pairs
+
+            if fluency_lambda > 0 and chunk_index == 0:
+                fluency_loss = _differentiable_instruction_fluency_loss(
+                    instruction_token_ids=instruction_token_ids,
+                    position=position,
+                    selected_embed=selected_embed,
+                    model=model,
+                    tokenizer=tokenizer,
+                    scope=fluency_scope,
+                )
+                loss = loss + fluency_lambda * fluency_loss
             loss.backward()
 
             del encoded, input_ids, attention_mask, base_embeds, replacement_embeds
@@ -466,6 +608,57 @@ def _candidate_one_hot_gradient(
     del one_hot, candidate_embeds
     clear_cuda_cache()
     return grad
+
+
+def _differentiable_instruction_fluency_loss(
+    *,
+    instruction_token_ids: Sequence[int],
+    position: int,
+    selected_embed: torch.Tensor,
+    model,
+    tokenizer,
+    scope: str,
+) -> torch.Tensor:
+    if scope == FLUENCY_SCOPE_PREFIX:
+        token_ids = list(instruction_token_ids[: position + 1])
+        replacement_position = len(token_ids) - 1
+    else:
+        if scope == FLUENCY_SCOPE_PROPOSAL_PREFIX:
+            # GReaTer regularizes the optimized control string itself. The
+            # proposal header is only artificial context for candidate proposal,
+            # so use the instruction control tokens for the differentiable term.
+            pass
+        token_ids = list(instruction_token_ids)
+        replacement_position = position
+
+    if len(token_ids) < 2:
+        return selected_embed.sum() * 0.0
+
+    embed_device = model.get_input_embeddings().weight.device
+    input_ids = torch.tensor([token_ids], device=embed_device, dtype=torch.long)
+    base_embeds = model.get_input_embeddings()(input_ids).detach()
+    replacement_embeds = torch.zeros_like(base_embeds)
+    replacement_mask = torch.zeros(
+        base_embeds.shape[:2],
+        device=base_embeds.device,
+        dtype=base_embeds.dtype,
+    )
+    replacement_embeds[0, replacement_position, :] = selected_embed[0]
+    replacement_mask[0, replacement_position] = 1.0
+    inputs_embeds = (
+        base_embeds * (1.0 - replacement_mask.unsqueeze(-1))
+        + replacement_embeds * replacement_mask.unsqueeze(-1)
+    )
+
+    outputs = model(inputs_embeds=inputs_embeds, use_cache=False)
+    shift_logits = outputs.logits[:, :-1, :].contiguous()
+    shift_labels = input_ids[:, 1:].contiguous()
+    loss = F.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        reduction="mean",
+    )
+    return loss
 
 
 def _fluency_payload(
@@ -547,7 +740,7 @@ def _score_candidate_instruction(
         scope=fluency_scope,
     )
     fluency_value = fluency[fluency_metric]
-    combined_score = (
+    total_loss = (
         float(task_metrics["mean_cross_entropy"])
         + fluency_lambda * float(fluency_value)
     )
@@ -557,7 +750,10 @@ def _score_candidate_instruction(
         "task_perplexity": float(task_metrics["mean_perplexity"]),
         "fluency": fluency,
         "fluency_metric": fluency_metric,
-        "combined_score": combined_score,
+        "fluency_lambda": fluency_lambda,
+        "fluency_loss_component": fluency_lambda * float(fluency_value),
+        "total_loss": total_loss,
+        "combined_score": total_loss,
         "predicted_labels": task_metrics["predicted_labels"],
         "target_labels": task_metrics["target_labels"],
     }
@@ -595,6 +791,68 @@ def _evaluate_full_split(
         binary_pairs=full_eval_pairs,
         prf_mode="episode",
     )
+
+
+def _sample_balanced_train_pairs_for_step(
+    *,
+    instruction_prompt: str,
+    train_samples: Dict[str, Any],
+    train_sample_index: Dict[str, dict],
+    dataset_type: str,
+    sample_size: int,
+    seed: int,
+    model,
+    tokenizer,
+    batch_size: int,
+    use_chat_template: bool,
+    log_every: int,
+    log_label: str,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, float]]:
+    rng = random.Random(seed)
+    train_feedback_samples = sample_feedback_fn(
+        train_samples,
+        k=sample_size,
+        rng=rng,
+    )
+    train_pair_pool = _build_binary_pairs_from_feedback_samples(
+        feedback_samples=train_feedback_samples,
+        shots_by_id=train_sample_index,
+        dataset_type=dataset_type,
+    )
+    train_prompts, train_target_labels = _build_binary_prompts_for_instruction(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=train_pair_pool,
+    )
+    train_predicted_labels = run_binary_inference(
+        train_prompts,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        log_every=log_every,
+        use_chat_template=use_chat_template,
+        add_generation_prompt=True,
+        enable_thinking=False,
+        log_label=log_label,
+    )
+    bucketed_pairs = _attach_predictions_to_pairs(
+        pairs=train_pair_pool,
+        predicted_labels=train_predicted_labels,
+    )
+    sampled_pairs, bucket_stats = _sample_balanced_pairs_from_bucketed_pool(
+        bucketed_pairs=bucketed_pairs,
+        seed=seed,
+    )
+    baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
+    baseline_prf = _build_prf_scores(
+        predicted_labels=baseline_score_payload["predicted_labels"],
+        target_labels=baseline_score_payload["target_labels"],
+    )
+    bucket_stats = {
+        **bucket_stats,
+        "train_pair_pool_size": len(train_pair_pool),
+        "balanced_pair_count": len(sampled_pairs),
+    }
+    return sampled_pairs, bucket_stats, baseline_prf
 
 
 def _freeze_model_parameters(model) -> None:
@@ -649,46 +907,20 @@ def main() -> None:
         filename=args.train_samples,
     )
     train_sample_index = _build_train_sample_index(train_samples)
-    rng = random.Random(args.seed)
-    train_feedback_samples = sample_feedback_fn(
-        train_samples,
-        k=args.train_gradient_sample_size,
-        rng=rng,
-    )
-    train_pair_pool = _build_binary_pairs_from_feedback_samples(
-        feedback_samples=train_feedback_samples,
-        shots_by_id=train_sample_index,
-        dataset_type=args.dataset_type,
-    )
-
     print("[relation_extraction_greater] building initial train buckets")
-    train_prompts, train_target_labels = _build_binary_prompts_for_instruction(
+    sampled_pairs, bucket_stats, baseline_prf = _sample_balanced_train_pairs_for_step(
         instruction_prompt=initial_instruction_prompt,
-        binary_pairs=train_pair_pool,
-    )
-    train_predicted_labels = run_binary_inference(
-        train_prompts,
+        train_samples=train_samples,
+        train_sample_index=train_sample_index,
+        dataset_type=args.dataset_type,
+        sample_size=args.train_gradient_sample_size,
+        seed=args.seed,
         model=model,
         tokenizer=tokenizer,
         batch_size=args.selection_batch_size,
-        log_every=args.log_every,
         use_chat_template=use_chat_template,
-        add_generation_prompt=True,
-        enable_thinking=False,
-        log_label="greater_train_bucket",
-    )
-    bucketed_pairs = _attach_predictions_to_pairs(
-        pairs=train_pair_pool,
-        predicted_labels=train_predicted_labels,
-    )
-    sampled_pairs, bucket_stats = _sample_balanced_pairs_from_bucketed_pool(
-        bucketed_pairs=bucketed_pairs,
-        seed=args.seed,
-    )
-    baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
-    baseline_prf = _build_prf_scores(
-        predicted_labels=baseline_score_payload["predicted_labels"],
-        target_labels=baseline_score_payload["target_labels"],
+        log_every=args.log_every,
+        log_label="greater_train_bucket_initial",
     )
     _save_json(
         run_dir / "balanced_train_sample.json",
@@ -711,25 +943,10 @@ def main() -> None:
         dataset_type=args.dataset_type,
         query_index=args.query_index,
     )
-    proposal_header = _build_proposal_header(sampled_pairs[0] if sampled_pairs else None)
-    (run_dir / "proposal_header.txt").write_text(proposal_header, encoding="utf-8")
 
     position = args.start_position % len(instruction_token_ids)
-    baseline_selection = _score_candidate_instruction(
-        instruction_token_ids=instruction_token_ids,
-        position=position,
-        sampled_pairs=sampled_pairs,
-        proposal_header=proposal_header,
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=args.selection_batch_size,
-        use_chat_template=use_chat_template,
-        fluency_lambda=args.fluency_lambda,
-        fluency_scope=args.fluency_scope,
-        fluency_metric=args.fluency_metric,
-    )
     best_instruction_ids = list(instruction_token_ids)
-    best_selection_score = float(baseline_selection["combined_score"])
+    best_selection_score = float("inf")
     best_full_eval: Dict[str, Any] | None = None
 
     for step_index in range(1, args.n_steps + 1):
@@ -742,14 +959,52 @@ def main() -> None:
             f"position={position}",
             f"token={tokenizer.decode([current_token])!r}",
         )
-
-        candidate_token_ids = _proposal_candidates_for_position(
+        sampled_pairs, bucket_stats, baseline_prf = _sample_balanced_train_pairs_for_step(
+            instruction_prompt=current_instruction,
+            train_samples=train_samples,
+            train_sample_index=train_sample_index,
+            dataset_type=args.dataset_type,
+            sample_size=args.train_gradient_sample_size,
+            seed=args.seed + step_index,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.selection_batch_size,
+            use_chat_template=use_chat_template,
+            log_every=args.log_every,
+            log_label=f"greater_train_bucket_step_{step_index}",
+        )
+        proposal_examples = _sample_proposal_examples(
+            sampled_pairs=sampled_pairs,
+            proposal_example_size=args.proposal_example_size,
+            seed=args.seed + 10_000 + step_index,
+        )
+        proposal_header_for_scoring = _build_proposal_header(proposal_examples[0])
+        baseline_selection = _score_candidate_instruction(
             instruction_token_ids=instruction_token_ids,
             position=position,
-            proposal_header=proposal_header,
+            sampled_pairs=sampled_pairs,
+            proposal_header=proposal_header_for_scoring,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.selection_batch_size,
+            use_chat_template=use_chat_template,
+            fluency_lambda=args.fluency_lambda,
+            fluency_scope=args.fluency_scope,
+            fluency_metric=args.fluency_metric,
+        )
+        if baseline_selection["combined_score"] < best_selection_score:
+            best_selection_score = float(baseline_selection["combined_score"])
+            best_instruction_ids = list(instruction_token_ids)
+        pre_step_selection = dict(baseline_selection)
+
+        candidate_token_ids, proposal_metadata = _proposal_candidates_for_examples(
+            instruction_token_ids=instruction_token_ids,
+            position=position,
+            proposal_examples=proposal_examples,
             model=model,
             tokenizer=tokenizer,
             top_k=args.proposal_top_k,
+            min_candidates=args.proposal_min_candidates,
             allow_non_ascii=args.allow_non_ascii,
         )
         gradient = _candidate_one_hot_gradient(
@@ -763,6 +1018,8 @@ def main() -> None:
             no_token_id=no_token_id,
             batch_size=args.gradient_batch_size,
             use_chat_template=use_chat_template,
+            fluency_lambda=args.fluency_lambda,
+            fluency_scope=args.fluency_scope,
         )
         mu = min(args.selection_top_mu, len(candidate_token_ids))
         selected_indices = torch.topk(-gradient[0], k=mu).indices.detach().cpu().tolist()
@@ -780,7 +1037,7 @@ def main() -> None:
                 instruction_token_ids=trial_ids,
                 position=position,
                 sampled_pairs=sampled_pairs,
-                proposal_header=proposal_header,
+                proposal_header=proposal_header_for_scoring,
                 model=model,
                 tokenizer=tokenizer,
                 batch_size=args.selection_batch_size,
@@ -796,6 +1053,8 @@ def main() -> None:
                 "mean_cross_entropy": score_payload["mean_cross_entropy"],
                 "task_perplexity": score_payload["task_perplexity"],
                 "fluency": score_payload["fluency"],
+                "fluency_loss_component": score_payload["fluency_loss_component"],
+                "total_loss": score_payload["total_loss"],
                 "combined_score": score_payload["combined_score"],
                 "changed": int(candidate_id) != current_token,
             }
@@ -807,14 +1066,14 @@ def main() -> None:
         if best_step_record is None:
             raise RuntimeError("No candidate was scored.")
 
-        accepted = best_step_record["combined_score"] <= baseline_selection["combined_score"]
+        accepted = best_step_record["combined_score"] <= pre_step_selection["combined_score"]
         if accepted:
             instruction_token_ids = best_step_ids
             baseline_selection = _score_candidate_instruction(
                 instruction_token_ids=instruction_token_ids,
                 position=position,
                 sampled_pairs=sampled_pairs,
-                proposal_header=proposal_header,
+                proposal_header=proposal_header_for_scoring,
                 model=model,
                 tokenizer=tokenizer,
                 batch_size=args.selection_batch_size,
@@ -848,6 +1107,17 @@ def main() -> None:
             "input_prompt": current_instruction,
             "current_token_id": current_token,
             "current_token_text": tokenizer.decode([current_token], skip_special_tokens=False),
+            "step_bucket_stats": bucket_stats,
+            "step_baseline_prf": baseline_prf,
+            "step_baseline_selection": {
+                "mean_cross_entropy": pre_step_selection["mean_cross_entropy"],
+                "task_perplexity": pre_step_selection["task_perplexity"],
+                "fluency": pre_step_selection["fluency"],
+                "fluency_loss_component": pre_step_selection["fluency_loss_component"],
+                "total_loss": pre_step_selection["total_loss"],
+                "combined_score": pre_step_selection["combined_score"],
+            },
+            "proposal_metadata": proposal_metadata,
             "proposal_candidate_count": len(candidate_token_ids),
             "proposal_candidates": [
                 {
