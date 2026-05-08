@@ -1,0 +1,133 @@
+GREATER adaptation for relation extraction
+
+We adapt GREATER to optimize only the instruction prompt in a binary relation extraction task.
+
+Original task format:
+
+    Instruction prompt + Input + Answer instruction -> Yes/No
+
+The issue is that GREATER proposes candidate prompt tokens using left context:
+
+    x_j + p_<i -> predict candidate token p_i
+
+But in our task, the instruction prompt appears before the input, so the first instruction token has no task-specific left context.
+
+To fix this, use a separate candidate-proposal context while keeping the real task/inference format unchanged.
+
+
+Two-context design
+
+1. Candidate proposal context
+
+Used only to generate candidate tokens for instruction token p_i.
+
+    Task header + input schema/example + instruction prefix p_<i>
+    -> top-k candidate tokens for p_i
+
+Sample task header:
+
+    You are optimizing an instruction prompt for a binary relation extraction classifier.
+
+    The final classifier input will appear after the instruction and will have this format:
+
+    Text: <text>
+    Head entity: <head entity>
+    Tail entity: <tail entity>
+    Target relation: <relation name>
+    Relation definition: <relation definition>
+
+    The classifier should answer whether the target relation is expressed between
+    the head and tail entities in the text.
+
+    Write the instruction that should appear before the input.
+
+    Instruction:
+
+Then append the current instruction prefix:
+
+    {task_header}
+    {p_<i}
+
+Use this to get top-k next-token candidates:
+
+    candidate_tokens = top_k(model.next_token_logits(task_header + instruction_prefix))
+
+This replaces GREATER's original candidate proposal context:
+
+    x_j + p_<i
+
+
+2. Real task context
+
+Used for actual training loss, gradients, candidate verification, and inference.
+
+    Instruction prompt + actual input + answer instruction
+
+Example:
+
+    {instruction_prompt}
+
+    Text:
+    {x_text}
+
+    Head entity:
+    {x_head}
+
+    Tail entity:
+    {x_tail}
+
+    Target relation:
+    {x_relation}
+
+    Relation definition:
+    {x_relation_definition}
+
+    Question:
+    Is the target relation expressed between the head entity and tail entity in the text?
+
+    Answer with exactly one token: Yes or No.
+    Answer:
+
+Compute loss from the next-token logits for:
+
+    Yes
+    No
+
+Use cross-entropy over only these label logits:
+
+    label_logits = [logit_yes, logit_no]
+    loss_ce = cross_entropy(label_logits, gold_label)
+
+Optionally keep GREATER's prompt perplexity regularizer, but compute it using the candidate proposal context:
+
+    PPL context = task_header + p_<i
+
+
+Optimization loop
+
+For each prompt token position i:
+
+    1. Use candidate proposal context:
+           task_header + p_<i
+       to generate top-k candidate tokens.
+
+    2. Create one-hot candidate selector over those candidates.
+
+    3. Build real task input:
+           instruction_prompt_candidate + input + answer_instruction
+
+    4. Compute Yes/No classification loss.
+
+    5. Backpropagate loss with respect to the candidate selector.
+
+    6. Select top candidates using largest negative gradient.
+
+    7. Forward-evaluate selected candidates on the real task format.
+
+    8. Replace p_i with the candidate giving the best loss or dev F1.
+
+Important: candidate proposal uses the artificial task header, but all gradients, verification, and inference must use the real deployment format:
+
+    Instruction prompt + Input + Answer instruction
+
+This keeps deployment unchanged while solving the empty-context problem for the first instruction token.

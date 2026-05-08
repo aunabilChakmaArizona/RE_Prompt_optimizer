@@ -3795,10 +3795,8 @@ nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-i
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 --seed 7 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_gemma" --feedback-prompt correct_and_mistakes_v1_gemma > nohup_outs/super_final_nohup_v10.1_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
 
-
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 --seed 100 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_gemma" --feedback-prompt correct_and_mistakes_v1_gemma > nohup_outs/super_final_nohup_v10.2_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
-
 
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 --seed 7 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.1_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
