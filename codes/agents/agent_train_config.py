@@ -84,6 +84,25 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--resume-from-nohup-log",
+        default=None,
+        help=(
+            "Recover a stopped evolutionary run from a nohup/train log only. "
+            "The log is parsed for completed prompts, validation metrics, and "
+            "population pruning; the remaining iterations are then continued."
+        ),
+    )
+    parser.add_argument(
+        "--resume-log-rng-catchup-extra-draws",
+        type=int,
+        default=1000,
+        help=(
+            "Extra cheap rng.random() draws consumed per completed iteration when "
+            "resuming from a nohup log. This approximates unknown RNG use from "
+            "feedback selection without running any LLM operations."
+        ),
+    )
+    parser.add_argument(
         "--update-mode",
         type=str,
         default="feedback",

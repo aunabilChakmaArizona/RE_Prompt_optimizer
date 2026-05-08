@@ -3793,7 +3793,7 @@ cat nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.05_r5_er_0.
 nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
 
-## almost final
+## final for now
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_gemma" --feedback-prompt correct_and_mistakes_v1_gemma > nohup_outs/super_final_nohup_v10.0_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
 
@@ -3810,3 +3810,46 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 ##
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_normal.out 2>&1 &
+
+nohup python -u core_trainer_evolutionary_search.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:0" \
+  --validation-f1-std-penalty 2.0 \
+  --dev-split final_step_dev \
+  --eval-n-chunks 3 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --max-iterations 20 \
+  --population-size 10 \
+  --mutation-group-id "group_2" \
+  --resume-from-nohup-log "nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out" \
+  > nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_resume.out 2>&1 &
+
+# 20260507_090049
+
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260505_220303_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 18 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 5 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 7 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.05 \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split dev_9000 \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.05_r5_er_0.6_mt5_sz30000_20260507_090049_google-gemma-3-4b-it_node18_v6test" \
+  > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.05_r5_er_0.6_mt5_sz30000_20260507_090049_google-gemma-3-4b-it_node18_v6test.out 2>&1 &

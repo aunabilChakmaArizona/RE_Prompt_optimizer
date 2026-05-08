@@ -46,6 +46,7 @@ class EvolutionarySearch:
         example_generation_prompt: str = "",
         rng: Optional[random.Random] = None,
         validation_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+        start_iteration: int = 0,
     ):
         self.root = root
         if population_size is not None and population_size <= 0:
@@ -88,6 +89,11 @@ class EvolutionarySearch:
         self.example_generation_prompt = example_generation_prompt
         self.rng = rng or random.Random()
         self.validation_std_penalty = validation_std_penalty
+        if start_iteration < 0:
+            raise ValueError("start_iteration must be >= 0")
+        if start_iteration > max_iterations:
+            raise ValueError("start_iteration must be <= max_iterations")
+        self.start_iteration = start_iteration
         existing_node_ids = [
             node.node_id for node in self.population_history if node.node_id is not None
         ]
@@ -236,7 +242,7 @@ class EvolutionarySearch:
             print("[agent_evolutionary_search] evaluate root")
             self.root.val_score = evaluate_fn(self.root, "validation")
 
-        for iteration in range(self.max_iterations):
+        for iteration in range(self.start_iteration, self.max_iterations):
             iter_start = time.monotonic()
             overall_elapsed = None
             if overall_start_time is not None:

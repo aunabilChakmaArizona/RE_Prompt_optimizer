@@ -5,6 +5,7 @@ import time
 
 from agents.agent_evolutionary_search import EvolutionarySearch
 from agents.agent_memory import clear_iteration_memory
+from agents.agent_nohup_resume import catch_up_rng_from_log, load_nohup_resume_state
 from agents.agent_prompts import (
     EXAMPLE_GENERATION_PROMPT_V1,
     FEEDBACK_PROMPT_MAP,
@@ -35,6 +36,11 @@ def main() -> None:
     args = parse_args()
     if args.validation_f1_std_penalty < 0:
         raise ValueError("--validation-f1-std-penalty must be non-negative.")
+    if args.resume_from_nohup_log and (args.load_population or args.initial_prompt_source_path):
+        raise ValueError(
+            "--resume-from-nohup-log cannot be combined with --load-population "
+            "or --initial-prompt-source-path"
+        )
 
     data_dir = resolve_data_dir(args.data_dir)
     run_dir = create_run_dir(args.trainings_dir, args.model)
@@ -51,7 +57,7 @@ def main() -> None:
         eval_output_dir = os.path.join(run_dir, "eval_outputs")
         os.makedirs(eval_output_dir, exist_ok=True)
 
-        _, _, rng, _, _, _, _, funcs = load_model_and_data(
+        _, _, rng, feedback_pool, _, _, _, funcs = load_model_and_data(
             args, data_dir, eval_output_dir, args.seed
         )
         sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate = funcs 
@@ -98,6 +104,7 @@ def main() -> None:
         initial_population = None
         initial_population_history = None
         resume_next_node_id = None
+        resume_start_iteration = 0
         if args.load_population:
             if not args.initial_prompt_source_path:
                 raise ValueError(
@@ -161,6 +168,35 @@ def main() -> None:
                 initial_prompt_node=initial_prompt_node,
             )
 
+        if args.resume_from_nohup_log:
+            resume_state = load_nohup_resume_state(
+                os.path.abspath(args.resume_from_nohup_log),
+                root=root,
+                population_size=args.population_size,
+                feedback_prompt=feedback_prompt,
+                mutation_prompt=mutation_prompt,
+                example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+            )
+            catch_up_rng_from_log(
+                rng,
+                feedback_pool=feedback_pool,
+                completed_iterations=resume_state.completed_iterations,
+                feedback_sample_size=args.feedback_sample_size,
+                selection_mode=args.selection_mode,
+                extra_draws_per_iteration=args.resume_log_rng_catchup_extra_draws,
+            )
+            initial_population = resume_state.initial_population
+            initial_population_history = resume_state.initial_population_history
+            resume_next_node_id = resume_state.next_node_id
+            resume_start_iteration = resume_state.completed_iterations
+            print("[core_trainer] resumed from nohup log:", resume_state.source_path)
+            print("[core_trainer] resumed completed_iterations:", resume_start_iteration)
+            print(
+                "[core_trainer] resumed active population node_ids:",
+                [node.node_id for node in initial_population],
+            )
+            print("[core_trainer] resumed next_node_id:", resume_next_node_id)
+
         search = EvolutionarySearch(
             root=root,
             initial_population=initial_population,
@@ -177,6 +213,7 @@ def main() -> None:
             example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
             rng=rng,
             validation_std_penalty=args.validation_f1_std_penalty,
+            start_iteration=resume_start_iteration,
         )
 
         print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (before search)")
