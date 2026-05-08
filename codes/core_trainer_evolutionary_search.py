@@ -50,6 +50,7 @@ def main() -> None:
         print(f"[core_trainer] data directory: {data_dir}")
         print("[core_trainer] run_dir:", run_dir)
         print("[core_trainer] model:", args.model)
+        print("[core_trainer] optimizer_model:", args.optimizer_model or args.model)
         print("[core_trainer] dataset_type:", args.dataset_type)
         print(f"[core_trainer] elapsed={time.monotonic() - overall_start:.2f}s (startup)")
 

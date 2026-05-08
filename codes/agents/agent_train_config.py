@@ -31,6 +31,15 @@ def resolve_data_dir(data_dir: Optional[str]) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run evolutionary prompt optimization.")
     parser.add_argument("--model", required=True, help="HF model id")
+    parser.add_argument(
+        "--optimizer-model",
+        default=None,
+        help=(
+            "Optional HF model id used for optimizer steps only "
+            "(feedback generation and prompt mutation). If omitted, --model is "
+            "used for both optimization and target binary inference/evaluation."
+        ),
+    )
     parser.add_argument("--dataset-type", default="fs_tacred", help="Dataset type")
     parser.add_argument("--data-dir", default=None, help="Path to data dir")
     parser.add_argument(

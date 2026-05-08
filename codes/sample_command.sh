@@ -3811,9 +3811,12 @@ nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --de
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_normal.out 2>&1 &
 
+nohup python -u core_trainer_evolutionary_search.py --model "Qwen/Qwen3-4B" --device-map "cuda:0" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
+--train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0.out 2>&1 &
+
 nohup python -u core_trainer_evolutionary_search.py \
   --model "Qwen/Qwen3-4B" \
-  --device-map "cuda:0" \
+  --device-map "cuda:3" \
   --validation-f1-std-penalty 2.0 \
   --dev-split final_step_dev \
   --eval-n-chunks 3 \
@@ -3825,7 +3828,7 @@ nohup python -u core_trainer_evolutionary_search.py \
   > nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_resume.out 2>&1 &
 
 # 20260507_090049
-
+# sometthing went wrong
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -3853,3 +3856,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.05_r5_er_0.6_mt5_sz30000_20260507_090049_google-gemma-3-4b-it_node18_v6test" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.05_r5_er_0.6_mt5_sz30000_20260507_090049_google-gemma-3-4b-it_node18_v6test.out 2>&1 &
+
+##
+nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --optimizer-model "google/gemma-3-12b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
+--train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.0_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_normal_opt_model.out 2>&1 &

@@ -24,6 +24,11 @@ from agents.agent_train_pipeline import build_root_node, load_model_and_data
 def main() -> None:
     overall_start = time.monotonic()
     args = parse_args()
+    if args.optimizer_model and args.optimizer_model != args.model:
+        raise ValueError(
+            "--optimizer-model is currently supported by "
+            "core_trainer_evolutionary_search.py, not core_trainer_cluster.py"
+        )
 
     data_dir = resolve_data_dir(args.data_dir)
     run_dir = create_run_dir(args.trainings_dir, f"{args.model}_cluster")

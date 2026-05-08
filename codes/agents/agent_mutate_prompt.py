@@ -154,6 +154,7 @@ def mutate_prompt_fn(
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
             do_sample=do_sample,
+            log_label="re_mutation",
         )
         tag_pattern = rf"{re.escape(prompt_open_tag)}(.*?){re.escape(prompt_close_tag)}"
         if not re.search(tag_pattern, raw_response, flags=re.DOTALL | re.IGNORECASE):

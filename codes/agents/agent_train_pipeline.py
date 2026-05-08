@@ -7,6 +7,7 @@ from agents.agent_data_loader import load_split_episodes, load_train_samples
 from agents.agent_evaluate import evaluate_fn as _evaluate_fn
 from agents.agent_generate_feedback import generate_feedback_fn as _generate_feedback_fn
 from agents.agent_graph_node import GraphNode
+from agents.agent_memory import clear_model_memory
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_mutate_prompt import mutate_prompt_fn as _mutate_prompt_fn
 from agents.agent_prompts import (
@@ -110,6 +111,79 @@ def load_data_assets(args, data_dir: str) -> Tuple[Dict, Dict, Dict, Dict]:
     print("[agent_train_pipeline] dataset loaded")
 
     return feedback_pool, train_shot_index, dev_data, test_data
+
+
+class RoleModelSwitcher:
+    TARGET_ROLE = "target"
+    OPTIMIZER_ROLE = "optimizer"
+
+    def __init__(
+        self,
+        *,
+        target_model_id: str,
+        optimizer_model_id: str,
+        device_map: str,
+    ):
+        self.target_model_id = target_model_id
+        self.optimizer_model_id = optimizer_model_id
+        self.device_map = device_map
+        self.current_role: str | None = None
+        self.current_model_id: str | None = None
+        self.model = None
+        self.tokenizer = None
+        self._target_yes_token_id: int | None = None
+        self._target_no_token_id: int | None = None
+
+    def _model_id_for_role(self, role: str) -> str:
+        if role == self.TARGET_ROLE:
+            return self.target_model_id
+        if role == self.OPTIMIZER_ROLE:
+            return self.optimizer_model_id
+        raise ValueError(f"Unsupported model role: {role}")
+
+    def _unload_current(self) -> None:
+        if self.model is None and self.tokenizer is None:
+            return
+        print(
+            "[agent_train_pipeline] unloading model:",
+            self.current_model_id,
+            f"role={self.current_role}",
+        )
+        self.model = None
+        self.tokenizer = None
+        self.current_role = None
+        self.current_model_id = None
+        clear_model_memory()
+
+    def ensure(self, role: str):
+        requested_model_id = self._model_id_for_role(role)
+        if self.model is not None and self.current_model_id == requested_model_id:
+            self.current_role = role
+            return self.model, self.tokenizer
+
+        self._unload_current()
+        print(
+            "[agent_train_pipeline] loading",
+            role,
+            "model:",
+            requested_model_id,
+        )
+        self.model, self.tokenizer = load_model_and_tokenizer(
+            requested_model_id,
+            device_map=self.device_map,
+        )
+        self.current_role = role
+        self.current_model_id = requested_model_id
+        if role == self.TARGET_ROLE:
+            self._target_yes_token_id = _resolve_binary_token_id(self.tokenizer, "yes")
+            self._target_no_token_id = _resolve_binary_token_id(self.tokenizer, "no")
+        return self.model, self.tokenizer
+
+    def target_binary_token_ids(self) -> tuple[int, int]:
+        self.ensure(self.TARGET_ROLE)
+        if self._target_yes_token_id is None or self._target_no_token_id is None:
+            raise RuntimeError("Target binary token ids were not initialized.")
+        return self._target_yes_token_id, self._target_no_token_id
 
 
 def build_training_functions(
@@ -229,6 +303,137 @@ def build_training_functions(
     return sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate
 
 
+def build_switching_training_functions(
+    *,
+    args,
+    switcher: RoleModelSwitcher,
+    feedback_pool: Dict[str, List[dict]],
+    train_shot_index: Dict[str, dict],
+    dev_data: Dict,
+    test_data: Dict,
+    eval_output_dir: str,
+    rng: random.Random,
+):
+    def sample_feedback(k: int):
+        samples = _sample_feedback_fn(feedback_pool, k=k, rng=rng)
+        enrich_feedback_samples(samples, train_shot_index)
+        return samples
+
+    def run_inference(
+        node: GraphNode,
+        feedback_samples,
+        *,
+        evolution_iteration: int | None = None,
+        evolution_max_iterations: int | None = None,
+    ):
+        model, tokenizer = switcher.ensure(RoleModelSwitcher.TARGET_ROLE)
+        yes_token_id, no_token_id = switcher.target_binary_token_ids()
+        try:
+            return _run_inference_fn(
+                node,
+                feedback_samples,
+                dataset_type=args.dataset_type,
+                model=model,
+                tokenizer=tokenizer,
+                batch_size=args.inference_batch_size,
+                yes_token_id=yes_token_id,
+                no_token_id=no_token_id,
+                log_every=args.log_every,
+                evolution_iteration=evolution_iteration,
+                evolution_max_iterations=evolution_max_iterations,
+            )
+        finally:
+            clear_model_memory()
+
+    def generate_feedback(node: GraphNode, feedback_samples):
+        model, tokenizer = switcher.ensure(RoleModelSwitcher.OPTIMIZER_ROLE)
+        try:
+            return _generate_feedback_fn(
+                node,
+                feedback_samples,
+                dataset_type=args.dataset_type,
+                model=model,
+                tokenizer=tokenizer,
+                batch_size=args.feedback_batch_size,
+                max_new_tokens=args.feedback_max_new_tokens,
+                do_sample=args.do_sample,
+                feedback_open_tag=args.feedback_open_tag,
+                feedback_close_tag=args.feedback_close_tag,
+            )
+        finally:
+            clear_model_memory()
+
+    def mutate_prompt(
+        node: GraphNode,
+        feedback_samples,
+        *,
+        mutation_prompt_override: str | None = None,
+        mutation_prompt_key_override: str | None = None,
+    ):
+        model, tokenizer = switcher.ensure(RoleModelSwitcher.OPTIMIZER_ROLE)
+        try:
+            return _mutate_prompt_fn(
+                node,
+                feedback_samples,
+                dataset_type=args.dataset_type,
+                model=model,
+                tokenizer=tokenizer,
+                max_new_tokens=args.max_new_tokens,
+                do_sample=args.do_sample,
+                prompt_open_tag=args.prompt_open_tag,
+                prompt_close_tag=args.prompt_close_tag,
+                mutation_prompt_override=mutation_prompt_override,
+                mutation_prompt_key_override=mutation_prompt_key_override,
+            )
+        finally:
+            clear_model_memory()
+
+    def evaluate(
+        node: GraphNode,
+        split: str,
+        *,
+        eval_id_override: str | int | None = None,
+        evolution_iteration: int | None = None,
+        evolution_max_iterations: int | None = None,
+    ):
+        model, tokenizer = switcher.ensure(RoleModelSwitcher.TARGET_ROLE)
+        yes_token_id, no_token_id = switcher.target_binary_token_ids()
+        eval_id = eval_id_override if eval_id_override is not None else (
+            node.node_id if node.node_id is not None else 0
+        )
+        if split == "validation":
+            episodes = dev_data["episodes"]
+            shots = dev_data
+        else:
+            episodes = test_data["episodes"]
+            shots = test_data
+        try:
+            return _evaluate_fn(
+                node,
+                split,
+                dataset_type=args.dataset_type,
+                model=model,
+                tokenizer=tokenizer,
+                episodes=episodes,
+                shots=shots,
+                query_index=args.query_index,
+                batch_size=args.eval_batch_size,
+                n_chunks=args.eval_n_chunks,
+                eval_id=eval_id,
+                output_dir=eval_output_dir,
+                yes_token_id=yes_token_id,
+                no_token_id=no_token_id,
+                stable_f1_std_penalty=args.validation_f1_std_penalty,
+                log_every=args.log_every,
+                evolution_iteration=evolution_iteration,
+                evolution_max_iterations=evolution_max_iterations,
+            )
+        finally:
+            clear_model_memory()
+
+    return sample_feedback, run_inference, generate_feedback, mutate_prompt, evaluate
+
+
 def build_root_node(
     feedback_prompt: str,
     mutation_prompt: str,
@@ -294,21 +499,44 @@ def build_root_node(
 
 def load_model_and_data(args, data_dir: str, eval_output_dir: str, rng_seed: int):
     rng = random.Random(rng_seed)
-    model, tokenizer = load_model_and_tokenizer(
-        args.model, device_map=args.device_map
-    )
     feedback_pool, train_shot_index, dev_data, test_data = load_data_assets(
         args, data_dir
     )
-    functions = build_training_functions(
-        args=args,
-        model=model,
-        tokenizer=tokenizer,
-        feedback_pool=feedback_pool,
-        train_shot_index=train_shot_index,
-        dev_data=dev_data,
-        test_data=test_data,
-        eval_output_dir=eval_output_dir,
-        rng=rng,
-    )
+    optimizer_model = getattr(args, "optimizer_model", None) or args.model
+    if optimizer_model == args.model:
+        model, tokenizer = load_model_and_tokenizer(
+            args.model, device_map=args.device_map
+        )
+        functions = build_training_functions(
+            args=args,
+            model=model,
+            tokenizer=tokenizer,
+            feedback_pool=feedback_pool,
+            train_shot_index=train_shot_index,
+            dev_data=dev_data,
+            test_data=test_data,
+            eval_output_dir=eval_output_dir,
+            rng=rng,
+        )
+    else:
+        print("[agent_train_pipeline] target model:", args.model)
+        print("[agent_train_pipeline] optimizer model:", optimizer_model)
+        print("[agent_train_pipeline] model switching enabled; one model is loaded at a time")
+        model = None
+        tokenizer = None
+        switcher = RoleModelSwitcher(
+            target_model_id=args.model,
+            optimizer_model_id=optimizer_model,
+            device_map=args.device_map,
+        )
+        functions = build_switching_training_functions(
+            args=args,
+            switcher=switcher,
+            feedback_pool=feedback_pool,
+            train_shot_index=train_shot_index,
+            dev_data=dev_data,
+            test_data=test_data,
+            eval_output_dir=eval_output_dir,
+            rng=rng,
+        )
     return model, tokenizer, rng, feedback_pool, train_shot_index, dev_data, test_data, functions
