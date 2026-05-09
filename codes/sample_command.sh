@@ -3873,8 +3873,8 @@ cat nohup_outs/super_final_nohup_v10.0_run_qwen4_group2_mixed_ps_10_itr_20_nchun
 nohup python -u core_trainer_evolutionary_search.py --model "google/gemma-3-4b-it" --optimizer-model "google/gemma-3-12b-it" --device-map "cuda:1" --validation-f1-std-penalty 2.0 --dev-split final_step_dev --eval-n-chunks 3 \
 --train-samples "fs_tacred_train_non_split_original_samples.pkl" --max-iterations 20 --population-size 10 --mutation-group-id "group_2" > nohup_outs/super_final_nohup_v10.1_run_gemma4_group2_mixed_ps_10_itr_20_nchunk3_stdp2.0_normal_opt_model.out 2>&1 &
 
-###
-
+### currently
+# done
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
