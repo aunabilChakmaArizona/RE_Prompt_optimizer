@@ -35,7 +35,6 @@ from agents.agent_gradient_eval_debug import (
     build_full_binary_pairs,
 )
 from agents.agent_gradient_token_analysis import _build_instruction_token_map
-from agents.agent_gradient_token_analysis import score_binary_prompts_with_ce_and_perplexity
 from agents.agent_memory import clear_cuda_cache
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import INFERENCE_INSTRUCTION_PROMPT_V1
@@ -190,6 +189,17 @@ def _namespace_to_json_dict(args: argparse.Namespace) -> Dict[str, Any]:
     return payload
 
 
+def _format_prf_for_print(prf: Dict[str, float]) -> str:
+    return (
+        f"P={float(prf.get('precision', 0.0)):.2f} +/- "
+        f"{float(prf.get('precision_std', 0.0)):.2f}, "
+        f"R={float(prf.get('recall', 0.0)):.2f} +/- "
+        f"{float(prf.get('recall_std', 0.0)):.2f}, "
+        f"F1={float(prf.get('f1', 0.0)):.2f} +/- "
+        f"{float(prf.get('f1_std', 0.0)):.2f}"
+    )
+
+
 def _resolve_initial_instruction_prompt(args: argparse.Namespace) -> Tuple[str, Dict[str, Any]]:
     if args.prompt_source == PROMPT_SOURCE_SCRATCH:
         return INFERENCE_INSTRUCTION_PROMPT_V1, {
@@ -286,7 +296,7 @@ def _build_proposal_header(example_pair: Dict[str, Any]) -> str:
         f"Support Sentence: {example_pair['support_sentence']}\n"
         f"Query Sentence: {example_pair['query_sentence']}\n\n"
 
-        "Write a concise instruction prompt that should appear before this type of input and help the classifier solve the relation extraction problem.\n\n"
+        "Write a instruction prompt that should appear before this type of input and help the classifier solve the relation extraction problem.\n\n"
 
         "Instruction:\n"
     )
@@ -538,10 +548,22 @@ def _candidate_one_hot_gradient(
                     rendered_prompt=formatted_prompt,
                     tokenizer=tokenizer,
                 )
-                if token_map["prompt_token_ids"] != list(instruction_token_ids):
+                prompt_token_ids = token_map["prompt_token_ids"]
+                if len(prompt_token_ids) != len(instruction_token_ids):
                     raise ValueError(
-                        "Instruction tokenization changed inside formatted prompt. "
-                        "Use a stable instruction prompt before optimizing."
+                        "Instruction token count changed inside formatted prompt. "
+                        f"standalone_len={len(instruction_token_ids)} "
+                        f"rendered_len={len(prompt_token_ids)}"
+                    )
+                if prompt_token_ids[position] != instruction_token_ids[position]:
+                    raise ValueError(
+                        "The instruction token being optimized changed inside the "
+                        "formatted prompt. This usually means the current token is "
+                        "at a prompt/input boundary and cannot be safely optimized "
+                        "with the current token-level replacement path. "
+                        f"position={position} "
+                        f"standalone_token={instruction_token_ids[position]} "
+                        f"rendered_token={prompt_token_ids[position]}"
                     )
                 rendered_len = tokenizer(
                     formatted_prompt,
@@ -704,6 +726,98 @@ def _fluency_payload(
     return {"nll": nll_value, "ppl": ppl_value}
 
 
+def _score_binary_prompts_with_task_ce(
+    *,
+    prompts: Sequence[str],
+    target_labels: Sequence[str],
+    model,
+    tokenizer,
+    batch_size: int,
+    use_chat_template: bool,
+) -> Dict[str, Any]:
+    if len(prompts) != len(target_labels):
+        raise ValueError("prompts/target_labels length mismatch")
+    if not prompts:
+        return {
+            "predicted_labels": [],
+            "target_labels": [],
+            "cross_entropy_losses": [],
+            "mean_cross_entropy": 0.0,
+            "task_perplexity": 1.0,
+        }
+
+    yes_token_id = _resolve_binary_token_id(tokenizer, "yes")
+    no_token_id = _resolve_binary_token_id(tokenizer, "no")
+    target_device = getattr(model, "device", None)
+    original_padding_side = getattr(tokenizer, "padding_side", "left")
+    predicted_labels: List[str] = []
+    cross_entropy_losses: List[float] = []
+
+    tokenizer.padding_side = "left"
+    try:
+        for prompt_batch, label_batch in zip(
+            _batched(list(prompts), batch_size),
+            _batched(list(target_labels), batch_size),
+        ):
+            if use_chat_template:
+                formatted_batch = [
+                    _format_real_prompt(
+                        prompt,
+                        tokenizer=tokenizer,
+                        use_chat_template=True,
+                    )
+                    for prompt in prompt_batch
+                ]
+            else:
+                formatted_batch = list(prompt_batch)
+
+            model_inputs = tokenizer(
+                formatted_batch,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
+            if target_device is not None:
+                model_inputs = model_inputs.to(target_device)
+
+            target_class_indices = torch.tensor(
+                [0 if label == "yes" else 1 for label in label_batch],
+                device=model_inputs["input_ids"].device,
+                dtype=torch.long,
+            )
+
+            with torch.inference_mode():
+                outputs = model(**model_inputs, use_cache=False)
+                decision_logits = outputs.logits[:, -1, [yes_token_id, no_token_id]]
+                batch_losses = F.cross_entropy(
+                    decision_logits,
+                    target_class_indices,
+                    reduction="none",
+                )
+                batch_predictions = torch.argmax(decision_logits, dim=-1)
+
+            predicted_labels.extend(
+                "yes" if prediction.item() == 0 else "no"
+                for prediction in batch_predictions
+            )
+            cross_entropy_losses.extend(float(loss.item()) for loss in batch_losses)
+
+            del model_inputs, target_class_indices, outputs, decision_logits
+            del batch_losses, batch_predictions
+            clear_cuda_cache()
+    finally:
+        tokenizer.padding_side = original_padding_side
+
+    mean_cross_entropy = sum(cross_entropy_losses) / len(cross_entropy_losses)
+    return {
+        "predicted_labels": predicted_labels,
+        "target_labels": list(target_labels),
+        "cross_entropy_losses": cross_entropy_losses,
+        "mean_cross_entropy": mean_cross_entropy,
+        "task_perplexity": float(torch.exp(torch.tensor(mean_cross_entropy)).item()),
+    }
+
+
 def _score_candidate_instruction(
     *,
     instruction_token_ids: Sequence[int],
@@ -723,7 +837,7 @@ def _score_candidate_instruction(
         instruction_prompt=instruction_prompt,
         binary_pairs=sampled_pairs,
     )
-    task_metrics = score_binary_prompts_with_ce_and_perplexity(
+    task_metrics = _score_binary_prompts_with_task_ce(
         prompts=prompts,
         target_labels=target_labels,
         model=model,
@@ -744,10 +858,17 @@ def _score_candidate_instruction(
         float(task_metrics["mean_cross_entropy"])
         + fluency_lambda * float(fluency_value)
     )
+
+    print(f"[scores] loss={float(task_metrics['mean_cross_entropy']):.3f}, fluency={float(fluency_value):.3f}, total_score={float(total_loss):.3f}")
+    prf = _build_prf_scores(
+        predicted_labels=task_metrics["predicted_labels"],
+        target_labels=task_metrics["target_labels"],
+    )
     return {
         "instruction_prompt": instruction_prompt,
         "mean_cross_entropy": float(task_metrics["mean_cross_entropy"]),
-        "task_perplexity": float(task_metrics["mean_perplexity"]),
+        "task_perplexity": float(task_metrics["task_perplexity"]),
+        "prf": prf,
         "fluency": fluency,
         "fluency_metric": fluency_metric,
         "fluency_lambda": fluency_lambda,
@@ -959,6 +1080,7 @@ def main() -> None:
             f"position={position}",
             f"token={tokenizer.decode([current_token])!r}",
         )
+        print(f"[Prompt to optimize] prompt = {current_instruction}")
         sampled_pairs, bucket_stats, baseline_prf = _sample_balanced_train_pairs_for_step(
             instruction_prompt=current_instruction,
             train_samples=train_samples,
@@ -996,6 +1118,12 @@ def main() -> None:
             best_selection_score = float(baseline_selection["combined_score"])
             best_instruction_ids = list(instruction_token_ids)
         pre_step_selection = dict(baseline_selection)
+        print(
+            "[relation_extraction_greater] balanced train before step:",
+            f"step={step_index}",
+            _format_prf_for_print(pre_step_selection["prf"]),
+            f"loss={pre_step_selection['combined_score']:.6f}",
+        )
 
         candidate_token_ids, proposal_metadata = _proposal_candidates_for_examples(
             instruction_token_ids=instruction_token_ids,
@@ -1007,6 +1135,14 @@ def main() -> None:
             min_candidates=args.proposal_min_candidates,
             allow_non_ascii=args.allow_non_ascii,
         )
+
+        current_tok = _decode_instruction(tokenizer, [instruction_token_ids[position]])
+        cands_toks = []
+        for tokid in candidate_token_ids:
+            new_tok = _decode_instruction(tokenizer, [tokid])
+            cands_toks.append(new_tok)
+        print(f"[Candidates tokens] current tok: '{current_tok}' , replacement: {cands_toks}")
+
         gradient = _candidate_one_hot_gradient(
             instruction_token_ids=instruction_token_ids,
             position=position,
@@ -1032,7 +1168,15 @@ def main() -> None:
         best_step_ids = list(instruction_token_ids)
         for candidate_id in selected_candidate_ids:
             trial_ids = list(instruction_token_ids)
+            current_tok = _decode_instruction(tokenizer, [trial_ids[position]])
+
             trial_ids[position] = int(candidate_id)
+            test_tok = _decode_instruction(tokenizer, [candidate_id])
+
+            trial_prompt = _decode_instruction(tokenizer, trial_ids)
+            print(f"[Token replacing] current tok: '{current_tok}' , replacement: {test_tok}")
+            print(f"[trailing prompt]: {trial_prompt}")
+
             score_payload = _score_candidate_instruction(
                 instruction_token_ids=trial_ids,
                 position=position,
@@ -1052,6 +1196,7 @@ def main() -> None:
                 "gradient": float(gradient[0, candidate_token_ids.index(int(candidate_id))].item()),
                 "mean_cross_entropy": score_payload["mean_cross_entropy"],
                 "task_perplexity": score_payload["task_perplexity"],
+                "prf": score_payload["prf"],
                 "fluency": score_payload["fluency"],
                 "fluency_loss_component": score_payload["fluency_loss_component"],
                 "total_loss": score_payload["total_loss"],
@@ -1085,11 +1230,21 @@ def main() -> None:
             if best_step_record["combined_score"] < best_selection_score:
                 best_selection_score = best_step_record["combined_score"]
                 best_instruction_ids = list(instruction_token_ids)
+        post_step_prf = baseline_selection["prf"]
+        print(
+            "[relation_extraction_greater] balanced train after step:",
+            f"step={step_index}",
+            _format_prf_for_print(post_step_prf),
+            f"loss={baseline_selection['combined_score']:.6f}",
+            f"accepted={accepted}",
+        )
 
         full_eval = None
-        if args.eval_every > 0 and (
+        if accepted and args.eval_every > 0 and (
             step_index % args.eval_every == 0 or step_index == args.n_steps
         ):
+            print(f"[new prompt updated!!!!!!]")
+            print(f"[Prompt to full eval] prompt = {_decode_instruction(tokenizer, instruction_token_ids)}")
             full_eval = _evaluate_full_split(
                 instruction_prompt=_decode_instruction(tokenizer, instruction_token_ids),
                 full_eval_pairs=full_eval_pairs,
@@ -1100,6 +1255,19 @@ def main() -> None:
                 log_every=args.log_every,
             )
             best_full_eval = full_eval
+            print(
+                "[relation_extraction_greater] dev evaluation:",
+                f"step={step_index}",
+                f"split={args.full_eval_split}",
+                _format_prf_for_print(full_eval["prf"]),
+            )
+        elif args.eval_every > 1:
+            print(
+                "[relation_extraction_greater] dev evaluation skipped:",
+                f"step={step_index}",
+                f"next_eval_every={args.eval_every}",
+                "set --eval-every 1 to print dev scores every iteration",
+            )
 
         step_payload = {
             "step": step_index,
@@ -1112,6 +1280,7 @@ def main() -> None:
             "step_baseline_selection": {
                 "mean_cross_entropy": pre_step_selection["mean_cross_entropy"],
                 "task_perplexity": pre_step_selection["task_perplexity"],
+                "prf": pre_step_selection["prf"],
                 "fluency": pre_step_selection["fluency"],
                 "fluency_loss_component": pre_step_selection["fluency_loss_component"],
                 "total_loss": pre_step_selection["total_loss"],
@@ -1132,6 +1301,7 @@ def main() -> None:
             "selected_token": best_step_record,
             "output_prompt": _decode_instruction(tokenizer, instruction_token_ids),
             "selection_score_after_step": baseline_selection["combined_score"],
+            "balanced_train_after_step_prf": post_step_prf,
             "full_evaluation": full_eval,
             "elapsed_seconds": time.monotonic() - step_start,
         }
