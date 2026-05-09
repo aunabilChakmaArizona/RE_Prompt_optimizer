@@ -39,7 +39,7 @@ from agents.agent_memory import clear_cuda_cache
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import INFERENCE_INSTRUCTION_PROMPT_V1
 from agents.agent_sample_feedback import sample_feedback_fn
-from agents.agent_utils import load_json_file
+from agents.agent_utils import load_json_file, stable_prf_score_or_neg_inf
 
 PROMPT_SOURCE_SCRATCH = "scratch"
 PROMPT_SOURCE_POPULATION = "population"
@@ -124,6 +124,22 @@ def _parse_args() -> argparse.Namespace:
         help="Number of gradient-ranked candidate tokens to forward-verify.",
     )
     parser.add_argument(
+        "--top-z",
+        type=int,
+        default=0,
+        help=(
+            "If >0, rank the train-validated top-u candidates by balanced-train "
+            "loss, fully evaluate the best top-z on the full eval split each "
+            "iteration, and update by dev stable F1 instead of train loss."
+        ),
+    )
+    parser.add_argument(
+        "--dev-f1-std-penalty",
+        type=float,
+        default=2.0,
+        help="Stable dev F1 penalty used by --top-z: f1 - penalty * f1_std.",
+    )
+    parser.add_argument(
         "--fluency-lambda",
         type=float,
         default=0.2,
@@ -198,6 +214,10 @@ def _format_prf_for_print(prf: Dict[str, float]) -> str:
         f"F1={float(prf.get('f1', 0.0)):.2f} +/- "
         f"{float(prf.get('f1_std', 0.0)):.2f}"
     )
+
+
+def _stable_dev_f1(prf: Dict[str, float], *, std_penalty: float = 2.0) -> float:
+    return stable_prf_score_or_neg_inf(prf, std_multiplier=std_penalty)
 
 
 def _resolve_initial_instruction_prompt(args: argparse.Namespace) -> Tuple[str, Dict[str, Any]]:
@@ -989,6 +1009,10 @@ def main() -> None:
         raise ValueError("--train-gradient-sample-size must be positive.")
     if args.fluency_lambda < 0:
         raise ValueError("--fluency-lambda must be non-negative.")
+    if args.top_z < 0:
+        raise ValueError("--top-z must be non-negative.")
+    if args.dev_f1_std_penalty < 0:
+        raise ValueError("--dev-f1-std-penalty must be non-negative.")
 
     start_time = time.monotonic()
     run_dir = _create_run_dir(args.output_root_dir, args.output_substring)
@@ -1069,9 +1093,32 @@ def main() -> None:
     best_instruction_ids = list(instruction_token_ids)
     best_selection_score = float("inf")
     best_full_eval: Dict[str, Any] | None = None
+    best_dev_stable_f1 = float("-inf")
+    if args.top_z > 0:
+        print("[relation_extraction_greater] initial dev evaluation for top-z retention")
+        initial_full_eval = _evaluate_full_split(
+            instruction_prompt=initial_instruction_prompt,
+            full_eval_pairs=full_eval_pairs,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=args.eval_batch_size,
+            use_chat_template=use_chat_template,
+            log_every=args.log_every,
+        )
+        best_full_eval = initial_full_eval
+        best_dev_stable_f1 = _stable_dev_f1(
+            initial_full_eval["prf"],
+            std_penalty=args.dev_f1_std_penalty,
+        )
+        print(
+            "[relation_extraction_greater] initial dev score:",
+            _format_prf_for_print(initial_full_eval["prf"]),
+            f"stable_f1={best_dev_stable_f1:.2f}",
+        )
 
     for step_index in range(1, args.n_steps + 1):
         step_start = time.monotonic()
+        pre_step_instruction_token_ids = list(instruction_token_ids)
         current_instruction = _decode_instruction(tokenizer, instruction_token_ids)
         current_token = int(instruction_token_ids[position])
         print(
@@ -1164,6 +1211,7 @@ def main() -> None:
             selected_candidate_ids.append(current_token)
 
         candidate_records: List[Dict[str, Any]] = []
+        candidate_variants: List[Dict[str, Any]] = []
         best_step_record: Dict[str, Any] | None = None
         best_step_ids = list(instruction_token_ids)
         for candidate_id in selected_candidate_ids:
@@ -1204,6 +1252,13 @@ def main() -> None:
                 "changed": int(candidate_id) != current_token,
             }
             candidate_records.append(record)
+            candidate_variants.append(
+                {
+                    "instruction_token_ids": trial_ids,
+                    "prompt": trial_prompt,
+                    "record": record,
+                }
+            )
             if best_step_record is None or record["combined_score"] < best_step_record["combined_score"]:
                 best_step_record = record
                 best_step_ids = trial_ids
@@ -1211,25 +1266,144 @@ def main() -> None:
         if best_step_record is None:
             raise RuntimeError("No candidate was scored.")
 
-        accepted = best_step_record["combined_score"] <= pre_step_selection["combined_score"]
-        if accepted:
-            instruction_token_ids = best_step_ids
-            baseline_selection = _score_candidate_instruction(
-                instruction_token_ids=instruction_token_ids,
-                position=position,
-                sampled_pairs=sampled_pairs,
-                proposal_header=proposal_header_for_scoring,
-                model=model,
-                tokenizer=tokenizer,
-                batch_size=args.selection_batch_size,
-                use_chat_template=use_chat_template,
-                fluency_lambda=args.fluency_lambda,
-                fluency_scope=args.fluency_scope,
-                fluency_metric=args.fluency_metric,
+        accepted = False
+        top_z_evaluations: List[Dict[str, Any]] = []
+        top_z_selected: Dict[str, Any] | None = None
+        if args.top_z > 0:
+            ranked_train_variants = sorted(
+                candidate_variants,
+                key=lambda item: (
+                    float(item["record"]["combined_score"]),
+                    0 if item["record"]["changed"] else -1,
+                    int(item["record"]["token_id"]),
+                ),
             )
-            if best_step_record["combined_score"] < best_selection_score:
-                best_selection_score = best_step_record["combined_score"]
-                best_instruction_ids = list(instruction_token_ids)
+            top_z_variants = ranked_train_variants[: min(args.top_z, len(ranked_train_variants))]
+            print(
+                "[relation_extraction_greater] top-z dev selection:",
+                f"step={step_index}",
+                f"top_u={len(candidate_variants)}",
+                f"top_z={len(top_z_variants)}",
+                f"std_penalty={args.dev_f1_std_penalty}",
+            )
+            for rank_index, variant in enumerate(top_z_variants, start=1):
+                print(
+                    "[relation_extraction_greater] top-z full eval candidate:",
+                    f"step={step_index}",
+                    f"rank={rank_index}",
+                    f"token={variant['record']['token_text']!r}",
+                    f"train_loss={variant['record']['combined_score']:.6f}",
+                )
+                full_candidate_eval = _evaluate_full_split(
+                    instruction_prompt=variant["prompt"],
+                    full_eval_pairs=full_eval_pairs,
+                    model=model,
+                    tokenizer=tokenizer,
+                    batch_size=args.eval_batch_size,
+                    use_chat_template=use_chat_template,
+                    log_every=args.log_every,
+                )
+                stable_f1 = _stable_dev_f1(
+                    full_candidate_eval["prf"],
+                    std_penalty=args.dev_f1_std_penalty,
+                )
+                eval_record = {
+                    "rank": rank_index,
+                    "token_id": variant["record"]["token_id"],
+                    "token_text": variant["record"]["token_text"],
+                    "changed": variant["record"]["changed"],
+                    "train_score": variant["record"],
+                    "prompt": variant["prompt"],
+                    "full_evaluation": full_candidate_eval,
+                    "stable_f1": stable_f1,
+                }
+                top_z_evaluations.append(eval_record)
+                print(
+                    "[relation_extraction_greater] top-z dev score:",
+                    f"step={step_index}",
+                    f"rank={rank_index}",
+                    _format_prf_for_print(full_candidate_eval["prf"]),
+                    f"stable_f1={stable_f1:.2f}",
+                )
+
+            if top_z_evaluations:
+                top_z_selected = max(
+                    top_z_evaluations,
+                    key=lambda item: (
+                        float(item["stable_f1"]),
+                        float(item["full_evaluation"]["prf"].get("f1", float("-inf"))),
+                        -float(item["full_evaluation"]["prf"].get("f1_std", 0.0) or 0.0),
+                        -float(item["train_score"]["combined_score"]),
+                    ),
+                )
+                best_step_record = top_z_selected["train_score"]
+                selected_variant = top_z_variants[top_z_selected["rank"] - 1]
+                candidate_improved = top_z_selected["stable_f1"] > best_dev_stable_f1
+                top_z_selected["improved_over_current_best"] = candidate_improved
+                top_z_selected["previous_best_dev_stable_f1"] = best_dev_stable_f1
+                print(
+                    "[relation_extraction_greater] top-z selected prompt:",
+                    f"step={step_index}",
+                    f"rank={top_z_selected['rank']}",
+                    f"token={top_z_selected['token_text']!r}",
+                    f"stable_f1={top_z_selected['stable_f1']:.2f}",
+                    f"previous_best_stable_f1={best_dev_stable_f1:.2f}",
+                    f"improved={candidate_improved}",
+                )
+                if candidate_improved:
+                    instruction_token_ids = list(selected_variant["instruction_token_ids"])
+                    best_step_ids = list(instruction_token_ids)
+                    accepted = True
+                    best_dev_stable_f1 = float(top_z_selected["stable_f1"])
+                    best_full_eval = top_z_selected["full_evaluation"]
+                    best_instruction_ids = list(instruction_token_ids)
+                    print(
+                        "[relation_extraction_greater] top-z prompt accepted for next iteration"
+                    )
+                    print(f"[Prompt selected by top-z dev] prompt = {_decode_instruction(tokenizer, instruction_token_ids)}")
+                    baseline_selection = _score_candidate_instruction(
+                        instruction_token_ids=instruction_token_ids,
+                        position=position,
+                        sampled_pairs=sampled_pairs,
+                        proposal_header=proposal_header_for_scoring,
+                        model=model,
+                        tokenizer=tokenizer,
+                        batch_size=args.selection_batch_size,
+                        use_chat_template=use_chat_template,
+                        fluency_lambda=args.fluency_lambda,
+                        fluency_scope=args.fluency_scope,
+                        fluency_metric=args.fluency_metric,
+                    )
+                    if best_step_record["combined_score"] < best_selection_score:
+                        best_selection_score = best_step_record["combined_score"]
+                else:
+                    instruction_token_ids = pre_step_instruction_token_ids
+                    baseline_selection = pre_step_selection
+                    accepted = False
+                    print(
+                        "[relation_extraction_greater] top-z prompt rejected; "
+                        "retaining current best prompt for next iteration"
+                    )
+        else:
+            accepted = best_step_record["combined_score"] <= pre_step_selection["combined_score"]
+            if accepted:
+                instruction_token_ids = best_step_ids
+                baseline_selection = _score_candidate_instruction(
+                    instruction_token_ids=instruction_token_ids,
+                    position=position,
+                    sampled_pairs=sampled_pairs,
+                    proposal_header=proposal_header_for_scoring,
+                    model=model,
+                    tokenizer=tokenizer,
+                    batch_size=args.selection_batch_size,
+                    use_chat_template=use_chat_template,
+                    fluency_lambda=args.fluency_lambda,
+                    fluency_scope=args.fluency_scope,
+                    fluency_metric=args.fluency_metric,
+                )
+                if best_step_record["combined_score"] < best_selection_score:
+                    best_selection_score = best_step_record["combined_score"]
+                    best_instruction_ids = list(instruction_token_ids)
         post_step_prf = baseline_selection["prf"]
         print(
             "[relation_extraction_greater] balanced train after step:",
@@ -1240,7 +1414,9 @@ def main() -> None:
         )
 
         full_eval = None
-        if accepted and args.eval_every > 0 and (
+        if top_z_selected is not None:
+            full_eval = top_z_selected["full_evaluation"]
+        elif accepted and args.eval_every > 0 and (
             step_index % args.eval_every == 0 or step_index == args.n_steps
         ):
             print(f"[new prompt updated!!!!!!]")
@@ -1254,12 +1430,20 @@ def main() -> None:
                 use_chat_template=use_chat_template,
                 log_every=args.log_every,
             )
-            best_full_eval = full_eval
+            full_eval_stable_f1 = _stable_dev_f1(
+                full_eval["prf"],
+                std_penalty=args.dev_f1_std_penalty,
+            )
+            if full_eval_stable_f1 > best_dev_stable_f1:
+                best_dev_stable_f1 = full_eval_stable_f1
+                best_full_eval = full_eval
+                best_instruction_ids = list(instruction_token_ids)
             print(
                 "[relation_extraction_greater] dev evaluation:",
                 f"step={step_index}",
                 f"split={args.full_eval_split}",
                 _format_prf_for_print(full_eval["prf"]),
+                f"stable_f1={full_eval_stable_f1:.2f}",
             )
         elif args.eval_every > 1:
             print(
@@ -1297,6 +1481,8 @@ def main() -> None:
             ],
             "selected_candidate_ids": [int(token_id) for token_id in selected_candidate_ids],
             "candidate_scores": candidate_records,
+            "top_z_evaluations": top_z_evaluations,
+            "top_z_selected": top_z_selected,
             "accepted": accepted,
             "selected_token": best_step_record,
             "output_prompt": _decode_instruction(tokenizer, instruction_token_ids),
@@ -1331,6 +1517,8 @@ def main() -> None:
         "final_prompt": final_prompt,
         "best_selection_prompt": best_prompt,
         "best_selection_score": best_selection_score,
+        "best_dev_stable_f1": best_dev_stable_f1,
+        "dev_f1_std_penalty": args.dev_f1_std_penalty,
         "last_full_evaluation": best_full_eval,
         "bucket_stats": bucket_stats,
         "baseline_prf": baseline_prf,
