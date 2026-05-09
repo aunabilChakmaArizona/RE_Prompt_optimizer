@@ -815,6 +815,33 @@ def _token_gradient_score_by_index(gradient_results: Dict[str, Any]) -> Dict[int
     return scores
 
 
+def _trim_region_to_alphanumeric_edges(
+    *,
+    instruction_prompt: str,
+    start_char: int,
+    end_char: int,
+) -> Dict[str, Any] | None:
+    """Trim punctuation/space edges while leaving the surrounding prompt intact."""
+    trimmed_start = start_char
+    trimmed_end = end_char
+    while trimmed_start < trimmed_end and not instruction_prompt[trimmed_start].isalnum():
+        trimmed_start += 1
+    while trimmed_end > trimmed_start and not instruction_prompt[trimmed_end - 1].isalnum():
+        trimmed_end -= 1
+    if trimmed_start >= trimmed_end:
+        return None
+    trimmed_text = instruction_prompt[trimmed_start:trimmed_end]
+    if not _has_alphanumeric(trimmed_text):
+        return None
+    return {
+        "start_char": trimmed_start,
+        "end_char": trimmed_end,
+        "region_text": trimmed_text,
+        "trimmed_left_chars": instruction_prompt[start_char:trimmed_start],
+        "trimmed_right_chars": instruction_prompt[trimmed_end:end_char],
+    }
+
+
 def _resolve_region_details(
     *,
     instruction_prompt: str,
@@ -849,8 +876,15 @@ def _resolve_region_details(
         for token_group in editable_groups:
             start_token = token_group[0]
             end_token = token_group[-1]
-            start_char = int(offsets[start_token][0])
-            end_char = int(offsets[end_token][1])
+            original_start_char = int(offsets[start_token][0])
+            original_end_char = int(offsets[end_token][1])
+            trimmed_region = _trim_region_to_alphanumeric_edges(
+                instruction_prompt=instruction_prompt,
+                start_char=original_start_char,
+                end_char=original_end_char,
+            )
+            if trimmed_region is None:
+                continue
             kept_gradient_scores = [
                 gradient_scores_by_token.get(token_index, 0.0)
                 for token_index in token_group
@@ -860,9 +894,17 @@ def _resolve_region_details(
                     "source_region_rank": source_region_rank,
                     "start_token": start_token,
                     "end_token": end_token,
-                    "start_char": start_char,
-                    "end_char": end_char,
-                    "region_text": instruction_prompt[start_char:end_char],
+                    "original_start_char": original_start_char,
+                    "original_end_char": original_end_char,
+                    "original_region_text": instruction_prompt[
+                        original_start_char:original_end_char
+                    ],
+                    "start_char": trimmed_region["start_char"],
+                    "end_char": trimmed_region["end_char"],
+                    "region_text": trimmed_region["region_text"],
+                    "region_position_mode": "character",
+                    "trimmed_left_chars": trimmed_region["trimmed_left_chars"],
+                    "trimmed_right_chars": trimmed_region["trimmed_right_chars"],
                     "region_score": max(kept_gradient_scores) if kept_gradient_scores else 0.0,
                     "region_score_method": "max_kept_token_gradient_norm",
                     "source_region_score": region["score"],
@@ -975,6 +1017,10 @@ def _build_region_candidate_meta_prompt(
     )
     prompt = prompt.replace("#NUM_CANDIDATES#", str(num_region_candidates))
     prompt = prompt.replace("#NUM_REGIONS#", str(region_details["num_edit_regions"]))
+    prompt += (
+        "\n\nJSON formatting requirement: use valid JSON only, with ASCII double quotes "
+        '(") for every key and string delimiter. Do not use curly quotes as JSON delimiters.'
+    )
     return prompt
 
 
@@ -1369,6 +1415,86 @@ def _extract_region_candidate_values(
         return []
 
     return list(candidate_values)
+
+
+def _extract_quoted_candidate_items(array_text: str) -> List[str]:
+    quote_chars = {'"', "\u201c", "\u201d"}
+    line_candidates: List[str] = []
+    for line in array_text.splitlines():
+        item = line.strip()
+        if not item:
+            continue
+        if item.endswith(","):
+            item = item[:-1].rstrip()
+        while item and item[0] in quote_chars:
+            item = item[1:].lstrip()
+        while item and item[-1] in quote_chars:
+            item = item[:-1].rstrip()
+        if item:
+            line_candidates.append(item)
+    if line_candidates:
+        return line_candidates
+
+    candidates: List[str] = []
+    index = 0
+    while index < len(array_text):
+        while index < len(array_text) and array_text[index] in " \t\r\n,":
+            index += 1
+        if index >= len(array_text):
+            break
+
+        quote_char = array_text[index]
+        if quote_char not in {'"', "\u201c", "\u201d"}:
+            next_comma = array_text.find(",", index)
+            if next_comma < 0:
+                break
+            index = next_comma + 1
+            continue
+
+        closing_quote = '"' if quote_char == '"' else "\u201d"
+        index += 1
+        chars: List[str] = []
+        escaped = False
+        while index < len(array_text):
+            char = array_text[index]
+            if escaped:
+                chars.append(char)
+                escaped = False
+                index += 1
+                continue
+            if char == "\\":
+                escaped = True
+                index += 1
+                continue
+            if char == closing_quote:
+                index += 1
+                break
+            chars.append(char)
+            index += 1
+        candidates.append("".join(chars))
+
+        while index < len(array_text) and array_text[index] not in ",":
+            if array_text[index] not in " \t\r\n":
+                break
+            index += 1
+        if index < len(array_text) and array_text[index] == ",":
+            index += 1
+    return candidates
+
+
+def _extract_region_candidate_values_from_raw_output(
+    *,
+    raw_output: str,
+    region_rank: int,
+) -> List[str]:
+    span_pattern = re.compile(
+        rf'"span_{region_rank}"\s*:\s*\{{.*?"candidates"\s*:\s*\[(.*?)\]',
+        flags=re.DOTALL,
+    )
+    match = span_pattern.search(raw_output)
+    if not match:
+        return []
+    return _extract_quoted_candidate_items(match.group(1))
 
 
 def _strip_region_markup(text: str) -> str:
@@ -2252,6 +2378,7 @@ def _generate_region_candidates(
         parsed_output = {}
     if not isinstance(parsed_output, dict):
         parsed_output = {}
+    used_raw_candidate_fallback = False
 
     json_length = None
     if parsed_output:
@@ -2267,6 +2394,13 @@ def _generate_region_candidates(
             parsed_output=parsed_output,
             region_rank=int(region["region_rank"]),
         )
+        if not ordered_candidates:
+            ordered_candidates = _extract_region_candidate_values_from_raw_output(
+                raw_output=raw_output,
+                region_rank=int(region["region_rank"]),
+            )
+            if ordered_candidates:
+                used_raw_candidate_fallback = True
         candidates: List[str] = []
         seen: set[str] = set()
         for candidate_text in ordered_candidates:
@@ -2294,12 +2428,18 @@ def _generate_region_candidates(
             f"region_rank={region['region_rank']}",
             f"candidates={json.dumps(candidates, ensure_ascii=False)}",
         )
+    if used_raw_candidate_fallback:
+        print(
+            "[agent_gradient_eval_debug] used raw candidate fallback parser "
+            "for malformed all-region JSON"
+        )
 
     return {
         "meta_prompt": meta_prompt,
         "raw_output": raw_output,
         "parsed_output": parsed_output,
         "selected_json_length": json_length,
+        "used_raw_candidate_fallback": used_raw_candidate_fallback,
         "region_candidates": region_candidates,
     }
 
