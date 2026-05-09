@@ -1017,10 +1017,10 @@ def _build_region_candidate_meta_prompt(
     )
     prompt = prompt.replace("#NUM_CANDIDATES#", str(num_region_candidates))
     prompt = prompt.replace("#NUM_REGIONS#", str(region_details["num_edit_regions"]))
-    prompt += (
-        "\n\nJSON formatting requirement: use valid JSON only, with ASCII double quotes "
-        '(") for every key and string delimiter. Do not use curly quotes as JSON delimiters.'
-    )
+    # prompt += (
+    #     "\n\nJSON formatting requirement: use valid JSON only, with ASCII double quotes "
+    #     '(") for every key and string delimiter. Do not use curly quotes as JSON delimiters.'
+    # )
     return prompt
 
 
@@ -2007,6 +2007,33 @@ def _select_best_variant(
             -float(variant.get("selection_metrics", {}).get("mean_cross_entropy", float("inf"))),
             -float(variant.get("selection_metrics", {}).get("mean_perplexity", float("inf"))),
         ),
+    )
+
+
+def _variant_beats_baseline_validation(
+    *,
+    selected_variant: Dict[str, Any] | None,
+    baseline_prf: Dict[str, float],
+    f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+) -> bool:
+    if selected_variant is None:
+        return False
+    validation = selected_variant.get("validation")
+    if not validation:
+        return False
+    variant_prf = validation.get("prf")
+    variant_stable_f1 = stable_prf_score_or_neg_inf(
+        variant_prf,
+        std_multiplier=f1_std_penalty,
+    )
+    baseline_stable_f1 = stable_prf_score_or_neg_inf(
+        baseline_prf,
+        std_multiplier=f1_std_penalty,
+    )
+    if variant_stable_f1 != baseline_stable_f1:
+        return variant_stable_f1 > baseline_stable_f1
+    return float((variant_prf or {}).get("f1", float("-inf"))) > float(
+        baseline_prf.get("f1", float("-inf"))
     )
 
 
@@ -3510,6 +3537,27 @@ def _run_candidate_suggestion_iteration(
         prompt_editing_payload=prompt_editing_payload,
         f1_std_penalty=args.selection_f1_std_penalty,
     )
+    selected_variant_beats_input = _variant_beats_baseline_validation(
+        selected_variant=selected_variant,
+        baseline_prf=baseline_prf,
+        f1_std_penalty=args.selection_f1_std_penalty,
+    )
+    if selected_variant is not None and not selected_variant_beats_input:
+        validation_prf = (selected_variant.get("validation") or {}).get("prf") or {}
+        print(
+            "[agent_gradient_eval_debug] retaining input prompt:",
+            f"iteration={iteration_index}",
+            "reason=no_generated_prompt_beats_input",
+            (
+                "candidate_stable_f1="
+                f"{stable_prf_score_or_neg_inf(validation_prf, std_multiplier=args.selection_f1_std_penalty):.2f}"
+            ),
+            (
+                "input_stable_f1="
+                f"{stable_prf_score_or_neg_inf(baseline_prf, std_multiplier=args.selection_f1_std_penalty):.2f}"
+            ),
+        )
+        selected_variant = None
     selected_prompt = _build_selected_prompt_summary(
         iteration_index=iteration_index,
         input_prompt=instruction_prompt,
