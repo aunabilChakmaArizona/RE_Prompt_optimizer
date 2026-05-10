@@ -247,6 +247,7 @@ def build_training_functions(
         *,
         mutation_prompt_override: str | None = None,
         mutation_prompt_key_override: str | None = None,
+        enable_thinking: bool = True,
     ):
         return _mutate_prompt_fn(
             node,
@@ -260,6 +261,7 @@ def build_training_functions(
             prompt_close_tag=args.prompt_close_tag,
             mutation_prompt_override=mutation_prompt_override,
             mutation_prompt_key_override=mutation_prompt_key_override,
+            enable_thinking=enable_thinking,
         )
 
     def evaluate(
@@ -273,15 +275,21 @@ def build_training_functions(
         eval_id = eval_id_override if eval_id_override is not None else (
             node.node_id if node.node_id is not None else 0
         )
-        if split == "validation":
+        if isinstance(split, dict):
+            episodes = split["episodes"]
+            shots = split
+            split_name = str(split.get("split", "custom"))
+        elif split == "validation":
             episodes = dev_data["episodes"]
             shots = dev_data
+            split_name = split
         else:
             episodes = test_data["episodes"]
             shots = test_data
+            split_name = split
         return _evaluate_fn(
             node,
-            split,
+            split_name,
             dataset_type=args.dataset_type,
             model=model,
             tokenizer=tokenizer,
@@ -369,6 +377,7 @@ def build_switching_training_functions(
         *,
         mutation_prompt_override: str | None = None,
         mutation_prompt_key_override: str | None = None,
+        enable_thinking: bool = True,
     ):
         model, tokenizer = switcher.ensure(RoleModelSwitcher.OPTIMIZER_ROLE)
         try:
@@ -384,6 +393,7 @@ def build_switching_training_functions(
                 prompt_close_tag=args.prompt_close_tag,
                 mutation_prompt_override=mutation_prompt_override,
                 mutation_prompt_key_override=mutation_prompt_key_override,
+                enable_thinking=enable_thinking,
             )
         finally:
             clear_model_memory()
@@ -401,16 +411,22 @@ def build_switching_training_functions(
         eval_id = eval_id_override if eval_id_override is not None else (
             node.node_id if node.node_id is not None else 0
         )
-        if split == "validation":
+        if isinstance(split, dict):
+            episodes = split["episodes"]
+            shots = split
+            split_name = str(split.get("split", "custom"))
+        elif split == "validation":
             episodes = dev_data["episodes"]
             shots = dev_data
+            split_name = split
         else:
             episodes = test_data["episodes"]
             shots = test_data
+            split_name = split
         try:
             return _evaluate_fn(
                 node,
-                split,
+                split_name,
                 dataset_type=args.dataset_type,
                 model=model,
                 tokenizer=tokenizer,

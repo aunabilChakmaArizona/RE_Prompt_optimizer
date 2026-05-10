@@ -105,6 +105,7 @@ def mutate_prompt_fn(
     prompt_close_tag: str = "</p>",
     mutation_prompt_override: Optional[str] = None,
     mutation_prompt_key_override: Optional[str] = None,
+    enable_thinking: bool = True,
 ) -> Optional[Tuple[str, str, str, str, str, str]]:
     base_prompt = mutation_prompt_override or node.mutation_prompt
 
@@ -154,6 +155,7 @@ def mutate_prompt_fn(
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
             do_sample=do_sample,
+            enable_thinking=enable_thinking,
             log_label="re_mutation",
         )
         tag_pattern = rf"{re.escape(prompt_open_tag)}(.*?){re.escape(prompt_close_tag)}"

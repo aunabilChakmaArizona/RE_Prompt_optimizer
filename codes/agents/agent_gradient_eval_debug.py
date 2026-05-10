@@ -494,17 +494,50 @@ def _build_episode_prf_scores(
 
 
 def _extract_prf_from_prompt_info(prompt_info: Dict[str, Any]) -> Dict[str, float] | None:
+    score_sources: List[Any] = []
     node_summary = prompt_info.get("node_summary")
-    if not isinstance(node_summary, dict):
-        return None
-    val_score = node_summary.get("val_score")
+    if isinstance(node_summary, dict):
+        score_sources.append(node_summary.get("val_score"))
+    candidate_metadata = prompt_info.get("candidate_metadata")
+    if isinstance(candidate_metadata, dict):
+        score_sources.extend(
+            [
+                candidate_metadata.get("val_score"),
+                candidate_metadata.get("dev_prf"),
+                (candidate_metadata.get("full_evaluation") or {}).get("prf")
+                if isinstance(candidate_metadata.get("full_evaluation"), dict)
+                else None,
+            ]
+        )
+    score_sources.extend(
+        [
+            prompt_info.get("dev_prf"),
+            (prompt_info.get("full_evaluation") or {}).get("prf")
+            if isinstance(prompt_info.get("full_evaluation"), dict)
+            else None,
+        ]
+    )
+    val_score = next((item for item in score_sources if isinstance(item, dict)), None)
     if not isinstance(val_score, dict):
         return None
-    return {
-        "precision": float(val_score.get("precision_mean", 0.0) * 100.0),
-        "recall": float(val_score.get("recall_mean", 0.0) * 100.0),
-        "f1": float(val_score.get("f1_mean", 0.0) * 100.0),
+
+    def _score_value(*keys: str) -> float:
+        for key in keys:
+            if key in val_score and val_score.get(key) is not None:
+                return float(val_score[key])
+        return 0.0
+
+    prf = {
+        "precision": _score_value("precision", "precision_mean"),
+        "precision_std": _score_value("precision_std"),
+        "recall": _score_value("recall", "recall_mean"),
+        "recall_std": _score_value("recall_std"),
+        "f1": _score_value("f1", "f1_mean"),
+        "f1_std": _score_value("f1_std"),
     }
+    if max(prf["precision"], prf["recall"], prf["f1"]) <= 1.0:
+        prf = {key: value * 100.0 for key, value in prf.items()}
+    return prf
 
 
 def _format_prf_for_log(prf: Dict[str, float]) -> str:
@@ -2010,18 +2043,21 @@ def _select_best_variant(
     )
 
 
-def _variant_beats_baseline_validation(
+def _variant_beats_baseline_full_evaluation(
     *,
     selected_variant: Dict[str, Any] | None,
-    baseline_prf: Dict[str, float],
+    baseline_full_evaluation: Dict[str, Any] | None,
     f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
 ) -> bool:
     if selected_variant is None:
         return False
-    validation = selected_variant.get("validation")
-    if not validation:
+    baseline_prf = (baseline_full_evaluation or {}).get("prf")
+    if not baseline_prf:
         return False
-    variant_prf = validation.get("prf")
+    full_evaluation = selected_variant.get("full_evaluation")
+    if not full_evaluation:
+        return False
+    variant_prf = full_evaluation.get("prf")
     variant_stable_f1 = stable_prf_score_or_neg_inf(
         variant_prf,
         std_multiplier=f1_std_penalty,
@@ -2042,6 +2078,8 @@ def _build_selected_prompt_summary(
     iteration_index: int,
     input_prompt: str,
     selected_variant: Dict[str, Any] | None,
+    baseline_prf: Dict[str, float] | None = None,
+    baseline_full_evaluation: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     if selected_variant is None:
         return {
@@ -2053,8 +2091,8 @@ def _build_selected_prompt_summary(
             "beam_index": None,
             "selection_metrics": None,
             "bucket_scores": None,
-            "balanced_train_prf": None,
-            "dev_prf": None,
+            "balanced_train_prf": copy.deepcopy(baseline_prf),
+            "dev_prf": copy.deepcopy((baseline_full_evaluation or {}).get("prf")),
         }
 
     validation = selected_variant.get("validation")
@@ -2102,6 +2140,9 @@ def _build_iteration_summary(
             "prompt": iteration_result["input_prompt"],
             "bucket_scores": copy.deepcopy(iteration_result["baseline_confusion_matrix"]),
             "balanced_train_prf": copy.deepcopy(iteration_result["baseline_prf"]),
+            "dev_prf": copy.deepcopy(
+                (iteration_result.get("baseline_full_evaluation") or {}).get("prf")
+            ),
         },
         "sampling_summary": copy.deepcopy(iteration_result["sampling_summary"]),
         "train_gradient_collection": copy.deepcopy(iteration_result["train_gradient_collection"]),
@@ -2923,6 +2964,51 @@ def _evaluate_prompt_variant(
     }
 
 
+def _evaluate_prompt_full_evaluation(
+    *,
+    instruction_prompt: str,
+    full_eval_pairs: Sequence[Dict[str, Any]],
+    full_eval_split: str,
+    model,
+    tokenizer,
+    validation_batch_size: int,
+    use_chat_template: bool,
+    f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+    log_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    full_eval_start = time.perf_counter()
+    full_variant_prompts, full_variant_targets = _build_binary_prompts_for_instruction(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=full_eval_pairs,
+    )
+    full_variant_score_payload = _predict_binary_prompts(
+        prompts=full_variant_prompts,
+        target_labels=full_variant_targets,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=validation_batch_size,
+        use_chat_template=use_chat_template,
+    )
+    full_evaluation = _build_evaluation_report(
+        score_payload=full_variant_score_payload,
+        binary_pairs=full_eval_pairs,
+        prf_mode="episode",
+    )
+    full_eval_elapsed = time.perf_counter() - full_eval_start
+    context_text = _format_log_context(log_context)
+    context_prefix = f"{context_text} " if context_text else ""
+    print(
+        f"[agent_gradient_eval_debug] prompt full evaluation: {context_prefix}"
+        f"split={full_eval_split} done in {full_eval_elapsed:.2f}s, "
+        f"{_format_prf_for_log(full_evaluation['prf'])}"
+    )
+    print(
+        "[agent_gradient_eval_debug] prompt full evaluation:",
+        f"{context_prefix}{_format_stable_f1_for_log(full_evaluation['prf'], f1_std_penalty=f1_std_penalty)}",
+    )
+    return full_evaluation
+
+
 def _save_prompt_eval_outputs(
     *,
     eval_outputs_dir: Path,
@@ -3346,6 +3432,7 @@ def _run_candidate_suggestion_iteration(
     args: argparse.Namespace,
     iteration_index: int,
     instruction_prompt: str,
+    input_full_evaluation: Dict[str, Any] | None,
     train_samples: Dict[str, Any],
     train_sample_index: Dict[str, dict],
     full_eval_pairs: Sequence[Dict[str, Any]],
@@ -3533,28 +3620,58 @@ def _run_candidate_suggestion_iteration(
             tokenizer=tokenizer,
         )
 
+    baseline_full_evaluation = copy.deepcopy(input_full_evaluation)
+    for variant in prompt_editing_payload.get("generated_prompt_variants", []):
+        if baseline_full_evaluation is not None:
+            break
+        if variant.get("revised_prompt") != instruction_prompt:
+            continue
+        full_evaluation = variant.get("full_evaluation")
+        if full_evaluation:
+            baseline_full_evaluation = copy.deepcopy(full_evaluation)
+            print(
+                "[agent_gradient_eval_debug] input prompt full evaluation reused:",
+                f"iteration={iteration_index}",
+            )
+            break
+    if baseline_full_evaluation is None:
+        baseline_full_evaluation = _evaluate_prompt_full_evaluation(
+            instruction_prompt=instruction_prompt,
+            full_eval_pairs=full_eval_pairs,
+            full_eval_split=args.full_eval_split,
+            model=model,
+            tokenizer=tokenizer,
+            validation_batch_size=args.validation_batch_size,
+            use_chat_template=not args.disable_chat_template,
+            f1_std_penalty=args.selection_f1_std_penalty,
+            log_context={
+                "generation_index": "input",
+                "beam_index": "input",
+            },
+        )
     selected_variant = _select_best_variant(
         prompt_editing_payload=prompt_editing_payload,
         f1_std_penalty=args.selection_f1_std_penalty,
     )
-    selected_variant_beats_input = _variant_beats_baseline_validation(
+    selected_variant_beats_input = _variant_beats_baseline_full_evaluation(
         selected_variant=selected_variant,
-        baseline_prf=baseline_prf,
+        baseline_full_evaluation=baseline_full_evaluation,
         f1_std_penalty=args.selection_f1_std_penalty,
     )
     if selected_variant is not None and not selected_variant_beats_input:
-        validation_prf = (selected_variant.get("validation") or {}).get("prf") or {}
+        candidate_full_prf = (selected_variant.get("full_evaluation") or {}).get("prf") or {}
+        input_full_prf = baseline_full_evaluation.get("prf") or {}
         print(
             "[agent_gradient_eval_debug] retaining input prompt:",
             f"iteration={iteration_index}",
-            "reason=no_generated_prompt_beats_input",
+            "reason=no_generated_prompt_beats_input_on_full_eval",
             (
                 "candidate_stable_f1="
-                f"{stable_prf_score_or_neg_inf(validation_prf, std_multiplier=args.selection_f1_std_penalty):.2f}"
+                f"{stable_prf_score_or_neg_inf(candidate_full_prf, std_multiplier=args.selection_f1_std_penalty):.2f}"
             ),
             (
                 "input_stable_f1="
-                f"{stable_prf_score_or_neg_inf(baseline_prf, std_multiplier=args.selection_f1_std_penalty):.2f}"
+                f"{stable_prf_score_or_neg_inf(input_full_prf, std_multiplier=args.selection_f1_std_penalty):.2f}"
             ),
         )
         selected_variant = None
@@ -3562,8 +3679,15 @@ def _run_candidate_suggestion_iteration(
         iteration_index=iteration_index,
         input_prompt=instruction_prompt,
         selected_variant=selected_variant,
+        baseline_prf=baseline_prf,
+        baseline_full_evaluation=baseline_full_evaluation,
     )
     next_prompt = selected_prompt["prompt"]
+    next_full_evaluation = (
+        copy.deepcopy(selected_variant.get("full_evaluation"))
+        if selected_variant is not None
+        else copy.deepcopy(baseline_full_evaluation)
+    )
     print(
         "[agent_gradient_eval_debug] selected prompt for next iteration:",
         f"iteration={iteration_index}",
@@ -3609,6 +3733,7 @@ def _run_candidate_suggestion_iteration(
         "gradient_analysis": gradient_results,
         "train_gradient_collection": train_gradient_collection,
         "baseline_prf": baseline_prf,
+        "baseline_full_evaluation": baseline_full_evaluation,
         "baseline_confusion_matrix": baseline_confusion_matrix,
         "baseline_validation": baseline_validation,
         "sampling_summary": sampling_summary,
@@ -3617,6 +3742,7 @@ def _run_candidate_suggestion_iteration(
         "prompt_editing_payload": prompt_editing_payload,
         "selected_prompt": selected_prompt,
         "next_prompt": next_prompt,
+        "next_full_evaluation": next_full_evaluation,
     }
 
 
@@ -3691,6 +3817,30 @@ def main() -> None:
         query_index=args.query_index,
     )
     original_dev_prf = _extract_prf_from_prompt_info(prompt_info)
+    current_full_evaluation = (
+        {"prf": copy.deepcopy(original_dev_prf)}
+        if original_dev_prf is not None
+        else None
+    )
+    if current_full_evaluation is None and args.mode in {
+        MODE_LLM_CANDIDATE_SUGGESTION,
+        MODE_LM_PROBABILITY_CANDIDATE_SUGGESTION,
+    }:
+        current_full_evaluation = _evaluate_prompt_full_evaluation(
+            instruction_prompt=instruction_prompt,
+            full_eval_pairs=full_eval_pairs,
+            full_eval_split=args.full_eval_split,
+            model=model,
+            tokenizer=tokenizer,
+            validation_batch_size=args.validation_batch_size,
+            use_chat_template=not args.disable_chat_template,
+            f1_std_penalty=args.selection_f1_std_penalty,
+            log_context={
+                "generation_index": "initial",
+                "beam_index": "initial",
+            },
+        )
+        original_dev_prf = copy.deepcopy(current_full_evaluation.get("prf"))
 
     iteration_results: List[Dict[str, Any]] = []
     sampled_examples: List[Dict[str, Any]] = []
@@ -3874,6 +4024,7 @@ def main() -> None:
                 args=args,
                 iteration_index=iteration_index,
                 instruction_prompt=current_prompt,
+                input_full_evaluation=current_full_evaluation,
                 train_samples=train_samples,
                 train_sample_index=train_sample_index,
                 full_eval_pairs=full_eval_pairs,
@@ -3882,6 +4033,7 @@ def main() -> None:
             )
             iteration_results.append(iteration_result)
             current_prompt = iteration_result["next_prompt"]
+            current_full_evaluation = iteration_result.get("next_full_evaluation")
 
         final_iteration_result = iteration_results[-1]
         initial_iteration_result = iteration_results[0]

@@ -4,7 +4,8 @@ import argparse
 import os
 import random
 import time
-from typing import Iterable, List, Optional
+from collections import defaultdict
+from typing import Any, Iterable, List, Optional
 
 from agents.agent_feedback_samples import FeedbackSamples
 from agents.agent_graph_node import GraphNode
@@ -23,12 +24,14 @@ from agents.agent_train_io import (
     restore_logging,
     save_population,
     save_resume_state,
+    save_json,
     save_summary,
     setup_logging,
     write_args,
 )
 from agents.agent_train_pipeline import build_root_node, load_model_and_data
-from agents.agent_utils import stable_node_score_or_neg_inf
+from agents.agent_scorer import NO_RELATION
+from agents.agent_utils import stable_f1_score_or_neg_inf
 
 
 EVOPROMPT_DE_TEMPLATE_RE = """Please follow the instruction step-by-step to generate a better prompt.
@@ -89,6 +92,12 @@ def parse_args() -> argparse.Namespace:
             "best prompt; if true, prompt3 is sampled randomly from the population."
         ),
     )
+    parser.add_argument(
+        "--evoprompt-train-episodes-per-iteration",
+        type=int,
+        default=1000,
+        help="Number of train-sampled episodes used as the per-iteration fitness set.",
+    )
     return parser.parse_args()
 
 
@@ -119,25 +128,25 @@ def _initial_prompt_variants(
     variants = [
         ("original", base_prompt),
         (
-            "codex_small",
+            "human1_simplest",
             _clean_prompt(
-                """Decide whether the given relation holds between the tagged Subject and Object entities in the query sentence. Use the relation description and the support sentence only to understand the intended relation type. Answer "yes" if the relation holds in the query; otherwise answer "no"."""
+                """Decide whether the given relation holds between the tagged Subject and Object entities in the query sentence. The support sentence is an example of the relation. Answer "yes" if the relation holds in the query; otherwise answer "no"."""
             ),
         ),
         (
-            "codex_large",
+            "chatgpt_large",
             _clean_prompt(
                 """You are given a relation name, its description, a support sentence that exemplifies the relation, and a query sentence. Determine whether the query sentence expresses that exact relation between the tagged Subject and Object entities. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the evidence is explicit or strongly implied. Treat the support sentence as an example of the relation, not as evidence about the query. If the relation holds in the query sentence, answer "yes"; otherwise answer "no"."""
             ),
         ),
         (
-            "codex_easy",
+            "chatgpt_easy",
             _clean_prompt(
                 """Read the relation description, then read the query sentence. The Subject and Object are already marked with tags. Decide if the query says that this relation is true for that Subject and Object. The support sentence is only an example to help you understand the relation. Answer only "yes" or "no"."""
             ),
         ),
         (
-            "codex_complex",
+            "chatgpt_complex",
             _clean_prompt(
                 """Perform binary relation verification for the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, that the Object has the required type or value for the relation, and that the query sentence itself supplies sufficient explicit or contextually implied evidence. Ignore distracting entities and do not transfer facts from the support sentence beyond its illustration of the relation schema. Output "yes" exactly when the relation holds; otherwise output "no"."""
             ),
@@ -180,19 +189,24 @@ def _make_prompt_node(
     return node
 
 
-def _score(node: GraphNode, std_penalty: float) -> float:
-    return stable_node_score_or_neg_inf(node, std_multiplier=std_penalty)
+def _score_attr(node: GraphNode, attr_name: str, std_penalty: float) -> float:
+    return stable_f1_score_or_neg_inf(
+        getattr(node, attr_name, None),
+        std_multiplier=std_penalty,
+    )
 
 
-def _f1_mean(node: GraphNode) -> float:
-    if isinstance(node.val_score, dict) and node.val_score.get("f1_mean") is not None:
-        return float(node.val_score["f1_mean"])
+def _metric_mean_attr(node: GraphNode, attr_name: str) -> float:
+    score = getattr(node, attr_name, None)
+    if isinstance(score, dict) and score.get("f1_mean") is not None:
+        return float(score["f1_mean"])
     return float("-inf")
 
 
-def _f1_std(node: GraphNode) -> float:
-    if isinstance(node.val_score, dict):
-        return float(node.val_score.get("f1_std", 0.0) or 0.0)
+def _metric_std_attr(node: GraphNode, attr_name: str) -> float:
+    score = getattr(node, attr_name, None)
+    if isinstance(score, dict):
+        return float(score.get("f1_std", 0.0) or 0.0)
     return float("inf")
 
 
@@ -200,17 +214,117 @@ def _sort_population(
     nodes: Iterable[GraphNode],
     *,
     std_penalty: float,
+    score_attr: str = "val_score",
 ) -> List[GraphNode]:
     return sorted(
         nodes,
         key=lambda node: (
-            _score(node, std_penalty),
-            _f1_mean(node),
-            -_f1_std(node),
+            _score_attr(node, score_attr, std_penalty),
+            _metric_mean_attr(node, score_attr),
+            -_metric_std_attr(node, score_attr),
             node.node_id if node.node_id is not None else -1,
         ),
         reverse=True,
     )
+
+
+def _build_train_relation_index(feedback_pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    relation_index: dict[str, list[dict]] = defaultdict(list)
+    for instances in feedback_pool.values():
+        for instance in instances:
+            relation = instance.get("relation")
+            if relation:
+                relation_index[relation].append(instance)
+    return dict(relation_index)
+
+
+def _sample_from_relation(
+    relation_index: dict[str, list[dict]],
+    relation: str,
+    rng: random.Random,
+    *,
+    exclude_ids: set[str] | None = None,
+) -> dict:
+    candidates = relation_index[relation]
+    if exclude_ids:
+        filtered = [
+            instance for instance in candidates if str(instance.get("id")) not in exclude_ids
+        ]
+        if filtered:
+            candidates = filtered
+    return rng.choice(candidates)
+
+
+def _sample_train_episode_bundle(
+    *,
+    relation_index: dict[str, list[dict]],
+    rng: random.Random,
+    num_episodes: int,
+    num_ways: int,
+    positive_probability: float = 0.05,
+) -> dict[str, Any]:
+    relation_names = sorted(
+        relation
+        for relation, instances in relation_index.items()
+        if relation != NO_RELATION and instances
+    )
+    if len(relation_names) < num_ways:
+        raise ValueError(
+            f"Need at least {num_ways} train relations, found {len(relation_names)}."
+        )
+
+    shots: dict[str, dict] = {}
+    queries: dict[str, dict] = {}
+    episodes: list[dict[str, list]] = []
+    negative_relations = list(relation_names)
+    if NO_RELATION in relation_index and relation_index[NO_RELATION]:
+        negative_relations.append(NO_RELATION)
+
+    for episode_index in range(num_episodes):
+        way_relations = rng.sample(relation_names, num_ways)
+        meta_train = []
+        support_ids: set[str] = set()
+        for relation in way_relations:
+            support = _sample_from_relation(relation_index, relation, rng)
+            support_id = str(support["id"])
+            shots[support_id] = support
+            support_ids.add(support_id)
+            meta_train.append([support_id])
+
+        if rng.random() < positive_probability:
+            query_relation = rng.choice(way_relations)
+        else:
+            outside_relations = [
+                relation for relation in negative_relations if relation not in way_relations
+            ]
+            query_relation = rng.choice(outside_relations or negative_relations)
+
+        query = _sample_from_relation(
+            relation_index,
+            query_relation,
+            rng,
+            exclude_ids=support_ids,
+        )
+        query_id = f"train_iter_query_{episode_index}_{query['id']}"
+        queries[query_id] = dict(query)
+        episodes.append({"meta_train": meta_train, "meta_test": [query_id]})
+
+    return {
+        "split": "train_sampled",
+        "episodes": episodes,
+        "shots": shots,
+        "queries": queries,
+        "umbc_shots": {},
+    }
+
+
+def _score_payload(score: Any, std_penalty: float) -> dict[str, Any]:
+    payload = dict(score) if isinstance(score, dict) else {"raw_score": score}
+    payload["stable_f1"] = stable_f1_score_or_neg_inf(
+        score if isinstance(score, dict) else None,
+        std_multiplier=std_penalty,
+    )
+    return payload
 
 
 def _sample_de_donors(
@@ -286,6 +400,7 @@ def _generate_de_child(
         FeedbackSamples(),
         mutation_prompt_override=de_prompt,
         mutation_prompt_key_override="evoprompt_de",
+        enable_thinking=False,
     )
     if mutation_result is None:
         print(
@@ -308,6 +423,8 @@ def main() -> None:
         raise ValueError(
             "This EvoPrompt-DE runner is intentionally fixed to --population-size 5 for now."
         )
+    if args.evoprompt_train_episodes_per_iteration <= 0:
+        raise ValueError("--evoprompt-train-episodes-per-iteration must be > 0.")
     if args.load_population:
         raise ValueError("EvoPrompt-DE does not support --load-population yet.")
     if args.resume_from_nohup_log:
@@ -329,10 +446,22 @@ def main() -> None:
         eval_output_dir = os.path.join(run_dir, "eval_outputs")
         os.makedirs(eval_output_dir, exist_ok=True)
 
-        _, _, rng, _, _, _, _, funcs = load_model_and_data(
+        _, _, rng, feedback_pool, _, dev_data, _, funcs = load_model_and_data(
             args, data_dir, eval_output_dir, args.seed
         )
         _, _, _, mutate_prompt, evaluate = funcs
+        relation_index = _build_train_relation_index(feedback_pool)
+        num_train_episode_ways = (
+            len(dev_data["episodes"][0]["meta_train"])
+            if dev_data.get("episodes")
+            else 5
+        )
+        print(
+            "[core_trainer_evoprompt_de] train sampled fitness episodes per iteration:",
+            args.evoprompt_train_episodes_per_iteration,
+            "ways:",
+            num_train_episode_ways,
+        )
 
         feedback_prompt = apply_tag_overrides(
             FEEDBACK_PROMPT_MAP[args.feedback_prompt],
@@ -393,20 +522,11 @@ def main() -> None:
                 f"node_id={node.node_id} mark={mark}"
             )
             print(node.inference_prompt)
-            node.val_score = evaluate(
-                node,
-                "validation",
-                eval_id_override=f"init_{node.node_id}_{mark}",
-                evolution_iteration=0,
-                evolution_max_iterations=args.max_iterations,
-            )
             population.append(node)
             population_history.append(node)
 
-        population = _sort_population(
-            population,
-            std_penalty=args.validation_f1_std_penalty,
-        )[: args.population_size]
+        dev_best_node: GraphNode | None = None
+        dev_best_history: list[dict[str, Any]] = []
         next_node_id = len(population_history)
 
         for iteration in range(args.max_iterations):
@@ -415,9 +535,33 @@ def main() -> None:
                 f"[core_trainer_evoprompt_de] iteration {iteration + 1}/"
                 f"{args.max_iterations} start"
             )
-            best_node = _sort_population(
-                population_history,
+            train_eval_bundle = _sample_train_episode_bundle(
+                relation_index=relation_index,
+                rng=rng,
+                num_episodes=args.evoprompt_train_episodes_per_iteration,
+                num_ways=num_train_episode_ways,
+            )
+            print(
+                "[core_trainer_evoprompt_de] evaluating existing population on "
+                f"{len(train_eval_bundle['episodes'])} sampled train episodes"
+            )
+            for target in population:
+                target.fitness_score = evaluate(
+                    target,
+                    train_eval_bundle,
+                    eval_id_override=f"iter_{iteration + 1}_fitness_existing_{target.node_id}",
+                    evolution_iteration=iteration + 1,
+                    evolution_max_iterations=args.max_iterations,
+                )
+            population = _sort_population(
+                population,
                 std_penalty=args.validation_f1_std_penalty,
+                score_attr="fitness_score",
+            )[: args.population_size]
+            best_node = _sort_population(
+                population,
+                std_penalty=args.validation_f1_std_penalty,
+                score_attr="fitness_score",
             )[0]
             new_population: List[GraphNode] = []
 
@@ -477,9 +621,10 @@ def main() -> None:
                     node_id=next_node_id,
                 )
                 next_node_id += 1
-                child.val_score = evaluate(
+                child.fitness_score = evaluate(
                     child,
-                    "validation",
+                    train_eval_bundle,
+                    eval_id_override=f"iter_{iteration + 1}_fitness_child_{child.node_id}",
                     evolution_iteration=iteration + 1,
                     evolution_max_iterations=args.max_iterations,
                 )
@@ -489,23 +634,81 @@ def main() -> None:
                 selected = max(
                     [target, child],
                     key=lambda node: (
-                        _score(node, args.validation_f1_std_penalty),
-                        _f1_mean(node),
-                        -_f1_std(node),
+                        _score_attr(
+                            node,
+                            "fitness_score",
+                            args.validation_f1_std_penalty,
+                        ),
+                        _metric_mean_attr(node, "fitness_score"),
+                        -_metric_std_attr(node, "fitness_score"),
                         node.node_id if node.node_id is not None else -1,
                     ),
                 )
                 new_population.append(selected)
                 print(
                     "[core_trainer_evoprompt_de] selected "
-                    f"node_id={selected.node_id} stable_f1="
-                    f"{_score(selected, args.validation_f1_std_penalty):.6f}"
+                    f"node_id={selected.node_id} train_stable_f1="
+                    f"{_score_attr(selected, 'fitness_score', args.validation_f1_std_penalty):.6f}"
                 )
 
             population = _sort_population(
                 new_population,
                 std_penalty=args.validation_f1_std_penalty,
+                score_attr="fitness_score",
             )[: args.population_size]
+
+            iteration_best_by_train = population[0]
+            print(
+                "[core_trainer_evoprompt_de] evaluating current train-fitness best "
+                f"on actual dev: node_id={iteration_best_by_train.node_id}"
+            )
+            iteration_best_by_train.val_score = evaluate(
+                iteration_best_by_train,
+                "validation",
+                eval_id_override=f"iter_{iteration + 1}_dev_candidate_{iteration_best_by_train.node_id}",
+                evolution_iteration=iteration + 1,
+                evolution_max_iterations=args.max_iterations,
+            )
+            if dev_best_node is None or (
+                _score_attr(
+                    iteration_best_by_train,
+                    "val_score",
+                    args.validation_f1_std_penalty,
+                )
+                > _score_attr(dev_best_node, "val_score", args.validation_f1_std_penalty)
+            ):
+                dev_best_node = iteration_best_by_train
+
+            dev_best_history.append(
+                {
+                    "iteration": iteration + 1,
+                    "train_fitness_best_node_id": iteration_best_by_train.node_id,
+                    "train_fitness_best_score": _score_payload(
+                        getattr(iteration_best_by_train, "fitness_score", None),
+                        args.validation_f1_std_penalty,
+                    ),
+                    "dev_candidate_node_id": iteration_best_by_train.node_id,
+                    "dev_candidate_score": _score_payload(
+                        iteration_best_by_train.val_score,
+                        args.validation_f1_std_penalty,
+                    ),
+                    "best_dev_so_far_node_id": (
+                        dev_best_node.node_id if dev_best_node is not None else None
+                    ),
+                    "best_dev_so_far_score": _score_payload(
+                        dev_best_node.val_score if dev_best_node is not None else None,
+                        args.validation_f1_std_penalty,
+                    ),
+                    "best_dev_so_far_prompt": (
+                        dev_best_node.inference_prompt if dev_best_node is not None else None
+                    ),
+                }
+            )
+            save_json(
+                run_dir,
+                "dev_best_history.json",
+                {"history": dev_best_history},
+            )
             clear_iteration_memory(iteration, best_node, population[0])
             print(
                 f"[core_trainer_evoprompt_de] iteration {iteration + 1} end "
@@ -513,9 +716,10 @@ def main() -> None:
                 f"overall={time.monotonic() - overall_start:.2f}s)"
             )
 
-        best_node = _sort_population(
-            population_history,
+        best_node = dev_best_node or _sort_population(
+            population,
             std_penalty=args.validation_f1_std_penalty,
+            score_attr="fitness_score",
         )[0]
         print("[core_trainer_evoprompt_de] recording best validation metrics")
         best_test_metrics = best_node.val_score
@@ -539,6 +743,8 @@ def main() -> None:
                 "population_history_size": len(population_history),
                 "initial_population_marks": [mark for mark, _ in initial_variants],
                 "validation_f1_std_penalty": args.validation_f1_std_penalty,
+                "train_episodes_per_iteration": args.evoprompt_train_episodes_per_iteration,
+                "dev_best_history": dev_best_history,
             },
         )
         print(f"[core_trainer_evoprompt_de] done (elapsed={time.monotonic() - overall_start:.2f}s)")
