@@ -567,6 +567,27 @@ def _format_stable_f1_for_log(
     )
 
 
+def _format_selection_metrics_for_log(selection_metrics: Dict[str, Any] | None) -> str:
+    if not selection_metrics:
+        return ""
+
+    loss = selection_metrics.get("mean_cross_entropy")
+    perplexity = selection_metrics.get("mean_perplexity")
+    combined_score = selection_metrics.get("combined_score")
+    fluency_metric = selection_metrics.get("prompt_fluency_metric")
+
+    parts: List[str] = []
+    if perplexity is not None:
+        parts.append(f"perplexity={float(perplexity):.6f}")
+    if loss is not None:
+        parts.append(f"loss={float(loss):.6f}")
+    if combined_score is not None:
+        parts.append(f"combined_score={float(combined_score):.6f}")
+    if fluency_metric:
+        parts.append(f"fluency_metric={fluency_metric}")
+    return ", ".join(parts)
+
+
 def _format_log_context(log_context: Dict[str, Any] | None) -> str:
     if not log_context:
         return ""
@@ -2732,7 +2753,7 @@ def _run_region_candidate_beam_search(
                     f"beam_index={node['beam_index']}",
                     f"parent_beam_index={node['parent_beam_index']}",
                     f"region_rank={region_rank}",
-                    f"combined_score={node['selection_metrics']['combined_score']:.6f}",
+                    _format_selection_metrics_for_log(node["selection_metrics"]),
                     f"num_changed_spans={node['num_changed_spans']}",
                 )
                 print(node["revised_prompt"])
@@ -2889,6 +2910,7 @@ def _evaluate_prompt_variant(
     validation_batch_size: int,
     use_chat_template: bool,
     f1_std_penalty: float = DEFAULT_F1_STABILITY_STD_MULTIPLIER,
+    selection_metrics: Dict[str, Any] | None = None,
     log_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     eval_start = time.perf_counter()
@@ -2964,6 +2986,12 @@ def _evaluate_prompt_variant(
         "[agent_gradient_eval_debug] prompt full evaluation:",
         f"{context_prefix}{_format_stable_f1_for_log(full_evaluation['prf'], f1_std_penalty=f1_std_penalty)}",
     )
+    selection_metrics_text = _format_selection_metrics_for_log(selection_metrics)
+    if selection_metrics_text:
+        print(
+            "[agent_gradient_eval_debug] prompt full evaluation:",
+            f"{context_prefix}{selection_metrics_text}",
+        )
 
     validation_payload = {
         "predicted_labels": score_payload["predicted_labels"],
@@ -3269,6 +3297,7 @@ def _build_and_evaluate_region_candidate_prompts(
                 validation_batch_size=args.validation_batch_size,
                 use_chat_template=not args.disable_chat_template,
                 f1_std_penalty=args.selection_f1_std_penalty,
+                selection_metrics=variant.get("selection_metrics"),
                 log_context={
                     "generation_index": variant.get("generation_index"),
                     "beam_index": variant.get("beam_index"),
