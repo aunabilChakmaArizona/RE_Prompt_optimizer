@@ -409,6 +409,7 @@ def score_instruction_prompt_fluency_perplexity(
     instruction_prompt: str,
     model,
     tokenizer,
+    return_log_score: bool = False,
 ) -> float:
     encoded_prompt = tokenizer(
         instruction_prompt,
@@ -418,7 +419,7 @@ def score_instruction_prompt_fluency_perplexity(
     input_ids = encoded_prompt["input_ids"]
     attention_mask = encoded_prompt.get("attention_mask")
     if input_ids.size(1) < 2:
-        return 1.0
+        return 0.0 if return_log_score else 1.0
 
     target_device = getattr(model, "device", None)
     if target_device is None:
@@ -441,7 +442,9 @@ def score_instruction_prompt_fluency_perplexity(
             reduction="mean",
         )
 
-    prompt_perplexity = float(torch.exp(token_nll).item())
+    prompt_perplexity = float(
+        token_nll.item() if return_log_score else torch.exp(token_nll).item()
+    )
     del encoded_prompt, input_ids, attention_mask, outputs, shift_logits, shift_labels, token_nll
     clear_cuda_cache()
     return prompt_perplexity

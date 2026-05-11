@@ -288,6 +288,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--use-log-fluency-score",
+        action="store_true",
+        help=(
+            "Candidate-suggestion modes only. Use the raw mean token negative "
+            "log-likelihood for prompt fluency instead of exp(NLL) perplexity."
+        ),
+    )
+    parser.add_argument(
         "--selection-f1-std-penalty",
         type=float,
         default=DEFAULT_F1_STABILITY_STD_MULTIPLIER,
@@ -2517,6 +2525,7 @@ def _score_instruction_prompt_for_candidate_selection(
     instruction_prompt: str,
     sampled_pairs: Sequence[Dict[str, Any]],
     selection_perplexity_lambda: float,
+    use_log_fluency_score: bool,
     validation_batch_size: int,
     use_chat_template: bool,
     prompt_result_cache: Dict[str, Dict[str, Any]],
@@ -2543,11 +2552,19 @@ def _score_instruction_prompt_for_candidate_selection(
         instruction_prompt=instruction_prompt,
         model=model,
         tokenizer=tokenizer,
+        return_log_score=use_log_fluency_score,
+    )
+    fluency_metric_name = (
+        "prompt_fluency_log_score"
+        if use_log_fluency_score
+        else "prompt_fluency_perplexity"
     )
     selection_metrics = {
         "mean_cross_entropy": raw_selection_metrics["mean_cross_entropy"],
         "mean_perplexity": prompt_perplexity,
         "prompt_fluency_perplexity": prompt_perplexity,
+        fluency_metric_name: prompt_perplexity,
+        "prompt_fluency_metric": fluency_metric_name,
     }
     combined_score = (
         selection_metrics["mean_cross_entropy"]
@@ -2638,6 +2655,7 @@ def _run_region_candidate_beam_search(
                     instruction_prompt=revised_prompt,
                     sampled_pairs=sampled_pairs,
                     selection_perplexity_lambda=args.selection_perplexity_lambda,
+                    use_log_fluency_score=args.use_log_fluency_score,
                     validation_batch_size=args.validation_batch_size,
                     use_chat_template=not args.disable_chat_template,
                     prompt_result_cache=prompt_result_cache,
