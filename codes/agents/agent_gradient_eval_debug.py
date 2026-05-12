@@ -739,6 +739,7 @@ def _build_score_payload_from_pairs(
 
 
 _LABEL_LITERAL_WORDS = {"yes", "no"}
+_TEMPLATE_LITERAL_WORDS = {"query", "support", "relation"}
 _SMART_QUOTE_TRANSLATION = str.maketrans(
     {
         "\u201c": '"',
@@ -766,6 +767,16 @@ def _normalized_label_literal(text: str) -> str:
 def _is_quote_only_span(text: str) -> bool:
     stripped = _normalize_quote_chars(text).strip()
     return bool(stripped) and all(char in _LABEL_LITERAL_QUOTE_CHARS for char in stripped)
+
+
+def _is_protected_template_word_span(
+    *,
+    instruction_prompt: str,
+    start_char: int,
+    end_char: int,
+) -> bool:
+    token_text = instruction_prompt[start_char:end_char]
+    return _normalized_label_literal(token_text) in _TEMPLATE_LITERAL_WORDS
 
 
 def _is_protected_yes_no_span(
@@ -824,6 +835,11 @@ def _editable_token_groups_for_region(
     for token_index in token_indices:
         start_char = int(offsets[token_index][0])
         end_char = int(offsets[token_index][1])
+        is_protected_template_word = _is_protected_template_word_span(
+            instruction_prompt=instruction_prompt,
+            start_char=start_char,
+            end_char=end_char,
+        )
         if _is_protected_yes_no_span(
             instruction_prompt=instruction_prompt,
             start_char=start_char,
@@ -838,6 +854,14 @@ def _editable_token_groups_for_region(
                 ]
                 if _is_quote_only_span(neighbor_text):
                     remove_token_indices.add(neighbor_index)
+            while current_group and current_group[-1] in remove_token_indices:
+                current_group.pop()
+            if current_group:
+                editable_groups.append(current_group)
+                current_group = []
+            continue
+        if is_protected_template_word:
+            remove_token_indices.add(token_index)
             while current_group and current_group[-1] in remove_token_indices:
                 current_group.pop()
             if current_group:
@@ -975,6 +999,7 @@ def _resolve_region_details(
                     ),
                     "region_token_indices": token_group,
                     "protected_yes_no_filter_applied": True,
+                    "protected_template_word_filter_applied": True,
                 }
             )
 

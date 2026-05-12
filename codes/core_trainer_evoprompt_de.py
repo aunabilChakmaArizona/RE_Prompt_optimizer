@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
+import re
 import time
 from collections import defaultdict
 from typing import Any, Iterable, List, Optional
@@ -20,7 +22,9 @@ from agents.agent_prompts import (
 from agents.agent_train_config import build_parser, resolve_data_dir
 from agents.agent_train_io import (
     create_run_dir,
+    load_initial_population,
     load_initial_prompt_node,
+    load_resume_state,
     restore_logging,
     save_population,
     save_resume_state,
@@ -97,6 +101,22 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=1000,
         help="Number of train-sampled episodes used as the per-iteration fitness set.",
+    )
+    parser.add_argument(
+        "--full-eval-split",
+        default=None,
+        help=(
+            "Alias for the real dev/evaluation split used to track best-dev-so-far. "
+            "If set, overrides --dev-split."
+        ),
+    )
+    parser.add_argument(
+        "--evoprompt-resume-from-nohup",
+        default=None,
+        help=(
+            "Resume/extend an earlier EvoPrompt-DE run from its nohup .out log. "
+            "--max-iterations is interpreted as the desired total iteration count."
+        ),
     )
     return parser.parse_args()
 
@@ -327,6 +347,121 @@ def _score_payload(score: Any, std_penalty: float) -> dict[str, Any]:
     return payload
 
 
+def _log_prompt_score(
+    *,
+    prefix: str,
+    node: GraphNode,
+    score_attr: str,
+    std_penalty: float,
+) -> None:
+    score = getattr(node, score_attr, None)
+    stable_f1 = stable_f1_score_or_neg_inf(
+        score if isinstance(score, dict) else None,
+        std_multiplier=std_penalty,
+    )
+    if isinstance(score, dict):
+        precision = score.get("precision_mean")
+        recall = score.get("recall_mean")
+        f1 = score.get("f1_mean")
+        f1_std = score.get("f1_std")
+        print(
+            f"[core_trainer_evoprompt_de] {prefix} node_id={node.node_id} "
+            f"precision={float(precision) * 100:.2f} "
+            f"recall={float(recall) * 100:.2f} "
+            f"f1={float(f1) * 100:.2f} "
+            f"f1_std={float(f1_std or 0.0) * 100:.2f} "
+            f"stable_f1={stable_f1 * 100:.2f}"
+        )
+    else:
+        print(
+            f"[core_trainer_evoprompt_de] {prefix} node_id={node.node_id} "
+            f"score={score} stable_f1={stable_f1 * 100:.2f}"
+        )
+    print(f"[core_trainer_evoprompt_de] {prefix} prompt node_id={node.node_id}:")
+    print(node.inference_prompt)
+
+
+def _resolve_previous_run_dir_from_nohup(nohup_path: str) -> str:
+    abs_nohup_path = os.path.abspath(nohup_path)
+    if not os.path.isfile(abs_nohup_path):
+        raise FileNotFoundError(f"Could not find nohup log: {abs_nohup_path}")
+    with open(abs_nohup_path, "r", encoding="utf-8", errors="replace") as handle:
+        text = handle.read()
+
+    run_dir_matches = re.findall(
+        r"\[core_trainer_evoprompt_de\]\s+run_dir:\s*(\S+)",
+        text,
+    )
+    if run_dir_matches:
+        run_dir = run_dir_matches[-1]
+        if not os.path.isabs(run_dir):
+            run_dir = os.path.abspath(os.path.join(os.path.dirname(abs_nohup_path), run_dir))
+        if os.path.isdir(run_dir):
+            return run_dir
+
+    log_matches = re.findall(
+        r"\[agent_train_io\]\s+Logging file:\s*(\S+)",
+        text,
+    )
+    if log_matches:
+        log_path = log_matches[-1]
+        if not os.path.isabs(log_path):
+            log_path = os.path.abspath(os.path.join(os.path.dirname(abs_nohup_path), log_path))
+        run_dir = os.path.dirname(log_path)
+        if os.path.isdir(run_dir):
+            return run_dir
+
+    raise ValueError(
+        "Could not determine prior run_dir from nohup log. Expected a "
+        "'[core_trainer_evoprompt_de] run_dir:' or '[agent_train_io] Logging file:' line."
+    )
+
+
+def _load_previous_dev_best_history(previous_run_dir: str) -> list[dict[str, Any]]:
+    history_path = os.path.join(previous_run_dir, "dev_best_history.json")
+    if os.path.isfile(history_path):
+        with open(history_path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        history = payload.get("history", payload)
+        if isinstance(history, list):
+            return history
+
+    summary_path = os.path.join(previous_run_dir, "summary.json")
+    if os.path.isfile(summary_path):
+        with open(summary_path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        history = payload.get("dev_best_history", [])
+        if isinstance(history, list):
+            return history
+
+    return []
+
+
+def _load_previous_dev_best_node(
+    population_history: list[GraphNode],
+    dev_best_history: list[dict[str, Any]],
+) -> GraphNode | None:
+    if not dev_best_history:
+        return None
+    best_node_id = dev_best_history[-1].get("best_dev_so_far_node_id")
+    if best_node_id is None:
+        return None
+    for node in population_history:
+        if node.node_id == int(best_node_id):
+            return node
+    return None
+
+
+def _completed_iterations_from_history(dev_best_history: list[dict[str, Any]]) -> int:
+    completed = 0
+    for entry in dev_best_history:
+        try:
+            completed = max(completed, int(entry.get("iteration", 0)))
+        except (TypeError, ValueError):
+            continue
+    return completed
+
+
 def _sample_de_donors(
     *,
     population: List[GraphNode],
@@ -429,6 +564,13 @@ def main() -> None:
         raise ValueError("EvoPrompt-DE does not support --load-population yet.")
     if args.resume_from_nohup_log:
         raise ValueError("EvoPrompt-DE does not support --resume-from-nohup-log yet.")
+    previous_run_dir = None
+    if args.evoprompt_resume_from_nohup:
+        previous_run_dir = _resolve_previous_run_dir_from_nohup(
+            args.evoprompt_resume_from_nohup
+        )
+    if args.full_eval_split:
+        args.dev_split = args.full_eval_split
 
     data_dir = resolve_data_dir(args.data_dir)
     run_dir = create_run_dir(args.trainings_dir, args.model)
@@ -441,6 +583,8 @@ def main() -> None:
         print("[core_trainer_evoprompt_de] optimizer_model:", args.optimizer_model or args.model)
         print("[core_trainer_evoprompt_de] dataset_type:", args.dataset_type)
         print("[core_trainer_evoprompt_de] algorithm: EvoPrompt-DE")
+        if previous_run_dir:
+            print("[core_trainer_evoprompt_de] extending previous run_dir:", previous_run_dir)
 
         write_args(run_dir, args)
         eval_output_dir = os.path.join(run_dir, "eval_outputs")
@@ -479,6 +623,11 @@ def main() -> None:
         )
 
         initial_prompt_node = None
+        if previous_run_dir and args.initial_prompt_source_path:
+            raise ValueError(
+                "--evoprompt-resume-from-nohup cannot be combined with "
+                "--initial-prompt-source-path"
+            )
         if args.initial_prompt_source_path:
             initial_prompt_node, initial_prompt_population_path = load_initial_prompt_node(
                 args.initial_prompt_source_path,
@@ -494,42 +643,101 @@ def main() -> None:
                 initial_prompt_node.get("node_id"),
             )
 
-        root = build_root_node(
-            feedback_prompt=feedback_prompt,
-            mutation_prompt=mutation_prompt,
-            inference_mode=args.inference_mode,
-            example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
-            initial_prompt_node=initial_prompt_node,
-        )
-
         population: List[GraphNode] = []
         population_history: List[GraphNode] = []
-        initial_variants = _initial_prompt_variants(
-            root.inference_prompt,
-            inference_mode=args.inference_mode,
-        )
-        for node_id, (mark, prompt) in enumerate(initial_variants):
-            node = _make_prompt_node(
-                root=root,
-                prompt=prompt,
-                mark=mark,
-                node_id=node_id,
-                feedback_prompt=feedback_prompt,
-                mutation_prompt=mutation_prompt,
-            )
-            print(
-                "[core_trainer_evoprompt_de] initial population "
-                f"node_id={node.node_id} mark={mark}"
-            )
-            print(node.inference_prompt)
-            population.append(node)
-            population_history.append(node)
-
         dev_best_node: GraphNode | None = None
         dev_best_history: list[dict[str, Any]] = []
-        next_node_id = len(population_history)
+        completed_iterations = 0
+        resume_next_node_id = None
+        initial_variants: list[tuple[str, str]] = []
 
-        for iteration in range(args.max_iterations):
+        if previous_run_dir:
+            (
+                population,
+                _loaded_best_node,
+                population_history,
+                previous_population_path,
+            ) = load_initial_population(
+                previous_run_dir,
+                expected_inference_mode=args.inference_mode,
+                feedback_prompt=feedback_prompt,
+                mutation_prompt=mutation_prompt,
+                example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+            )
+            dev_best_history = _load_previous_dev_best_history(previous_run_dir)
+            completed_iterations = _completed_iterations_from_history(dev_best_history)
+            dev_best_node = _load_previous_dev_best_node(
+                population_history,
+                dev_best_history,
+            )
+            try:
+                rng_state, resume_next_node_id, resume_state_path = load_resume_state(
+                    previous_run_dir
+                )
+            except FileNotFoundError:
+                print(
+                    "[core_trainer_evoprompt_de] previous resume_state.json not found; "
+                    "continuing with seed-based RNG initialization"
+                )
+            else:
+                rng.setstate(rng_state)
+                print("[core_trainer_evoprompt_de] resumed rng state from:", resume_state_path)
+                print("[core_trainer_evoprompt_de] resumed next_node_id:", resume_next_node_id)
+
+            print("[core_trainer_evoprompt_de] previous population source:", previous_population_path)
+            print("[core_trainer_evoprompt_de] previous completed_iterations:", completed_iterations)
+            print(
+                "[core_trainer_evoprompt_de] resumed active population node_ids:",
+                [node.node_id for node in population],
+            )
+            print(
+                "[core_trainer_evoprompt_de] loaded population_history_size:",
+                len(population_history),
+            )
+            if completed_iterations > args.max_iterations:
+                raise ValueError(
+                    "--max-iterations is lower than the previous completed iteration "
+                    f"count ({completed_iterations})."
+                )
+        else:
+            root = build_root_node(
+                feedback_prompt=feedback_prompt,
+                mutation_prompt=mutation_prompt,
+                inference_mode=args.inference_mode,
+                example_generation_prompt=EXAMPLE_GENERATION_PROMPT_V1,
+                initial_prompt_node=initial_prompt_node,
+            )
+            initial_variants = _initial_prompt_variants(
+                root.inference_prompt,
+                inference_mode=args.inference_mode,
+            )
+            for node_id, (mark, prompt) in enumerate(initial_variants):
+                node = _make_prompt_node(
+                    root=root,
+                    prompt=prompt,
+                    mark=mark,
+                    node_id=node_id,
+                    feedback_prompt=feedback_prompt,
+                    mutation_prompt=mutation_prompt,
+                )
+                print(
+                    "[core_trainer_evoprompt_de] initial population "
+                    f"node_id={node.node_id} mark={mark}"
+                )
+                print(node.inference_prompt)
+                population.append(node)
+                population_history.append(node)
+
+        existing_node_ids = [
+            node.node_id for node in population_history if node.node_id is not None
+        ]
+        next_node_id = (
+            resume_next_node_id
+            if resume_next_node_id is not None
+            else ((max(existing_node_ids) + 1) if existing_node_ids else len(population_history))
+        )
+
+        for iteration in range(completed_iterations, args.max_iterations):
             iteration_start = time.monotonic()
             print(
                 f"[core_trainer_evoprompt_de] iteration {iteration + 1}/"
@@ -552,6 +760,12 @@ def main() -> None:
                     eval_id_override=f"iter_{iteration + 1}_fitness_existing_{target.node_id}",
                     evolution_iteration=iteration + 1,
                     evolution_max_iterations=args.max_iterations,
+                )
+                _log_prompt_score(
+                    prefix=f"iter {iteration + 1} train existing",
+                    node=target,
+                    score_attr="fitness_score",
+                    std_penalty=args.validation_f1_std_penalty,
                 )
             population = _sort_population(
                 population,
@@ -628,6 +842,12 @@ def main() -> None:
                     evolution_iteration=iteration + 1,
                     evolution_max_iterations=args.max_iterations,
                 )
+                _log_prompt_score(
+                    prefix=f"iter {iteration + 1} train child",
+                    node=child,
+                    score_attr="fitness_score",
+                    std_penalty=args.validation_f1_std_penalty,
+                )
                 target.add_child_from_feedback(FeedbackSamples(), child)
                 population_history.append(child)
 
@@ -668,6 +888,12 @@ def main() -> None:
                 eval_id_override=f"iter_{iteration + 1}_dev_candidate_{iteration_best_by_train.node_id}",
                 evolution_iteration=iteration + 1,
                 evolution_max_iterations=args.max_iterations,
+            )
+            _log_prompt_score(
+                prefix=f"iter {iteration + 1} full-dev candidate",
+                node=iteration_best_by_train,
+                score_attr="val_score",
+                std_penalty=args.validation_f1_std_penalty,
             )
             if dev_best_node is None or (
                 _score_attr(
@@ -723,6 +949,11 @@ def main() -> None:
         )[0]
         print("[core_trainer_evoprompt_de] recording best validation metrics")
         best_test_metrics = best_node.val_score
+        save_json(
+            run_dir,
+            "dev_best_history.json",
+            {"history": dev_best_history},
+        )
 
         save_population(
             run_dir,
@@ -744,6 +975,11 @@ def main() -> None:
                 "initial_population_marks": [mark for mark, _ in initial_variants],
                 "validation_f1_std_penalty": args.validation_f1_std_penalty,
                 "train_episodes_per_iteration": args.evoprompt_train_episodes_per_iteration,
+                "resumed_from_nohup": args.evoprompt_resume_from_nohup,
+                "resumed_from_run_dir": previous_run_dir,
+                "start_iteration": completed_iterations,
+                "requested_total_iterations": args.max_iterations,
+                "completed_iterations": args.max_iterations,
                 "dev_best_history": dev_best_history,
             },
         )
