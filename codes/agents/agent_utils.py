@@ -63,10 +63,10 @@ def score_node_or_neg_inf(node) -> float:
 
 def extract_tagged_text(text: str, open_tag: str, close_tag: str) -> str:
     pattern = rf"{re.escape(open_tag)}(.*?){re.escape(close_tag)}"
-    match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
-    if not match:
+    matches = list(re.finditer(pattern, text, flags=re.DOTALL | re.IGNORECASE))
+    if not matches:
         return text.strip()
-    return match.group(1).strip()
+    return matches[-1].group(1).strip()
 
 
 def extract_json_object(text: str) -> Dict[str, Any]:

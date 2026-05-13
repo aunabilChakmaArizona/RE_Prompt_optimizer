@@ -174,6 +174,16 @@ def _parse_args() -> argparse.Namespace:
         default=Path("codes/greater_experiments"),
     )
     parser.add_argument("--output-substring", default="")
+    parser.add_argument(
+        "--resume-out-file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a previous nohup/stdout log. The log is parsed for the saved "
+            "run directory, then summary.json/steps.jsonl are loaded from that run "
+            "and optimization continues until --n-steps total steps."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -218,6 +228,131 @@ def _format_prf_for_print(prf: Dict[str, float]) -> str:
 
 def _stable_dev_f1(prf: Dict[str, float], *, std_penalty: float = 2.0) -> float:
     return stable_prf_score_or_neg_inf(prf, std_multiplier=std_penalty)
+
+
+def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    records: List[Dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            records.append(json.loads(line))
+    return records
+
+
+def _run_dir_candidates_from_log(raw_run_dir: str, out_file: Path) -> List[Path]:
+    raw_path = Path(raw_run_dir).expanduser()
+    candidates: List[Path] = []
+    if raw_path.is_absolute():
+        candidates.append(raw_path)
+    else:
+        candidates.extend(
+            [
+                Path.cwd() / raw_path,
+                out_file.parent / raw_path,
+                out_file.parent.parent / raw_path,
+                REPO_ROOT / raw_path,
+                CODES_DIR / raw_path,
+            ]
+        )
+
+    run_name = raw_path.name
+    candidates.extend(
+        [
+            REPO_ROOT / "greater_experiments" / run_name,
+            CODES_DIR / "greater_experiments" / run_name,
+            Path.cwd() / "greater_experiments" / run_name,
+            Path.cwd() / "codes" / "greater_experiments" / run_name,
+        ]
+    )
+    return candidates
+
+
+def _resolve_run_dir_from_out_file(out_file: Path) -> Tuple[Path, str]:
+    if not out_file.exists() and not out_file.is_absolute():
+        for candidate in (CODES_DIR / out_file, REPO_ROOT / out_file):
+            if candidate.exists():
+                out_file = candidate
+                break
+    if not out_file.exists():
+        raise FileNotFoundError(f"--resume-out-file does not exist: {out_file}")
+
+    lines = out_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    logged_run_dir = ""
+    for marker in (
+        "[relation_extraction_greater] done:",
+        "[relation_extraction_greater] run_dir:",
+    ):
+        for line in reversed(lines):
+            if marker in line:
+                logged_run_dir = line.split(marker, 1)[1].strip()
+                break
+        if logged_run_dir:
+            break
+    if not logged_run_dir:
+        raise ValueError(
+            "Could not find a '[relation_extraction_greater] run_dir:' or "
+            "'done:' line in --resume-out-file."
+        )
+
+    for candidate in _run_dir_candidates_from_log(logged_run_dir, out_file.resolve()):
+        resolved = candidate.resolve()
+        if resolved.exists() and (resolved / "summary.json").exists():
+            return resolved, logged_run_dir
+
+    searched = [
+        str(candidate)
+        for candidate in _run_dir_candidates_from_log(logged_run_dir, out_file.resolve())
+    ]
+    raise FileNotFoundError(
+        "Could not resolve the saved run directory from --resume-out-file. "
+        f"Logged value: {logged_run_dir}. Searched: {searched}"
+    )
+
+
+def _load_resume_state_from_out_file(out_file: Path) -> Dict[str, Any]:
+    source_run_dir, logged_run_dir = _resolve_run_dir_from_out_file(out_file)
+    summary_path = source_run_dir / "summary.json"
+    steps_path = source_run_dir / "steps.jsonl"
+    args_path = source_run_dir / "args.json"
+    summary = load_json_file(summary_path)
+    previous_args = load_json_file(args_path) if args_path.exists() else {}
+    previous_steps = _load_jsonl(steps_path)
+    completed_steps = 0
+    if previous_steps:
+        completed_steps = max(int(step.get("step", 0) or 0) for step in previous_steps)
+
+    prompt = summary.get("final_prompt") or ""
+    if not prompt and (source_run_dir / "latest_prompt.txt").exists():
+        prompt = (source_run_dir / "latest_prompt.txt").read_text(encoding="utf-8")
+    if not prompt and summary.get("best_selection_prompt"):
+        prompt = str(summary["best_selection_prompt"])
+    if not prompt:
+        raise ValueError(f"Could not load a resume prompt from {source_run_dir}")
+
+    best_dev_stable_f1 = summary.get("best_dev_stable_f1")
+    if best_dev_stable_f1 is not None:
+        best_dev_stable_f1 = float(best_dev_stable_f1)
+
+    return {
+        "out_file": str(out_file),
+        "logged_run_dir": logged_run_dir,
+        "source_run_dir": str(source_run_dir),
+        "summary_path": str(summary_path),
+        "steps_path": str(steps_path),
+        "args_path": str(args_path) if args_path.exists() else None,
+        "previous_args": previous_args,
+        "summary": summary,
+        "completed_steps": completed_steps,
+        "resume_prompt": prompt,
+        "best_selection_prompt": summary.get("best_selection_prompt"),
+        "best_selection_score": summary.get("best_selection_score"),
+        "best_dev_stable_f1": best_dev_stable_f1,
+        "last_full_evaluation": summary.get("last_full_evaluation"),
+    }
 
 
 def _resolve_initial_instruction_prompt(args: argparse.Namespace) -> Tuple[str, Dict[str, Any]]:
@@ -1015,13 +1150,54 @@ def main() -> None:
         raise ValueError("--dev-f1-std-penalty must be non-negative.")
 
     start_time = time.monotonic()
+    resume_state: Dict[str, Any] | None = None
+    completed_steps_before_run = 0
+    if args.resume_out_file is not None:
+        resume_state = _load_resume_state_from_out_file(args.resume_out_file)
+        completed_steps_before_run = int(resume_state["completed_steps"])
+        if completed_steps_before_run >= args.n_steps:
+            raise ValueError(
+                "--n-steps is the total requested step count including the "
+                f"resumed run. The source run already has {completed_steps_before_run} "
+                f"steps, but --n-steps={args.n_steps}."
+            )
+
     run_dir = _create_run_dir(args.output_root_dir, args.output_substring)
     steps_path = run_dir / "steps.jsonl"
-    _save_json(run_dir / "args.json", _namespace_to_json_dict(args))
+    run_args_payload = _namespace_to_json_dict(args)
+    if resume_state is not None:
+        run_args_payload["resume"] = {
+            "source_run_dir": resume_state["source_run_dir"],
+            "resume_out_file": str(args.resume_out_file),
+            "completed_steps_before_run": completed_steps_before_run,
+            "new_steps_requested": args.n_steps - completed_steps_before_run,
+            "total_requested_steps": args.n_steps,
+        }
+    _save_json(run_dir / "args.json", run_args_payload)
 
-    instruction_prompt, prompt_source_info = _resolve_initial_instruction_prompt(args)
+    if resume_state is not None:
+        instruction_prompt = str(resume_state["resume_prompt"])
+        prompt_source_info = {
+            "prompt_source": "resume",
+            "resume_out_file": str(args.resume_out_file),
+            "source_run_dir": resume_state["source_run_dir"],
+            "logged_run_dir": resume_state["logged_run_dir"],
+            "completed_steps_before_run": completed_steps_before_run,
+            "previous_prompt_source": resume_state["summary"].get("prompt_source"),
+        }
+        _save_json(run_dir / "resume_state.json", resume_state)
+    else:
+        instruction_prompt, prompt_source_info = _resolve_initial_instruction_prompt(args)
     print("[relation_extraction_greater] run_dir:", run_dir)
     print("[relation_extraction_greater] prompt_source:", prompt_source_info)
+    if resume_state is not None:
+        print(
+            "[relation_extraction_greater] resume:",
+            f"source_run_dir={resume_state['source_run_dir']}",
+            f"completed_steps={completed_steps_before_run}",
+            f"remaining_steps={args.n_steps - completed_steps_before_run}",
+            f"total_steps={args.n_steps}",
+        )
     print("[relation_extraction_greater] loading model")
     model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device_map)
     _freeze_model_parameters(model)
@@ -1089,34 +1265,53 @@ def main() -> None:
         query_index=args.query_index,
     )
 
-    position = args.start_position % len(instruction_token_ids)
+    position = (args.start_position + completed_steps_before_run) % len(instruction_token_ids)
     best_instruction_ids = list(instruction_token_ids)
     best_selection_score = float("inf")
     best_full_eval: Dict[str, Any] | None = None
     best_dev_stable_f1 = float("-inf")
+    if resume_state is not None:
+        if resume_state.get("best_selection_score") is not None:
+            best_selection_score = float(resume_state["best_selection_score"])
+        if resume_state.get("best_selection_prompt"):
+            best_instruction_ids = _tokenize_instruction(
+                tokenizer,
+                str(resume_state["best_selection_prompt"]),
+            )
+        if resume_state.get("last_full_evaluation") is not None:
+            best_full_eval = resume_state["last_full_evaluation"]
+        if resume_state.get("best_dev_stable_f1") is not None:
+            best_dev_stable_f1 = float(resume_state["best_dev_stable_f1"])
     if args.top_z > 0:
-        print("[relation_extraction_greater] initial dev evaluation for top-z retention")
-        initial_full_eval = _evaluate_full_split(
-            instruction_prompt=initial_instruction_prompt,
-            full_eval_pairs=full_eval_pairs,
-            model=model,
-            tokenizer=tokenizer,
-            batch_size=args.eval_batch_size,
-            use_chat_template=use_chat_template,
-            log_every=args.log_every,
-        )
-        best_full_eval = initial_full_eval
-        best_dev_stable_f1 = _stable_dev_f1(
-            initial_full_eval["prf"],
-            std_penalty=args.dev_f1_std_penalty,
-        )
-        print(
-            "[relation_extraction_greater] initial dev score:",
-            _format_prf_for_print(initial_full_eval["prf"]),
-            f"stable_f1={best_dev_stable_f1:.2f}",
-        )
+        if resume_state is not None and best_full_eval is not None:
+            print(
+                "[relation_extraction_greater] resumed top-z best dev score:",
+                _format_prf_for_print(best_full_eval["prf"]),
+                f"stable_f1={best_dev_stable_f1:.2f}",
+            )
+        else:
+            print("[relation_extraction_greater] initial dev evaluation for top-z retention")
+            initial_full_eval = _evaluate_full_split(
+                instruction_prompt=initial_instruction_prompt,
+                full_eval_pairs=full_eval_pairs,
+                model=model,
+                tokenizer=tokenizer,
+                batch_size=args.eval_batch_size,
+                use_chat_template=use_chat_template,
+                log_every=args.log_every,
+            )
+            best_full_eval = initial_full_eval
+            best_dev_stable_f1 = _stable_dev_f1(
+                initial_full_eval["prf"],
+                std_penalty=args.dev_f1_std_penalty,
+            )
+            print(
+                "[relation_extraction_greater] initial dev score:",
+                _format_prf_for_print(initial_full_eval["prf"]),
+                f"stable_f1={best_dev_stable_f1:.2f}",
+            )
 
-    for step_index in range(1, args.n_steps + 1):
+    for step_index in range(completed_steps_before_run + 1, args.n_steps + 1):
         step_start = time.monotonic()
         pre_step_instruction_token_ids = list(instruction_token_ids)
         current_instruction = _decode_instruction(tokenizer, instruction_token_ids)
@@ -1161,7 +1356,7 @@ def main() -> None:
             fluency_scope=args.fluency_scope,
             fluency_metric=args.fluency_metric,
         )
-        if baseline_selection["combined_score"] < best_selection_score:
+        if args.top_z <= 0 and baseline_selection["combined_score"] < best_selection_score:
             best_selection_score = float(baseline_selection["combined_score"])
             best_instruction_ids = list(instruction_token_ids)
         pre_step_selection = dict(baseline_selection)
@@ -1520,6 +1715,17 @@ def main() -> None:
         "best_dev_stable_f1": best_dev_stable_f1,
         "dev_f1_std_penalty": args.dev_f1_std_penalty,
         "last_full_evaluation": best_full_eval,
+        "resume": (
+            {
+                "source_run_dir": resume_state["source_run_dir"],
+                "resume_out_file": str(args.resume_out_file),
+                "completed_steps_before_run": completed_steps_before_run,
+                "new_steps_run": args.n_steps - completed_steps_before_run,
+                "total_requested_steps": args.n_steps,
+            }
+            if resume_state is not None
+            else None
+        ),
         "bucket_stats": bucket_stats,
         "baseline_prf": baseline_prf,
         "elapsed_seconds": time.monotonic() - start_time,
