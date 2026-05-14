@@ -3649,7 +3649,7 @@ Examples:
                         help=f'Reflection model for GEPA (default: {DEFAULT_REFLECTION_MODEL})')
     parser.add_argument('--taxonomy_model', type=str, default=DEFAULT_TAXONOMY_MODEL,
                         help=f'Model for taxonomy analysis (default: {DEFAULT_TAXONOMY_MODEL})')
-    parser.add_argument('--max_new_tokens', type=int, default=None,
+    parser.add_argument('--max_new_tokens', type=int, default=10000,
                         help='Max new tokens for taxonomy/guidance JSON generation. Defaults to 10000 in RE mode and 32768 otherwise.')
     
     # Taxonomy settings

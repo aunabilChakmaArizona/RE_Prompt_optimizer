@@ -5381,7 +5381,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.5_r5_er_0.6_mt1_sz20000_20260508_122409_node2_qwen4_v6test" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q1_stdp2.0_px_0.5_r5_er_0.6_mt1_sz20000_20260508_122409_node2_qwen4_v6test.out 2>&1 &
 
-#running
+#done
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -5411,7 +5411,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "llm_cand_sugg_beam5_C7_Q2_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v6test" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q2_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v6test.out 2>&1 &
 
-#runnning
+#done
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -5441,7 +5441,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "llm_cand_sugg_beam5_C7_Q2_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz70000_20260508_120655_google-gemma-3-4b-it_node18_v6test" \
   > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q2_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz70000_20260508_120655_google-gemma-3-4b-it_node18_v6test.out 2>&1 &
 
-#runnning
+#done
 nohup python -u core_trainer_evoprompt_de.py \
   --model "Qwen/Qwen3-4B" \
   --optimizer-model "Qwen/Qwen3-14B" \
@@ -5455,7 +5455,7 @@ nohup python -u core_trainer_evoprompt_de.py \
   --prompt-close-tag "[/p]" \
   > nohup_outs/nohup_evoprompt_de_qwen14opt_qwen4inf_itr5_train1000_final_step_dev2.out 2>&1 &
 
-#runnning
+#done
 nohup python -u core_trainer_evoprompt_de.py \
   --model "google/gemma-3-4b-it" \
   --optimizer-model "google/gemma-3-12b-it" \
@@ -5469,7 +5469,7 @@ nohup python -u core_trainer_evoprompt_de.py \
   --prompt-close-tag "[/p]" \
   > nohup_outs/nohup_evoprompt_de_gemma12opt_gemma4inf_itr5_train1000_final_step_dev2.out 2>&1 &
 
-
+#done
 nohup python -u core_trainer_evoprompt_de.py \
   --model "Qwen/Qwen3-4B" \
   --optimizer-model "Qwen/Qwen3-14B" \
@@ -5484,6 +5484,7 @@ nohup python -u core_trainer_evoprompt_de.py \
   --evoprompt-resume-from-nohup "nohup_outs/nohup_evoprompt_de_qwen14opt_qwen4inf_itr5_train1000_final_step_dev2.out" \
   > nohup_outs/nohup_evoprompt_de_qwen14opt_qwen4inf_itr20_train1000_final_step_dev2_resume.out 2>&1 &
 
+#done
 nohup python -u core_trainer_evoprompt_de.py \
   --model "google/gemma-3-4b-it" \
   --optimizer-model "google/gemma-3-12b-it" \
@@ -5498,6 +5499,103 @@ nohup python -u core_trainer_evoprompt_de.py \
   --evoprompt-resume-from-nohup "nohup_outs/nohup_evoprompt_de_gemma12opt_gemma4inf_itr5_train1000_final_step_dev2.out" \
   > nohup_outs/nohup_evoprompt_de_gemma12opt_gemma4inf_itr20_train1000_final_step_dev2_resume.out 2>&1 &
 
+#done
+nohup python -u etgpo/etgpo_full_adjusted.py \
+  --task_mode relation_extraction_non_reasoning \
+  --dataset fs_tacred \
+  --methods taxonomy \
+  --main_model "Qwen/Qwen3-4B" \
+  --taxonomy_model "Qwen/Qwen3-14B" \
+  --device_map "cuda:1" \
+  --train_samples_file "fs_tacred_train_non_split_original_samples.pkl" \
+  --dev_split final_step_dev \
+  --valid_size 1000 \
+  --taxonomy_runs 1 \
+  --eval_runs 1 \
+  --num_guidance_prompts 5 \
+  --max_guidances 7 \
+  --output_dir "../unified_optimization_results/" \
+  --taxonomy_batch_size 6 \
+  > nohup_outs/nohup_etgpo_re_taxonomy_fresh_noncluster_train_original_final_dev_5newprompts_g7_run1.out 2>&1 &
+
+#done
+nohup python -u etgpo/etgpo_full_adjusted.py \
+  --task_mode relation_extraction_non_reasoning \
+  --dataset fs_tacred \
+  --methods taxonomy \
+  --main_model "Qwen/Qwen3-4B" \
+  --taxonomy_model "Qwen/Qwen3-14B" \
+  --device_map "cuda:1" \
+  --train_samples_file "fs_tacred_train_non_split_original_samples.pkl" \
+  --dev_split final_step_dev \
+  --valid_size 1000 \
+  --taxonomy_runs 1 \
+  --eval_runs 1 \
+  --num_guidance_prompts 5 \
+  --max_guidances 5 \
+  --output_dir "../unified_optimization_results/" \
+  --taxonomy_batch_size 6 \
+  > nohup_outs/nohup_etgpo_re_taxonomy_fresh_noncluster_train_original_final_dev_5newprompts_g5_run1.out 2>&1 &
+
+#done
+nohup python -u etgpo/etgpo_full_adjusted.py \
+  --task_mode relation_extraction_non_reasoning \
+  --dataset fs_tacred \
+  --methods taxonomy \
+  --main_model "google/gemma-3-4b-it" \
+  --taxonomy_model "google/gemma-3-12b-it" \
+  --device_map "cuda:1" \
+  --train_samples_file "fs_tacred_train_non_split_original_samples.pkl" \
+  --dev_split final_step_dev \
+  --valid_size 1000 \
+  --taxonomy_runs 1 \
+  --eval_runs 1 \
+  --num_guidance_prompts 5 \
+  --max_guidances 5 \
+  --output_dir "../unified_optimization_results/" \
+  --taxonomy_batch_size 3 \
+  --max_new_tokens 20000 \
+  > nohup_outs/nohup_etgpo_re_taxonomy_fresh_noncluster_train_original_final_dev_5newprompts_g5_run1_gemma.out 2>&1 &
+
+#done
+nohup python -u etgpo/etgpo_full_adjusted.py \
+  --task_mode relation_extraction_non_reasoning \
+  --dataset fs_tacred \
+  --methods taxonomy \
+  --main_model "google/gemma-3-4b-it" \
+  --taxonomy_model "google/gemma-3-12b-it" \
+  --device_map "cuda:1" \
+  --train_samples_file "fs_tacred_train_non_split_original_samples.pkl" \
+  --dev_split final_step_dev \
+  --valid_size 1000 \
+  --taxonomy_runs 1 \
+  --eval_runs 1 \
+  --num_guidance_prompts 7 \
+  --max_guidances 5 \
+  --output_dir "../unified_optimization_results/" \
+  --taxonomy_batch_size 3 \
+  --max_new_tokens 20000 \
+  > nohup_outs/nohup_etgpo_re_taxonomy_fresh_noncluster_train_original_final_dev_5newprompts_g7_run1_gemma.out 2>&1 &
+
+#running
+nohup python -u etgpo/etgpo_full_adjusted.py \
+  --task_mode relation_extraction_non_reasoning \
+  --dataset fs_tacred \
+  --methods taxonomy \
+  --main_model "google/gemma-3-4b-it" \
+  --taxonomy_model "google/gemma-3-12b-it" \
+  --device_map "cuda:1" \
+  --train_samples_file "fs_tacred_train_non_split_original_samples.pkl" \
+  --dev_split final_step_dev \
+  --valid_size 1000 \
+  --taxonomy_runs 1 \
+  --eval_runs 1 \
+  --num_guidance_prompts 5 \
+  --max_guidances 7 \
+  --output_dir "../unified_optimization_results/" \
+  --taxonomy_batch_size 3 \
+  --max_new_tokens 20000 \
+  > nohup_outs/nohup_etgpo_re_taxonomy_fresh_noncluster_train_original_final_dev_5newprompts_g7_run1_gemma_real.out 2>&1 &
 
   # > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q2_stdp2.0_px_0.05_r5_er_0.6_mt5_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v6test.out 2>&1 &
   # > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C7_Q2_stdp2.0_px_0.1_r5_er_0.6_mt5_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v6test.out 2>&1 &

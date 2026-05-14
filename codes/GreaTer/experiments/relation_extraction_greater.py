@@ -35,6 +35,7 @@ from agents.agent_gradient_eval_debug import (
     build_full_binary_pairs,
 )
 from agents.agent_gradient_token_analysis import _build_instruction_token_map
+from agents.agent_gradient_token_analysis import analyze_relation_extraction_binary_pairs
 from agents.agent_memory import clear_cuda_cache
 from agents.agent_models import load_model_and_tokenizer
 from agents.agent_prompts import INFERENCE_INSTRUCTION_PROMPT_V1
@@ -48,6 +49,8 @@ FLUENCY_SCOPE_PREFIX = "prefix"
 FLUENCY_SCOPE_PROPOSAL_PREFIX = "proposal_prefix"
 FLUENCY_METRIC_NLL = "nll"
 FLUENCY_METRIC_PPL = "ppl"
+POSITION_SELECTION_SEQUENTIAL = "sequential"
+POSITION_SELECTION_TOP_GRADIENT = "top_gradient"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -97,6 +100,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-batch-size", type=int, default=8)
     parser.add_argument("--n-steps", type=int, default=50)
     parser.add_argument("--start-position", type=int, default=0)
+    parser.add_argument(
+        "--position-selection-mode",
+        choices=[POSITION_SELECTION_SEQUENTIAL, POSITION_SELECTION_TOP_GRADIENT],
+        default=POSITION_SELECTION_SEQUENTIAL,
+        help=(
+            "sequential optimizes positions in token order. top_gradient recomputes "
+            "prompt-token gradients on the fresh balanced train pairs every step and "
+            "optimizes the single token position with the largest gradient norm."
+        ),
+    )
     parser.add_argument("--proposal-top-k", type=int, default=32)
     parser.add_argument(
         "--proposal-example-size",
@@ -1131,6 +1144,66 @@ def _sample_balanced_train_pairs_for_step(
     return sampled_pairs, bucket_stats, baseline_prf
 
 
+def _select_top_gradient_position_for_step(
+    *,
+    instruction_prompt: str,
+    sampled_pairs: Sequence[Dict[str, Any]],
+    model,
+    tokenizer,
+    dataset_type: str,
+    gradient_batch_size: int,
+    use_chat_template: bool,
+) -> Tuple[int, Dict[str, Any]]:
+    gradient_results = analyze_relation_extraction_binary_pairs(
+        instruction_prompt=instruction_prompt,
+        binary_pairs=sampled_pairs,
+        model=model,
+        tokenizer=tokenizer,
+        dataset_type=dataset_type,
+        gradient_batch_size=gradient_batch_size,
+        num_candidates=1,
+        max_regions=0,
+        max_total_region_tokens=0,
+        use_chat_template=use_chat_template,
+    )
+    token_gradients = [
+        record
+        for record in gradient_results.get("token_gradients", [])
+        if isinstance(record, dict) and record.get("token_index") is not None
+    ]
+    if not token_gradients:
+        raise ValueError("Gradient analysis returned no token_gradients.")
+
+    ranked = sorted(
+        token_gradients,
+        key=lambda record: (
+            float(record.get("gradient_norm", 0.0) or 0.0),
+            -int(record["token_index"]),
+        ),
+        reverse=True,
+    )
+    selected = ranked[0]
+    top_positions = [
+        {
+            "token_index": int(record["token_index"]),
+            "token_id": int(record.get("token_id", -1)),
+            "token": str(record.get("token", "")),
+            "gradient_norm": float(record.get("gradient_norm", 0.0) or 0.0),
+        }
+        for record in ranked[:10]
+    ]
+    return int(selected["token_index"]), {
+        "selection_mode": POSITION_SELECTION_TOP_GRADIENT,
+        "num_instances": gradient_results.get("num_instances"),
+        "token_gradient_count": len(token_gradients),
+        "selected_token_index": int(selected["token_index"]),
+        "selected_token_id": int(selected.get("token_id", -1)),
+        "selected_token": str(selected.get("token", "")),
+        "selected_gradient_norm": float(selected.get("gradient_norm", 0.0) or 0.0),
+        "top_positions": top_positions,
+    }
+
+
 def _freeze_model_parameters(model) -> None:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
@@ -1315,13 +1388,9 @@ def main() -> None:
         step_start = time.monotonic()
         pre_step_instruction_token_ids = list(instruction_token_ids)
         current_instruction = _decode_instruction(tokenizer, instruction_token_ids)
-        current_token = int(instruction_token_ids[position])
-        print(
-            "[relation_extraction_greater] step",
-            f"{step_index}/{args.n_steps}",
-            f"position={position}",
-            f"token={tokenizer.decode([current_token])!r}",
-        )
+        position_selection_payload: Dict[str, Any] = {
+            "selection_mode": args.position_selection_mode,
+        }
         print(f"[Prompt to optimize] prompt = {current_instruction}")
         sampled_pairs, bucket_stats, baseline_prf = _sample_balanced_train_pairs_for_step(
             instruction_prompt=current_instruction,
@@ -1336,6 +1405,31 @@ def main() -> None:
             use_chat_template=use_chat_template,
             log_every=args.log_every,
             log_label=f"greater_train_bucket_step_{step_index}",
+        )
+        if args.position_selection_mode == POSITION_SELECTION_TOP_GRADIENT:
+            position, position_selection_payload = _select_top_gradient_position_for_step(
+                instruction_prompt=current_instruction,
+                sampled_pairs=sampled_pairs,
+                model=model,
+                tokenizer=tokenizer,
+                dataset_type=args.dataset_type,
+                gradient_batch_size=args.gradient_batch_size,
+                use_chat_template=use_chat_template,
+            )
+            print(
+                "[relation_extraction_greater] top-gradient position selected:",
+                f"step={step_index}",
+                f"position={position}",
+                f"token={position_selection_payload['selected_token']!r}",
+                f"gradient_norm={position_selection_payload['selected_gradient_norm']:.6f}",
+            )
+        current_token = int(instruction_token_ids[position])
+        print(
+            "[relation_extraction_greater] step",
+            f"{step_index}/{args.n_steps}",
+            f"position={position}",
+            f"token={tokenizer.decode([current_token])!r}",
+            f"position_selection_mode={args.position_selection_mode}",
         )
         proposal_examples = _sample_proposal_examples(
             sampled_pairs=sampled_pairs,
@@ -1651,6 +1745,7 @@ def main() -> None:
         step_payload = {
             "step": step_index,
             "position": position,
+            "position_selection": position_selection_payload,
             "input_prompt": current_instruction,
             "current_token_id": current_token,
             "current_token_text": tokenizer.decode([current_token], skip_special_tokens=False),
@@ -1699,7 +1794,8 @@ def main() -> None:
             f"elapsed={step_payload['elapsed_seconds']:.2f}s",
         )
 
-        position = (position + 1) % len(instruction_token_ids)
+        if args.position_selection_mode == POSITION_SELECTION_SEQUENTIAL:
+            position = (position + 1) % len(instruction_token_ids)
 
     final_prompt = _decode_instruction(tokenizer, instruction_token_ids)
     best_prompt = _decode_instruction(tokenizer, best_instruction_ids)

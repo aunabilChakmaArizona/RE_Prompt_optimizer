@@ -1,0 +1,42 @@
+sub section - Task description
+It is a relation extraction few shot; N-way M-shot -- we work on 5-way 1-shot fixed. (define what is an episode) - our goal is to use prompting and optimize the prompt.
+
+
+subsection method overview
+It is to use 2 stage optimization: 1st textual / reasoning based -- because it optimizes within 5-10 (few) iterations.
+then we apply gradient based prompt optimization, which is basically a refinement of local tokens.
+in the reasoning based prompt optimization we can use any kind approaches. (APO, APE, TextGrad, Evoprompt, etc.)
+Then we plug in our gradient based approach - which makes precise updates using gradient signals.
+
+
+
+subsection Reasoning based prompt optimization
+We tried to cover different kinds of reasoning based optimization.
+We create a simplest reasoning based prompt optimization - we make some trails - gather corrects and mistakes.
+use those as mutation signals and create optimize the prompt. This approach is a similar to APO, APE / textgrad, etc.
+So we use this as a representative. the errors/corrects are learned from the train set. and evaluated on dev set.
+
+(new paragraph) We also use EvoPrompt. This is not the approach where we learn from feedback.
+This appraoch is pure crossover based approach -- start with some prompts and keep crossovering.
+here is no error singals. In our approach directly optimizing on the devset may overafit and perform bad on test set.
+So we mainly optimzie on train set and select the best on from train to test on dev set .. the one doing best on dev set among all iterations is the final prompt.
+
+(new paragraph) We also use ETGPO -- this is just a one iteration approach -- a completely diffrent from.
+similarly we keep gathers errors from train set and validate the optimzated prompt on validation/dev set.
+
+
+subsection gradient based prompt optimization
+We try 2 kind of approach that differs on how the candidates are generated.
+one is simple prompting based approach to generate the candidate replacements.
+other one is lm probability top-k tokens selection. for multi-token regions - we generate the first token only then use autoregresion to genreate the rest of the required number of tokens.
+we do beam search to find the the best replacements from different regions.
+We score is loss + lambda*perplexity.
+The beam search is done on much smaller set of (balanced train - no need to say about this; just smaller set is enough i believe.)
+we fully evaluate the beam width promtps on the full dev set.
+
+(new paragraph) we try some alternatives - GreaTer paper. we try two variants;
+one is the original (start from first token) .. the other (will haven't writen the code of this yet but will do)
+is we udpate single token in each iteration based on gradient signal.
+
+(new paragraph) is the paper Local Prompt Optimization (this is not also implemented yet) - the idea is to (this is reasoning based tough)
+locate tokens on where to edit based on the errors.
