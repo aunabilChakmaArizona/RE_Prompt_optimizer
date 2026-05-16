@@ -459,6 +459,45 @@ Do not modify any other parts of the prompt (but remove the target span tags).
 Output only the revised prompt.
 '''
 
+LPO_LOCATION_TAGGING_PROMPT_V1 = '''A relation extraction prompt helps an LLM decide whether a query sentence expresses a target relation between the subject and object entities, using a support sentence for that relation. The classifier must answer with exactly one token: "yes" or "no".
+
+Current prompt:
+```
+#INFERENCE_PROMPT#
+```
+
+Feedback examples from the current prompt:
+#FEEDBACK_EXAMPLES#
+
+Let's think step by step.
+First, identify the scope of tokens within the prompt where edits should take place.
+Prompt edits include adding, deleting or modifying tokens.
+Mark the scope of the prompt that needs editing by putting <edit>, </edit> tags.
+You can have multiple <edit> tags and each <edit> tag should not entail more than #MAX_WORDS_PER_EDIT_TAG# words.
+Use at most #MAX_EDIT_TAGS# <edit> tags.
+Do not cover the whole sentence with multiple <edit> tags.
+Reply with the prompt with <edit>, </edit> tags.
+Do not include any other text.
+'''
+
+LPO_LOCAL_REWRITE_PROMPT_V1 = '''A relation extraction prompt helps an LLM decide whether a query sentence expresses a target relation between the subject and object entities, using a support sentence for that relation. The classifier must answer with exactly one token: "yes" or "no".
+
+Current prompt with local edit scopes:
+```
+#TAGGED_PROMPT#
+```
+
+Feedback examples from the current prompt:
+#FEEDBACK_EXAMPLES#
+
+Generate one revised full prompt by editing only the text inside the <edit>, </edit> tags.
+You may add, delete, or modify tokens inside those local scopes.
+Keep the rest of the prompt unchanged except for minimal grammar cleanup at the edit boundaries.
+Do not include <edit> or </edit> tags in the revised prompts.
+
+Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
+'''
+
 # Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
 # Use the replacements exactly as provided.
 # Do not modify any other parts of the prompt, except for minimal local adjustments if necessary for grammatical correctness or coherence.

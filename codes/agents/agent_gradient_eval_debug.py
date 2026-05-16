@@ -901,6 +901,29 @@ def _token_gradient_score_by_index(gradient_results: Dict[str, Any]) -> Dict[int
     return scores
 
 
+def _token_indices_overlapping_char_span(
+    *,
+    token_indices: Sequence[int],
+    offsets: Sequence[Sequence[int]],
+    start_char: int,
+    end_char: int,
+) -> List[int]:
+    return [
+        token_index
+        for token_index in token_indices
+        if int(offsets[token_index][0]) < end_char
+        and int(offsets[token_index][1]) > start_char
+    ]
+
+
+def _candidate_region_sort_key(region: Dict[str, Any]) -> tuple[float, int, int]:
+    return (
+        float(region["region_score"]),
+        -int(region["source_region_rank"]),
+        -int(region["start_token"]),
+    )
+
+
 def _trim_region_to_alphanumeric_edges(
     *,
     instruction_prompt: str,
@@ -971,9 +994,15 @@ def _resolve_region_details(
             )
             if trimmed_region is None:
                 continue
+            score_token_indices = _token_indices_overlapping_char_span(
+                token_indices=token_group,
+                offsets=offsets,
+                start_char=trimmed_region["start_char"],
+                end_char=trimmed_region["end_char"],
+            )
             kept_gradient_scores = [
                 gradient_scores_by_token.get(token_index, 0.0)
-                for token_index in token_group
+                for token_index in score_token_indices
             ]
             candidate_regions.append(
                 {
@@ -993,6 +1022,7 @@ def _resolve_region_details(
                     "trimmed_right_chars": trimmed_region["trimmed_right_chars"],
                     "region_score": max(kept_gradient_scores) if kept_gradient_scores else 0.0,
                     "region_score_method": "max_kept_token_gradient_norm",
+                    "region_score_token_indices": score_token_indices,
                     "source_region_score": region["score"],
                     "region_tokens": tokenizer.convert_ids_to_tokens(
                         [input_ids[token_index] for token_index in token_group]
@@ -1005,16 +1035,13 @@ def _resolve_region_details(
 
     if not candidate_regions:
         raise ValueError(
-            "No editable top_regions remained after protecting yes/no label tokens."
+            "No editable top_regions remained after protecting label/template tokens."
         )
-    candidate_regions.sort(
-        key=lambda item: (
-            item["region_score"],
-            -int(item["source_region_rank"]),
-            -int(item["start_token"]),
-        ),
-        reverse=True,
-    )
+
+    # Protected tokens can split one gradient top_region into multiple editable
+    # fragments. Rank only after all fragments exist so each region competes by
+    # its own strongest remaining gradient token.
+    candidate_regions.sort(key=_candidate_region_sort_key, reverse=True)
     selected_regions = candidate_regions[:num_edit_regions]
     for region_rank, region in enumerate(selected_regions, start=1):
         region["region_rank"] = region_rank
@@ -1033,6 +1060,7 @@ def _resolve_region_details(
         "num_edit_regions": len(selected_regions),
         "selected_regions": selected_regions,
         "marked_prompt": marked_prompt,
+        "candidate_region_selection_method": "post_split_max_token_gradient_norm",
     }
 
 
