@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # PIDs currently running
-PID1=2670511
-PID2=2671187
+PID1=824691
+PID2=825344
 
 check_pid () {
     ps -p "$1" > /dev/null 2>&1
@@ -24,32 +24,19 @@ while true; do
     if [[ $ALIVE1 -ne 0 && $NODE2_STARTED -eq 0 ]]; then
         echo "$(date): PID $PID1 finished. Starting node2 job..."
 
-        nohup python -u GreaTer/experiments/relation_extraction_greater.py \
-          --model "Qwen/Qwen3-4B" \
-          --device-map "cuda:1" \
-          --prompt-source population \
-          --population-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
-          --prompt-node-id 2 \
-          --dataset-type "fs_tacred" \
-          --train-gradient-sample-size 10000 \
-          --gradient-batch-size 4 \
-          --selection-batch-size 8 \
-          --proposal-example-size 50 \
-          --proposal-top-k 25 \
-          --proposal-min-candidates 10 \
-          --selection-top-mu 10 \
-          --top-z 5 \
-          --dev-f1-std-penalty 2.0 \
-          --fluency-lambda 0.2 \
-          --fluency-scope instruction \
-          --fluency-metric nll \
-          --n-steps 1 \
-          --eval-every 1 \
-          --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
-          --full-eval-split final_step_dev \
-          --output-root-dir "../greater_experiments" \
-          --output-substring "seq_node2_1steps_lmd0.2_qwen4" \
-          > nohup_outs/greater_seq_node2_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out 2>&1 &
+        nohup python -u core_trainer_evoprompt_de.py \
+            --model "Qwen/Qwen3-4B" \
+            --optimizer-model "Qwen/Qwen3-14B" \
+            --device-map "cuda:2" \
+            --max-iterations 20 \
+            --population-size 5 \
+            --evoprompt-train-episodes-per-iteration 1000 \
+            --dataset fs_fewrel \
+            --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+            --full-eval-split final_step_dev \
+            --prompt-open-tag "[p]" \
+            --prompt-close-tag "[/p]" \
+            > nohup_outs/fewrel_nohup_evoprompt_de_qwen14opt_qwen4inf_itr20_train1000_final_step_dev.out 2>&1 &
 
         NODE2_STARTED=1
     fi
@@ -58,32 +45,19 @@ while true; do
     if [[ $ALIVE2 -ne 0 && $NODE10_STARTED -eq 0 ]]; then
         echo "$(date): PID $PID2 finished. Starting node10 job..."
 
-        nohup python -u GreaTer/experiments/relation_extraction_greater.py \
-          --model "Qwen/Qwen3-4B" \
-          --device-map "cuda:1" \
-          --prompt-source population \
-          --population-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
-          --prompt-node-id 10 \
-          --dataset-type "fs_tacred" \
-          --train-gradient-sample-size 10000 \
-          --gradient-batch-size 4 \
-          --selection-batch-size 8 \
-          --proposal-example-size 50 \
-          --proposal-top-k 25 \
-          --proposal-min-candidates 10 \
-          --selection-top-mu 10 \
-          --top-z 5 \
-          --dev-f1-std-penalty 2.0 \
-          --fluency-lambda 0.2 \
-          --fluency-scope instruction \
-          --fluency-metric nll \
-          --n-steps 1 \
-          --eval-every 1 \
-          --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
-          --full-eval-split final_step_dev \
-          --output-root-dir "../greater_experiments" \
-          --output-substring "seq_node10_1steps_lmd0.2_qwen4" \
-          > nohup_outs/greater_seq_node10_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out 2>&1 &
+        nohup python -u core_trainer_evoprompt_de.py \
+            --model "google/gemma-3-4b-it" \
+            --optimizer-model "google/gemma-3-12b-it" \
+            --device-map "cuda:2" \
+            --max-iterations 20 \
+            --population-size 5 \
+            --evoprompt-train-episodes-per-iteration 1000 \
+            --dataset fs_fewrel \
+            --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+            --full-eval-split final_step_dev \
+            --prompt-open-tag "[p]" \
+            --prompt-close-tag "[/p]" \
+            > nohup_outs/fewrel_nohup_evoprompt_de_gemma12opt_gemma4inf_itr20_train1000_final_step_dev.out 2>&1 &
 
         NODE10_STARTED=1
     fi
