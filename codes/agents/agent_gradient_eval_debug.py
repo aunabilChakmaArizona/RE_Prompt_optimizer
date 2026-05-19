@@ -62,6 +62,7 @@ LM_PROBABILITY_SUBMODE_CHOICES = [
     LM_PROBABILITY_SUBMODE_NO_CONTEXT,
     LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT,
 ]
+LM_PROBABILITY_TOP_P = 0.9
 BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS = "LLM_SYNTHESIS"
 BEAM_REPLACEMENT_MODE_DIRECT_REPLACEMENT = "DIRECT_REPLACEMENT"
 BEAM_REPLACEMENT_MODE_CHOICES = [
@@ -1644,41 +1645,61 @@ def _collect_top_token_ids_from_prefix(
     model,
     tokenizer,
     num_candidate_pool_tokens: int,
+    top_p: float = LM_PROBABILITY_TOP_P,
 ) -> List[int]:
     if not prefix_token_ids:
         raise ValueError("prefix_token_ids must not be empty for probability-based token selection.")
     if num_candidate_pool_tokens <= 0:
         return []
+    if top_p <= 0.0 or top_p > 1.0:
+        raise ValueError(f"top_p must be in (0, 1], got {top_p}.")
 
     device = _model_device(model)
     input_ids = torch.tensor([list(prefix_token_ids)], dtype=torch.long, device=device)
     with torch.inference_mode():
         outputs = model(input_ids=input_ids, use_cache=False) # todo: clear cuda cache
     next_token_logits = outputs.logits[0, -1, :]
+    next_token_probs = torch.softmax(next_token_logits.float(), dim=-1)
     vocab_size = int(next_token_logits.size(0))
     special_token_ids = set(getattr(tokenizer, "all_special_ids", []))
 
     search_budget = min(vocab_size, max(num_candidate_pool_tokens * 8, num_candidate_pool_tokens))
     collected_ids: List[int] = []
     while True:
-        topk_indices = torch.topk(next_token_logits, k=search_budget).indices.tolist()
+        topk_result = torch.topk(next_token_probs, k=search_budget)
+        topk_probs = topk_result.values.tolist()
+        topk_indices = topk_result.indices.tolist()
         collected_ids = []
         seen_ids: set[int] = set()
-        for token_id in topk_indices:
+        cumulative_probability = 0.0
+        reached_top_p = False
+        for token_probability, token_id in zip(topk_probs, topk_indices):
             token_id = int(token_id)
+            cumulative_probability += float(token_probability)
             if token_id in seen_ids or token_id in special_token_ids:
+                if cumulative_probability >= top_p and collected_ids:
+                    reached_top_p = True
+                    break
                 continue
             token_text = _decode_token_text(tokenizer=tokenizer, token_ids=[token_id])
             if token_text == "":
+                if cumulative_probability >= top_p and collected_ids:
+                    reached_top_p = True
+                    break
                 continue
             seen_ids.add(token_id)
             collected_ids.append(token_id)
-            if len(collected_ids) == num_candidate_pool_tokens:
+            if len(collected_ids) == num_candidate_pool_tokens or cumulative_probability >= top_p:
+                reached_top_p = cumulative_probability >= top_p
                 break
-        if len(collected_ids) >= num_candidate_pool_tokens or search_budget == vocab_size:
+        if (
+            len(collected_ids) >= num_candidate_pool_tokens
+            or reached_top_p
+            or search_budget == vocab_size
+        ):
             break
         search_budget = min(vocab_size, search_budget * 2)
-    del input_ids, outputs, next_token_logits
+    del input_ids, outputs, next_token_logits, next_token_probs
     clear_cuda_cache()
     return collected_ids
 
@@ -1789,6 +1810,7 @@ def _generate_region_candidates_from_lm_probability(
                 "[agent_gradient_eval_debug] LM probability first-token selection:",
                 f"region_rank={region_rank}",
                 "start_token=0 using original first token only",
+                f"top_p={LM_PROBABILITY_TOP_P}",
             )
         else:
             probability_context_prefix_token_ids = _build_probability_context_prefix_token_ids(
@@ -1802,6 +1824,7 @@ def _generate_region_candidates_from_lm_probability(
                 model=model,
                 tokenizer=tokenizer,
                 num_candidate_pool_tokens=candidate_pool_size,
+                top_p=LM_PROBABILITY_TOP_P,
             )
             # clustered_first_token_ids = select_centroid_token_ids(
             #     token_ids=initial_top_token_ids,
@@ -1814,6 +1837,7 @@ def _generate_region_candidates_from_lm_probability(
                 "[agent_gradient_eval_debug] LM probability first-token selection:",
                 f"region_rank={region_rank}",
                 f"submode={lm_probability_submode}",
+                f"top_p={LM_PROBABILITY_TOP_P}",
                 f"candidate_pool_size={len(initial_top_token_ids)}",
                 f"selected_first_tokens={json.dumps([_decode_token_text(tokenizer=tokenizer, token_ids=[token_id]) for token_id in selected_first_token_ids], ensure_ascii=False)}",
             )
@@ -1883,6 +1907,7 @@ def _generate_region_candidates_from_lm_probability(
                 "region_text": region["region_text"],
                 "generation_method": "lm_probability",
                 "lm_probability_submode": lm_probability_submode,
+                "lm_probability_top_p": LM_PROBABILITY_TOP_P,
                 "meta_prompt": None,
                 "raw_output": None,
                 "initial_top_token_ids": initial_top_token_ids,
@@ -3500,6 +3525,7 @@ def _run_lm_probability_candidate_suggestion(
         f"num_region_candidates={args.num_region_candidates}",
         f"beam_width={args.beam_width}",
         f"lm_probability_submode={args.lm_probability_submode}",
+        f"lm_probability_top_p={LM_PROBABILITY_TOP_P}",
     )
     region_candidates = _generate_region_candidates_from_lm_probability(
         instruction_prompt=instruction_prompt,
