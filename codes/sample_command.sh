@@ -4096,10 +4096,10 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../greater_experiments" \
-  --output-substring "fewrel_scratch_10steps_gemma4_n30000" \
-  --resume-out-file "nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n30000_lmd0.2_k25_u10_z5_gemma4_resume.out" \
+  --output-substring "fewrel_scratch_10steps_gemma4_n30000_resume" \
+  --resume-out-file "nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n30000_lmd0.2_k25_u10_z5_gemma4.out" \
   > nohup_outs/fewrel_scratch_10steps_gemma4_greater_scratch_10steps_n30000_lmd0.2_k25_u10_z5_gemma4_resume.out 2>&1 &
-
+nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n30000_lmd0.2_k25_u10_z5_gemma4.out
 # nohup python -u GreaTer/experiments/relation_extraction_greater.py \
 #   --model "Qwen/Qwen3-4B" \
 #   --device-map "cuda:2" \
@@ -6545,3 +6545,36 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   # > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_sz70000_20260508_120655_google-gemma-3-4b-it_node3_v6test.out 2>&1 &
   # > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt2_sz70000_20260508_120655_google-gemma-3-4b-it_node3_v6test.out 2>&1 &
   # > nohup_outs/nohup_gradient_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz70000_20260508_120655_google-gemma-3-4b-it_node3_v6test.out 2>&1 &
+
+
+
+##### Superstar tuning
+# running
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 2 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node2_qwen4_v7" \
+  > nohup_outs/superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node2_qwen4_v7.out 2>&1 &
