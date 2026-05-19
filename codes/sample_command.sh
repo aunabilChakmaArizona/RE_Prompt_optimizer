@@ -3995,13 +3995,13 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "fewrel_scratch_5steps_qwen4" > nohup_outs/fewrel_scratch_5steps_qwen4_greater_scratch_5steps_n10000_lmd0.2_k25_u10_z5_qwen4.out 2>&1 &
 #../greater_experiments/20260518_015356_fewrel_scratch_5steps_qwen4
 
-#running
+#running again
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:2" \
   --prompt-source scratch \
   --dataset-type "fs_fewrel" \
-  --train-gradient-sample-size 10000 \
+  --train-gradient-sample-size 30000 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-example-size 50 \
@@ -4018,9 +4018,9 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../greater_experiments" \
-  --output-substring "fewrel_scratch_5steps_gemma4" > nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n10000_lmd0.2_k25_u10_z5_gemma4.out 2>&1 &
+  --output-substring "fewrel_scratch_5steps_gemma4_n30000" > nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n30000_lmd0.2_k25_u10_z5_gemma4.out 2>&1 &
 
-#running
+#done
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:1" \
@@ -4073,6 +4073,32 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-root-dir "../greater_experiments" \
   --output-substring "fewrel_scratch_10steps_qwen4_top_grad" > nohup_outs/fewrel_scratch_10steps_qwen4_greater_scratch_5steps_n10000_lmd0.2_k25_u10_z5_qwen4_top_grad.out 2>&1 &
 
+# later
+nohup python -u GreaTer/experiments/relation_extraction_greater.py \
+  --model "google/gemma-3-4b-it" \
+  --device-map "cuda:2" \
+  --prompt-source scratch \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-example-size 50 \
+  --proposal-top-k 25 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-z 5 \
+  --dev-f1-std-penalty 2.0 \
+  --fluency-lambda 0.2 \
+  --fluency-scope instruction \
+  --fluency-metric nll \
+  --n-steps 10 \
+  --eval-every 1 \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../greater_experiments" \
+  --output-substring "fewrel_scratch_10steps_gemma4_n30000" \
+  --resume-out-file "nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n30000_lmd0.2_k25_u10_z5_gemma4_resume.out" \
+  > nohup_outs/fewrel_scratch_10steps_gemma4_greater_scratch_10steps_n30000_lmd0.2_k25_u10_z5_gemma4_resume.out 2>&1 &
 
 # nohup python -u GreaTer/experiments/relation_extraction_greater.py \
 #   --model "Qwen/Qwen3-4B" \
