@@ -63,6 +63,11 @@ LM_PROBABILITY_SUBMODE_CHOICES = [
     LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT,
 ]
 LM_PROBABILITY_TOP_P = 0.95
+LM_PROBABILITY_REWRITE_TASK = (
+    "Write a natural revised version of the original prompt while preserving meaning, "
+    "structure, and tone. Prefer paraphrase or other clear, robust, and effective wording."
+)
+LM_PROBABILITY_REVISED_PROMPT_PREFIX = "Revised prompt:\n"
 BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS = "LLM_SYNTHESIS"
 BEAM_REPLACEMENT_MODE_DIRECT_REPLACEMENT = "DIRECT_REPLACEMENT"
 BEAM_REPLACEMENT_MODE_CHOICES = [
@@ -1646,6 +1651,8 @@ def _collect_top_token_ids_from_prefix(
     tokenizer,
     num_candidate_pool_tokens: int,
     top_p: float = LM_PROBABILITY_TOP_P,
+    original_token_id: int | None = None,
+    min_non_original_token_ids: int = 0,
 ) -> List[int]:
     if not prefix_token_ids:
         raise ValueError("prefix_token_ids must not be empty for probability-based token selection.")
@@ -1653,6 +1660,10 @@ def _collect_top_token_ids_from_prefix(
         return []
     if top_p <= 0.0 or top_p > 1.0:
         raise ValueError(f"top_p must be in (0, 1], got {top_p}.")
+    if min_non_original_token_ids < 0:
+        raise ValueError(
+            f"min_non_original_token_ids must be non-negative, got {min_non_original_token_ids}."
+        )
 
     device = _model_device(model)
     input_ids = torch.tensor([list(prefix_token_ids)], dtype=torch.long, device=device)
@@ -1673,23 +1684,36 @@ def _collect_top_token_ids_from_prefix(
         seen_ids: set[int] = set()
         cumulative_probability = 0.0
         reached_top_p = False
+        non_original_count = 0
         for token_probability, token_id in zip(topk_probs, topk_indices):
             token_id = int(token_id)
             cumulative_probability += float(token_probability)
             if token_id in seen_ids or token_id in special_token_ids:
-                if cumulative_probability >= top_p and collected_ids:
+                if (
+                    cumulative_probability >= top_p
+                    and collected_ids
+                    and non_original_count >= min_non_original_token_ids
+                ):
                     reached_top_p = True
                     break
                 continue
             token_text = _decode_token_text(tokenizer=tokenizer, token_ids=[token_id])
             if token_text == "":
-                if cumulative_probability >= top_p and collected_ids:
+                if (
+                    cumulative_probability >= top_p
+                    and collected_ids
+                    and non_original_count >= min_non_original_token_ids
+                ):
                     reached_top_p = True
                     break
                 continue
             seen_ids.add(token_id)
             collected_ids.append(token_id)
-            if len(collected_ids) == num_candidate_pool_tokens or cumulative_probability >= top_p:
+            if original_token_id is None or token_id != original_token_id:
+                non_original_count += 1
+            if len(collected_ids) == num_candidate_pool_tokens:
+                break
+            if cumulative_probability >= top_p and non_original_count >= min_non_original_token_ids:
                 reached_top_p = cumulative_probability >= top_p
                 break
         if (
@@ -1722,14 +1746,28 @@ def _build_lm_probability_context_prompt(
     full_instruction_prompt: str,
     prompt_prefix_text: str,
 ) -> str:
+    adjusted_prompt_prefix_text = prompt_prefix_text.strip()
     return (
         "Original Prompt:\n"
-        f"{full_instruction_prompt}\n\n"
+        f"```{full_instruction_prompt}```\n\n"
         "Task:\n"
-        "Write a natural revised version of the original prompt while preserving meaning, structure, and tone. Prefer paraphrase or other clear, robust, and effective wording.\n\n"
-        "Revised prompt:\n"
-        f"{prompt_prefix_text}"
+        f"{LM_PROBABILITY_REWRITE_TASK}\n\n"
+        f"{LM_PROBABILITY_REVISED_PROMPT_PREFIX}"
+        f"```{adjusted_prompt_prefix_text}"
     )
+
+
+def _encode_text_without_special_tokens(
+    *,
+    text: str,
+    tokenizer,
+) -> List[int]:
+    encoded = tokenizer(
+        text,
+        add_special_tokens=False,
+        return_attention_mask=False,
+    )
+    return list(encoded["input_ids"])
 
 
 def _build_probability_context_prefix_token_ids(
@@ -1740,22 +1778,18 @@ def _build_probability_context_prefix_token_ids(
     lm_probability_submode: str,
 ) -> List[int]:
     if lm_probability_submode == LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT:
-        encoded = tokenizer(
-            _build_lm_probability_context_prompt(
+        return _encode_text_without_special_tokens(
+            text=_build_lm_probability_context_prompt(
                 full_instruction_prompt=instruction_prompt,
                 prompt_prefix_text=prompt_prefix_text,
             ),
-            add_special_tokens=False,
-            return_attention_mask=False,
+            tokenizer=tokenizer,
         )
-        return list(encoded["input_ids"])
     if lm_probability_submode == LM_PROBABILITY_SUBMODE_NO_CONTEXT:
-        encoded = tokenizer(
-            prompt_prefix_text,
-            add_special_tokens=False,
-            return_attention_mask=False,
+        return _encode_text_without_special_tokens(
+            text=prompt_prefix_text,
+            tokenizer=tokenizer,
         )
-        return list(encoded["input_ids"])
     raise ValueError(f"Unsupported lm_probability_submode: {lm_probability_submode}")
 
 
@@ -1802,7 +1836,19 @@ def _generate_region_candidates_from_lm_probability(
         prefix_token_ids = prompt_token_ids[:start_token]
         prompt_prefix_text = instruction_prompt[: region["start_char"]]
         candidate_pool_size = max(num_region_candidates, num_region_candidates * num_region_candidates)
-        if start_token == 0:
+        probability_context_prefix_token_ids: List[int] | None = None
+        if (
+            lm_probability_submode == LM_PROBABILITY_SUBMODE_FULL_PROMPT_AS_CONTEXT
+            or start_token != 0
+        ):
+            probability_context_prefix_token_ids = _build_probability_context_prefix_token_ids(
+                instruction_prompt=instruction_prompt,
+                prompt_prefix_text=prompt_prefix_text,
+                tokenizer=tokenizer,
+                lm_probability_submode=lm_probability_submode,
+            )
+
+        if start_token == 0 and probability_context_prefix_token_ids is None:
             initial_top_token_ids = [original_first_token_id]
             clustered_first_token_ids = [original_first_token_id]
             selected_first_token_ids = [original_first_token_id] * num_region_candidates
@@ -1811,20 +1857,19 @@ def _generate_region_candidates_from_lm_probability(
                 f"region_rank={region_rank}",
                 "start_token=0 using original first token only",
                 f"top_p={LM_PROBABILITY_TOP_P}",
+                "min_non_original_first_tokens=0",
             )
         else:
-            probability_context_prefix_token_ids = _build_probability_context_prefix_token_ids(
-                instruction_prompt=instruction_prompt,
-                prompt_prefix_text=prompt_prefix_text,
-                tokenizer=tokenizer,
-                lm_probability_submode=lm_probability_submode,
-            )
+            if probability_context_prefix_token_ids is None:
+                raise ValueError("Missing probability context prefix token ids.")
             initial_top_token_ids = _collect_top_token_ids_from_prefix(
                 prefix_token_ids=probability_context_prefix_token_ids,
                 model=model,
                 tokenizer=tokenizer,
                 num_candidate_pool_tokens=candidate_pool_size,
                 top_p=LM_PROBABILITY_TOP_P,
+                original_token_id=original_first_token_id,
+                min_non_original_token_ids=1,
             )
             # clustered_first_token_ids = select_centroid_token_ids(
             #     token_ids=initial_top_token_ids,
@@ -1838,6 +1883,7 @@ def _generate_region_candidates_from_lm_probability(
                 f"region_rank={region_rank}",
                 f"submode={lm_probability_submode}",
                 f"top_p={LM_PROBABILITY_TOP_P}",
+                "min_non_original_first_tokens=1",
                 f"candidate_pool_size={len(initial_top_token_ids)}",
                 f"selected_first_tokens={json.dumps([_decode_token_text(tokenizer=tokenizer, token_ids=[token_id]) for token_id in selected_first_token_ids], ensure_ascii=False)}",
             )
@@ -1846,15 +1892,23 @@ def _generate_region_candidates_from_lm_probability(
             _decode_token_text(tokenizer=tokenizer, token_ids=[token_id])
             for token_id in selected_first_token_ids
         ]
+        continuation_prefix_token_ids = (
+            probability_context_prefix_token_ids
+            if probability_context_prefix_token_ids is not None
+            else prefix_token_ids
+        )
+        if continuation_prefix_token_ids is None:
+            raise ValueError("Missing continuation prefix token ids.")
         continuation_prompts = [
             _decode_token_text(
                 tokenizer=tokenizer,
-                token_ids=prefix_token_ids + [token_id],
+                token_ids=continuation_prefix_token_ids + [token_id],
             )
             for token_id in selected_first_token_ids
         ]
         remaining_region_tokens = max(0, region_token_length - 1)
         if remaining_region_tokens > 0:
+            log_label = f"agent_gradient_eval_debug_lm_region_candidates_r{region_rank}"
             continuation_outputs = run_prompts(
                 continuation_prompts,
                 model=model,
@@ -1866,7 +1920,7 @@ def _generate_region_candidates_from_lm_probability(
                 enable_thinking=False,
                 do_sample=True,
                 do_log=True,
-                log_label=f"agent_gradient_eval_debug_lm_region_candidates_r{region_rank}",
+                log_label=log_label,
             )
         else:
             continuation_outputs = [""] * len(continuation_prompts)
@@ -1908,6 +1962,9 @@ def _generate_region_candidates_from_lm_probability(
                 "generation_method": "lm_probability",
                 "lm_probability_submode": lm_probability_submode,
                 "lm_probability_top_p": LM_PROBABILITY_TOP_P,
+                "lm_probability_min_non_original_first_tokens": (
+                    0 if start_token == 0 and probability_context_prefix_token_ids is None else 1
+                ),
                 "meta_prompt": None,
                 "raw_output": None,
                 "initial_top_token_ids": initial_top_token_ids,
