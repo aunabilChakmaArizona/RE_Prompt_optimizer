@@ -31,6 +31,7 @@ from agents.agent_gradient_eval_debug import (
     _build_train_sample_index,
     _sample_balanced_pairs_from_bucketed_pool,
     build_full_binary_pairs,
+    resolve_instruction_prompt,
 )
 from agents.agent_llm_prompting import run_prompts
 from agents.agent_memory import clear_model_memory
@@ -69,8 +70,25 @@ def _parse_args() -> argparse.Namespace:
         choices=[PROMPT_SOURCE_SCRATCH, PROMPT_SOURCE_POPULATION],
         default=PROMPT_SOURCE_SCRATCH,
     )
-    parser.add_argument("--population-path", type=Path, default=None)
-    parser.add_argument("--prompt-node-id", type=int, default=None)
+    parser.add_argument(
+        "--population-path",
+        type=Path,
+        default=None,
+        help=(
+            "Path to population.json or generated_prompt_candidates.json. With a "
+            "generated candidates file, --prompt-node-id is treated as the 0-based "
+            "candidate prompt index."
+        ),
+    )
+    parser.add_argument(
+        "--prompt-node-id",
+        type=int,
+        default=None,
+        help=(
+            "node_id for population.json, or 0-based prompt index for "
+            "generated_prompt_candidates.json."
+        ),
+    )
     parser.add_argument("--dataset-type", default="fs_tacred")
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR)
     parser.add_argument("--train-samples", default="fs_tacred_train_samples.pkl")
@@ -229,20 +247,18 @@ def _resolve_initial_instruction_prompt(args: argparse.Namespace) -> Tuple[str, 
     if args.prompt_node_id is None:
         raise ValueError("--prompt-node-id is required with --prompt-source=population.")
 
-    payload = load_json_file(args.population_path)
-    for node in payload.get("population", []):
-        if node.get("node_id") == args.prompt_node_id:
-            prompt = node.get("inference_instruction_prompt") or node.get("inference_prompt") or ""
-            if not prompt:
-                raise ValueError(f"Node {args.prompt_node_id} does not contain an instruction prompt.")
-            return prompt, {
-                "prompt_source": PROMPT_SOURCE_POPULATION,
-                "population_path": str(args.population_path),
-                "prompt_node_id": args.prompt_node_id,
-                "best_node_id": payload.get("best_node_id"),
-                "node_val_score": node.get("val_score"),
-            }
-    raise KeyError(f"Could not find node_id={args.prompt_node_id} in population.")
+    prompt, prompt_info = resolve_instruction_prompt(
+        args.population_path,
+        prompt_index=None,
+        prompt_node_id=args.prompt_node_id,
+    )
+    prompt_info = {
+        "prompt_source": PROMPT_SOURCE_POPULATION,
+        "population_path": str(args.population_path),
+        "prompt_node_id": args.prompt_node_id,
+        **prompt_info,
+    }
+    return prompt, prompt_info
 
 
 def _sample_balanced_train_pairs_for_step(

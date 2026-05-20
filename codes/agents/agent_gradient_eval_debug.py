@@ -142,8 +142,21 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prompt-source-path",
         type=Path,
-        required=True,
-        help="Path to generated_prompt_candidates.json or population.json",
+        default=None,
+        help=(
+            "Legacy alias for --population-path. Path to generated_prompt_candidates.json "
+            "or population.json."
+        ),
+    )
+    parser.add_argument(
+        "--population-path",
+        type=Path,
+        default=None,
+        help=(
+            "Path to population.json or generated_prompt_candidates.json. With a "
+            "generated candidates file, --prompt-node-id is treated as the 0-based "
+            "candidate prompt index."
+        ),
     )
     parser.add_argument(
         "--prompt-index",
@@ -155,7 +168,10 @@ def _parse_args() -> argparse.Namespace:
         "--prompt-node-id",
         type=int,
         default=None,
-        help="node_id for population.json",
+        help=(
+            "node_id for population.json, or 0-based prompt index for "
+            "generated_prompt_candidates.json."
+        ),
     )
     parser.add_argument("--dataset-type", default="fs_tacred")
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR)
@@ -349,7 +365,11 @@ def _resolve_prompt_from_generated_candidates(
     prompt_index: int | None,
 ) -> Tuple[str, Dict[str, Any]]:
     if prompt_index is None:
-        raise ValueError("--prompt-index is required for generated_prompt_candidates.json")
+        raise ValueError(
+            "--prompt-node-id is required for generated_prompt_candidates.json "
+            "and is treated as the 0-based prompt index. The legacy --prompt-index "
+            "argument is also supported."
+        )
 
     prompts = payload.get("candidate_prompts", [])
     metadata_list = payload.get("candidate_metadata", [])
@@ -407,13 +427,14 @@ def resolve_instruction_prompt(
     prompt_node_id: int | None,
 ) -> Tuple[str, Dict[str, Any]]:
     payload = load_json_file(prompt_source_path)
-    if prompt_source_path.name == "generated_prompt_candidates.json":
-        return _resolve_prompt_from_generated_candidates(payload, prompt_index)
-    if prompt_source_path.name == "population.json":
+    if "population" in payload:
         return _resolve_prompt_from_population(payload, prompt_node_id)
+    if "candidate_prompts" in payload:
+        effective_prompt_index = prompt_index if prompt_index is not None else prompt_node_id
+        return _resolve_prompt_from_generated_candidates(payload, effective_prompt_index)
     raise ValueError(
-        "Unsupported prompt source file. Expected generated_prompt_candidates.json "
-        "or population.json."
+        "Unsupported prompt source file. Expected a JSON object with either "
+        "'population' or 'candidate_prompts'."
     )
 
 def _resolve_num_ways(episodes: Sequence[Dict[str, Any]]) -> int:
@@ -3936,8 +3957,12 @@ def main() -> None:
     if args.selection_f1_std_penalty < 0:
         raise ValueError("--selection-f1-std-penalty must be non-negative.")
 
+    prompt_source_path = args.population_path or args.prompt_source_path
+    if prompt_source_path is None:
+        raise ValueError("--population-path is required. --prompt-source-path is kept as a legacy alias.")
+
     instruction_prompt, prompt_info = resolve_instruction_prompt(
-        args.prompt_source_path,
+        prompt_source_path,
         prompt_index=args.prompt_index,
         prompt_node_id=args.prompt_node_id,
     )
@@ -4263,7 +4288,7 @@ def main() -> None:
         "candidate_mode": args.candidate_mode,
         "mode": args.mode,
         "dataset_split": "train",
-        "prompt_source_path": str(args.prompt_source_path),
+        "prompt_source_path": str(prompt_source_path),
         "prompt_info": prompt_info,
         "num_iterations": max(len(iteration_results), 1),
         "gradient_analysis": gradient_results,
