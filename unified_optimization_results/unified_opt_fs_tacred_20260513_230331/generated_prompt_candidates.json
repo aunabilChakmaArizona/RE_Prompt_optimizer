@@ -1,0 +1,106 @@
+{
+  "candidate_prompts": [
+    "You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated with subject and object tags. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence, following these rules:\n\n1. **Resolve Ambiguity**: Treat abbreviations (e.g., 'Minn.') as part of the entity (e.g., 'Minnesota') and ensure the object matches the required role (e.g., state vs. city).\n2. **Avoid Assumptions**: Only infer the relation if explicitly stated in the query. Do not assume events (e.g., death) or relationships (e.g., familial ties) from incomplete information.\n3. **Differentiate Relationships**: Distinguish between relationship types (e.g., friendship vs. family) and recognize roles (e.g., 'managing principal' implies 'shareholder') even if not explicitly stated.\n4. **Validate Entity Types**: Ensure the object is a subnational entity (e.g., state/province) when required, not a sovereign country (e.g., 'Cuba' cannot satisfy 'per:stateorprovince_of_birth').\n\nIf the relation holds between the Subject and Object entities in the query sentence, answer \"yes\"; otherwise, answer \"no\".",
+    "You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities indicated by subject and object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these guidelines:\n\n1. **Entity Precision**: Resolve abbreviations (e.g., 'Minn.' \u2192 Minnesota) and distinguish roles (e.g., state vs. city) based on context. Treat ambiguous references strictly according to their explicit role in the sentence.\n2. **Direct Evidence Only**: Relations must be explicitly supported by the query sentence. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly stated.\n3. **Relation Type Specificity**: Match the exact type of relationship (e.g., 'other family' vs. 'friendship'). Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., shareholder) even without explicit mention.\n4. **Geographic Hierarchy**: Distinguish sovereign countries (e.g., Cuba) from subnational entities (e.g., California). A relation requiring a state/province must be fulfilled by a subnational entity, not a country.\n\nAnswer 'yes' if the relation holds under these criteria; otherwise, answer 'no'.",
+    "You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:\n\n1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country).\n2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.\n3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations.\n4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated.\n5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province.\n\nAnswer 'yes' if the relation holds under these constraints; otherwise, answer 'no'.",
+    "You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities, indicated with subject and object tags. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence, following these guidelines: (1) Resolve abbreviations (e.g., 'Minn.' \u2192 Minnesota) and ensure they are correctly interpreted as states, cities, or other entities as required by the relation. (2) Avoid assuming relations based on incomplete information; the relation must be explicitly supported by the query sentence. (3) Distinguish between relationship types (e.g., familial vs. non-familial) as defined in the relation description. (4) Recognize that certain roles (e.g., 'managing principal') may imply specific relationships (e.g., shareholder) even if not explicitly stated. (5) Ensure relations requiring subnational entities (e.g., state/province) are matched with states/provinces, not countries. If the relation holds between the Subject and Object entities in the query sentence, answer 'yes'; otherwise, answer 'no'.",
+    "You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.\n\nA relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence.\n\n**Key guidelines:**\n1. **Entity Precision:** Resolve abbreviations (e.g., 'Minn.' = Minnesota) and distinguish between entity types (e.g., state vs. city, country vs. province). Do not conflate geographic hierarchies.\n2. **Explicit Evidence Only:** Relations require direct, unambiguous support. Do not infer events (e.g., death) or relationships (e.g., familial ties) from incomplete or unrelated information.\n3. **Relation Type Specificity:** Match the exact relationship type (e.g., 'familial' vs. 'friendly'). Non-familial roles (e.g., 'friend') do not satisfy familial relations unless explicitly stated.\n4. **Role Implications:** Recognize that certain roles (e.g., 'managing principal') inherently imply relationships (e.g., 'shareholder') even if not explicitly stated.\n5. **Geographic Scope:** Relations requiring subnational entities (e.g., 'stateorprovince_of_birth') must reference states/provinces, not sovereign countries.\n\nIf the relation holds between the Subject and the Object entities in the query sentence, answer \"yes\"; otherwise, answer \"no\"."
+  ],
+  "candidate_metadata": [
+    {
+      "candidate_index": 1,
+      "cluster_id": null,
+      "cluster_prompt_index": 0,
+      "category_ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "category_names": [
+        "Misreading the Problem",
+        "Logical Fallacy",
+        "Conceptual Misunderstanding of Relation Types",
+        "Misinterpreting Role Implications",
+        "Confusing Country with State/Province"
+      ]
+    },
+    {
+      "candidate_index": 2,
+      "cluster_id": null,
+      "cluster_prompt_index": 1,
+      "category_ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "category_names": [
+        "Misreading the Problem",
+        "Logical Fallacy",
+        "Conceptual Misunderstanding of Relation Types",
+        "Misinterpreting Role Implications",
+        "Confusing Country with State/Province"
+      ]
+    },
+    {
+      "candidate_index": 3,
+      "cluster_id": null,
+      "cluster_prompt_index": 2,
+      "category_ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "category_names": [
+        "Misreading the Problem",
+        "Logical Fallacy",
+        "Conceptual Misunderstanding of Relation Types",
+        "Misinterpreting Role Implications",
+        "Confusing Country with State/Province"
+      ]
+    },
+    {
+      "candidate_index": 4,
+      "cluster_id": null,
+      "cluster_prompt_index": 3,
+      "category_ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "category_names": [
+        "Misreading the Problem",
+        "Logical Fallacy",
+        "Conceptual Misunderstanding of Relation Types",
+        "Misinterpreting Role Implications",
+        "Confusing Country with State/Province"
+      ]
+    },
+    {
+      "candidate_index": 5,
+      "cluster_id": null,
+      "cluster_prompt_index": 4,
+      "category_ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "category_names": [
+        "Misreading the Problem",
+        "Logical Fallacy",
+        "Conceptual Misunderstanding of Relation Types",
+        "Misinterpreting Role Implications",
+        "Confusing Country with State/Province"
+      ]
+    }
+  ]
+}
