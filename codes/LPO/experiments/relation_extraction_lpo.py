@@ -602,6 +602,8 @@ def _select_candidate(
             f"candidate_index={candidate['candidate_index']}",
             f"split={full_eval_split}",
         )
+        print("[relation_extraction_lpo] full eval candidate prompt:")
+        print(candidate["prompt"])
         report = _evaluate_on_pairs(
             instruction_prompt=candidate["prompt"],
             binary_pairs=full_eval_pairs,

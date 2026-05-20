@@ -7127,3 +7127,377 @@ python -u agents/agent_gradient_eval_debug.py \
   --full-eval-split final_step_dev \
   --output-root-dir "../gradients_experiments" \
   --output-substring "llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v8"
+
+# trying again - done
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 2 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_top0.95_sz20000_20260508_122409_node2_qwen4_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_top0.95_sz20000_20260508_122409_node2_qwen4_v9.out 2>&1 &
+
+# trying again - done
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9.out 2>&1 &
+
+# aunabil lpo 1 done
+python -u LPO/experiments/relation_extraction_lpo.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:0" \
+  --optimizer-model "Qwen/Qwen3-14B" \
+  --optimizer-device-map "cuda:0" \
+  --prompt-source population \
+  --population-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 2 \
+  --dataset-type "fs_tacred" \
+  --train-feedback-sample-size 1000 \
+  --feedback-example-size 5 \
+  --mistake-example-size 5 \
+  --n-steps 1 \
+  --max-edit-tags 5 \
+  --max-words-per-edit-tag 2 \
+  --num-candidates 5 \
+  --top-z 5 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../lpo_experiments" \
+  --output-substring "superstart_lpo_roleswitch_node2_step1_n1000_qwen4_optqwen14"
+
+# aunabil lpo 2 done 
+python -u LPO/experiments/relation_extraction_lpo.py \
+  --model "Qwen/Qwen3-4B" \
+  --device-map "cuda:0" \
+  --optimizer-model "Qwen/Qwen3-14B" \
+  --optimizer-device-map "cuda:0" \
+  --prompt-source population \
+  --population-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 10 \
+  --dataset-type "fs_tacred" \
+  --train-feedback-sample-size 1000 \
+  --feedback-example-size 5 \
+  --mistake-example-size 5 \
+  --n-steps 1 \
+  --max-edit-tags 5 \
+  --max-words-per-edit-tag 2 \
+  --num-candidates 5 \
+  --top-z 5 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../lpo_experiments" \
+  --output-substring "superstart_lpo_roleswitch_node10_step1_n1000_qwen4_optqwen14"
+
+# tanvir lpo 1 done
+python -u LPO/experiments/relation_extraction_lpo.py \
+  --model "google/gemma-3-4b-it" \
+  --device-map "cuda:0" \
+  --optimizer-model "google/gemma-3-12b-it" \
+  --optimizer-device-map "cuda:0" \
+  --prompt-source population \
+  --population-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_tacred" \
+  --train-feedback-sample-size 1000 \
+  --feedback-example-size 5 \
+  --mistake-example-size 5 \
+  --n-steps 1 \
+  --max-edit-tags 5 \
+  --max-words-per-edit-tag 2 \
+  --num-candidates 5 \
+  --top-z 5 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../lpo_experiments" \
+  --output-substring "superstart_lpo_roleswitch_node3_step1_n1000_gemma4_optgemma12"
+
+
+# tanvir lpo 2 done
+python -u LPO/experiments/relation_extraction_lpo.py \
+  --model "google/gemma-3-4b-it" \
+  --device-map "cuda:0" \
+  --optimizer-model "google/gemma-3-12b-it" \
+  --optimizer-device-map "cuda:0" \
+  --prompt-source population \
+  --population-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 18 \
+  --dataset-type "fs_tacred" \
+  --train-feedback-sample-size 1000 \
+  --feedback-example-size 5 \
+  --mistake-example-size 5 \
+  --n-steps 1 \
+  --max-edit-tags 5 \
+  --max-words-per-edit-tag 2 \
+  --num-candidates 5 \
+  --top-z 5 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../lpo_experiments" \
+  --output-substring "superstart_lpo_roleswitch_node18_step1_n1000_gemma4_optgemma12"
+
+# trying with r5 done
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9.out 2>&1 &
+
+# trying again with mt1 done --- selected somehow
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 2 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 1 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node2_qwen4_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node2_qwen4_v9.out 2>&1 &
+
+## Evoprompt DE
+# Qwen trainings/20260513_093517_Qwen-Qwen3-4B/population.json - node 14 and 42 : 14=	19.97,	26.04; 42 = 22.72,	32.35
+# Gemma trainings/20260513_093554_google-gemma-3-4b-it/population.json - node 26 and 34: 17.47	20.34	; 34 =	18.13	22.72	
+
+# running
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260513_093517_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 14 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node14_qwen4_v9" \
+  > nohup_outs/superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node14_qwen4_v9.out 2>&1 &
+
+# running
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260513_093517_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 42 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node42_qwen4_v9" \
+  > nohup_outs/superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node42_qwen4_v9.out 2>&1 &
+
+# trying with r5 mt1 running - assuming selected
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:3" \
+  --prompt-source-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 1 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9.out 2>&1 &
+
+# running
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 10 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 1 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node10_qwen4_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node10_qwen4_v9.out 2>&1 &
+
+# running
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
+  --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 18 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 1 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v9" \
+  > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v9.out 2>&1 &
