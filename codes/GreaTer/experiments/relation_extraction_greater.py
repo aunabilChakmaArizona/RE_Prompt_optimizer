@@ -1583,6 +1583,7 @@ def main() -> None:
                     f"token={variant['record']['token_text']!r}",
                     f"train_loss={variant['record']['combined_score']:.6f}",
                 )
+                print(f"[To evaluate the prompt:] {variant["prompt"]}")
                 full_candidate_eval = _evaluate_full_split(
                     instruction_prompt=variant["prompt"],
                     full_eval_pairs=full_eval_pairs,

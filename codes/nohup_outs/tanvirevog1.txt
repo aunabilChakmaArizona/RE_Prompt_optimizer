@@ -1,0 +1,2590 @@
+[agent_gradient_eval_debug] starting
+[agent_gradient_eval_debug] prompt resolved: population
+[agent_gradient_eval_debug] initial instruction prompt:
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_models] loading model: google/gemma-3-4b-it
+Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+Loading weights: 100% 883/883 [00:01<00:00, 608.59it/s, Materializing param=model.vision_tower.vision_model.post_layernorm.weight]
+generation_config.json: 100% 215/215 [00:00<00:00, 1.98MB/s]
+[agent_models] model loading done: google/gemma-3-4b-it
+tokenizer_config.json: 1.16MB [00:00, 14.1MB/s]
+tokenizer.json: 100% 33.4M/33.4M [00:00<00:00, 54.8MB/s]
+added_tokens.json: 100% 35.0/35.0 [00:00<00:00, 484kB/s]
+special_tokens_map.json: 100% 662/662 [00:00<00:00, 9.16MB/s]
+[agent_gradient_eval_debug] model and tokenizer loaded
+[agent_gradient_eval_debug] train samples loaded: relations=26 dataset_type=fs_tacred
+[agent_gradient_eval_debug] full evaluation dataset loaded: split=final_step_dev episodes=9000
+[agent_gradient_eval_debug] starting optimization iteration: iteration=1 Q=1
+[agent_gradient_eval_debug] iteration input prompt:
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_sample_feedback] sample_feedback_fn: k=30000, relations=26
+[agent_sample_feedback] sample_feedback_fn: done, all_samples=30000, selected_samples=0
+[agent_gradient_eval_debug] train D sample built: iteration=1 D=30000
+[agent_binary_inference] run_binary_inference: 30000 prompts, batch_size=8, batches=3750
+
+[train_gradient_collection_iter_1] sample first prompt:
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+
+Output only "yes" or "no" as answer, with no explanation or additional text.
+
+==
+
+Relation name: "per:stateorprovince_of_birth" (a person's state or province of birth)
+
+Support Sentence: Mr. <subject>DeBlanc</subject> , a native of Lockport , <object>La.</object> , left active military service after the war , received a doctorate in education from McNeese State University and taught mathematics and science in St. Martinville .
+
+Query Sentence: Watson and <subject>his</subject> <object>Sea Shepherd Conservation Society</object> are hunting the six Japanese whalers with the 54-metre ( 177-foot ) Farley Mowat , a second , faster ship , the Robert Hunter , a helicopter and a total of 70 crew from 14 countries .
+
+Answer: 
+
+[train_gradient_collection_iter_1] sample first output:
+no
+[agent_binary_inference]  Processed 20/3750 batches in 2.75s
+[agent_binary_inference]  Processed 40/3750 batches in 4.97s
+[agent_binary_inference]  Processed 60/3750 batches in 7.18s
+[agent_binary_inference]  Processed 80/3750 batches in 9.36s
+[agent_binary_inference]  Processed 100/3750 batches in 11.53s
+[agent_binary_inference]  Processed 120/3750 batches in 13.69s
+[agent_binary_inference]  Processed 140/3750 batches in 15.93s
+[agent_binary_inference]  Processed 160/3750 batches in 18.10s
+[agent_binary_inference]  Processed 180/3750 batches in 20.35s
+[agent_binary_inference]  Processed 200/3750 batches in 22.57s
+[agent_binary_inference]  Processed 220/3750 batches in 24.76s
+[agent_binary_inference]  Processed 240/3750 batches in 26.94s
+[agent_binary_inference]  Processed 260/3750 batches in 29.13s
+[agent_binary_inference]  Processed 280/3750 batches in 31.25s
+[agent_binary_inference]  Processed 300/3750 batches in 33.43s
+[agent_binary_inference]  Processed 320/3750 batches in 35.59s
+[agent_binary_inference]  Processed 340/3750 batches in 37.77s
+[agent_binary_inference]  Processed 360/3750 batches in 39.97s
+[agent_binary_inference]  Processed 380/3750 batches in 42.12s
+[agent_binary_inference]  Processed 400/3750 batches in 44.26s
+[agent_binary_inference]  Processed 420/3750 batches in 46.45s
+[agent_binary_inference]  Processed 440/3750 batches in 48.64s
+[agent_binary_inference]  Processed 460/3750 batches in 50.82s
+[agent_binary_inference]  Processed 480/3750 batches in 53.00s
+[agent_binary_inference]  Processed 500/3750 batches in 55.21s
+[agent_binary_inference]  Processed 520/3750 batches in 57.41s
+[agent_binary_inference]  Processed 540/3750 batches in 59.59s
+[agent_binary_inference]  Processed 560/3750 batches in 61.76s
+[agent_binary_inference]  Processed 580/3750 batches in 63.99s
+[agent_binary_inference]  Processed 600/3750 batches in 66.20s
+[agent_binary_inference]  Processed 620/3750 batches in 68.43s
+[agent_binary_inference]  Processed 640/3750 batches in 70.64s
+[agent_binary_inference]  Processed 660/3750 batches in 72.74s
+[agent_binary_inference]  Processed 680/3750 batches in 74.92s
+[agent_binary_inference]  Processed 700/3750 batches in 77.13s
+[agent_binary_inference]  Processed 720/3750 batches in 79.30s
+[agent_binary_inference]  Processed 740/3750 batches in 81.44s
+[agent_binary_inference]  Processed 760/3750 batches in 83.58s
+[agent_binary_inference]  Processed 780/3750 batches in 85.76s
+[agent_binary_inference]  Processed 800/3750 batches in 87.97s
+[agent_binary_inference]  Processed 820/3750 batches in 90.14s
+[agent_binary_inference]  Processed 840/3750 batches in 92.35s
+[agent_binary_inference]  Processed 860/3750 batches in 94.57s
+[agent_binary_inference]  Processed 880/3750 batches in 96.78s
+[agent_binary_inference]  Processed 900/3750 batches in 98.98s
+[agent_binary_inference]  Processed 920/3750 batches in 101.20s
+[agent_binary_inference]  Processed 940/3750 batches in 103.40s
+[agent_binary_inference]  Processed 960/3750 batches in 105.64s
+[agent_binary_inference]  Processed 980/3750 batches in 107.83s
+[agent_binary_inference]  Processed 1000/3750 batches in 110.04s
+[agent_binary_inference]  Processed 1020/3750 batches in 112.26s
+[agent_binary_inference]  Processed 1040/3750 batches in 114.41s
+[agent_binary_inference]  Processed 1060/3750 batches in 116.58s
+[agent_binary_inference]  Processed 1080/3750 batches in 118.75s
+[agent_binary_inference]  Processed 1100/3750 batches in 120.93s
+[agent_binary_inference]  Processed 1120/3750 batches in 123.11s
+[agent_binary_inference]  Processed 1140/3750 batches in 125.29s
+[agent_binary_inference]  Processed 1160/3750 batches in 127.47s
+[agent_binary_inference]  Processed 1180/3750 batches in 129.68s
+[agent_binary_inference]  Processed 1200/3750 batches in 131.88s
+[agent_binary_inference]  Processed 1220/3750 batches in 134.08s
+[agent_binary_inference]  Processed 1240/3750 batches in 136.32s
+[agent_binary_inference]  Processed 1260/3750 batches in 138.50s
+[agent_binary_inference]  Processed 1280/3750 batches in 140.66s
+[agent_binary_inference]  Processed 1300/3750 batches in 142.91s
+[agent_binary_inference]  Processed 1320/3750 batches in 145.11s
+[agent_binary_inference]  Processed 1340/3750 batches in 147.28s
+[agent_binary_inference]  Processed 1360/3750 batches in 149.47s
+[agent_binary_inference]  Processed 1380/3750 batches in 151.69s
+[agent_binary_inference]  Processed 1400/3750 batches in 153.82s
+[agent_binary_inference]  Processed 1420/3750 batches in 156.00s
+[agent_binary_inference]  Processed 1440/3750 batches in 158.20s
+[agent_binary_inference]  Processed 1460/3750 batches in 160.41s
+[agent_binary_inference]  Processed 1480/3750 batches in 162.60s
+[agent_binary_inference]  Processed 1500/3750 batches in 164.81s
+[agent_binary_inference]  Processed 1520/3750 batches in 166.97s
+[agent_binary_inference]  Processed 1540/3750 batches in 169.10s
+[agent_binary_inference]  Processed 1560/3750 batches in 171.32s
+[agent_binary_inference]  Processed 1580/3750 batches in 173.54s
+[agent_binary_inference]  Processed 1600/3750 batches in 175.72s
+[agent_binary_inference]  Processed 1620/3750 batches in 177.87s
+[agent_binary_inference]  Processed 1640/3750 batches in 180.07s
+[agent_binary_inference]  Processed 1660/3750 batches in 182.29s
+[agent_binary_inference]  Processed 1680/3750 batches in 184.49s
+[agent_binary_inference]  Processed 1700/3750 batches in 186.67s
+[agent_binary_inference]  Processed 1720/3750 batches in 188.83s
+[agent_binary_inference]  Processed 1740/3750 batches in 191.06s
+[agent_binary_inference]  Processed 1760/3750 batches in 193.32s
+[agent_binary_inference]  Processed 1780/3750 batches in 195.48s
+[agent_binary_inference]  Processed 1800/3750 batches in 197.65s
+[agent_binary_inference]  Processed 1820/3750 batches in 199.79s
+[agent_binary_inference]  Processed 1840/3750 batches in 202.06s
+[agent_binary_inference]  Processed 1860/3750 batches in 204.36s
+[agent_binary_inference]  Processed 1880/3750 batches in 206.57s
+[agent_binary_inference]  Processed 1900/3750 batches in 208.73s
+[agent_binary_inference]  Processed 1920/3750 batches in 210.94s
+[agent_binary_inference]  Processed 1940/3750 batches in 213.15s
+[agent_binary_inference]  Processed 1960/3750 batches in 215.44s
+[agent_binary_inference]  Processed 1980/3750 batches in 217.59s
+[agent_binary_inference]  Processed 2000/3750 batches in 219.78s
+[agent_binary_inference]  Processed 2020/3750 batches in 221.98s
+[agent_binary_inference]  Processed 2040/3750 batches in 224.17s
+[agent_binary_inference]  Processed 2060/3750 batches in 226.38s
+[agent_binary_inference]  Processed 2080/3750 batches in 228.63s
+[agent_binary_inference]  Processed 2100/3750 batches in 230.85s
+[agent_binary_inference]  Processed 2120/3750 batches in 233.10s
+[agent_binary_inference]  Processed 2140/3750 batches in 235.32s
+[agent_binary_inference]  Processed 2160/3750 batches in 237.57s
+[agent_binary_inference]  Processed 2180/3750 batches in 239.77s
+[agent_binary_inference]  Processed 2200/3750 batches in 241.91s
+[agent_binary_inference]  Processed 2220/3750 batches in 244.12s
+[agent_binary_inference]  Processed 2240/3750 batches in 246.34s
+[agent_binary_inference]  Processed 2260/3750 batches in 248.51s
+[agent_binary_inference]  Processed 2280/3750 batches in 250.76s
+[agent_binary_inference]  Processed 2300/3750 batches in 253.00s
+[agent_binary_inference]  Processed 2320/3750 batches in 255.21s
+[agent_binary_inference]  Processed 2340/3750 batches in 257.42s
+[agent_binary_inference]  Processed 2360/3750 batches in 259.60s
+[agent_binary_inference]  Processed 2380/3750 batches in 261.80s
+[agent_binary_inference]  Processed 2400/3750 batches in 264.00s
+[agent_binary_inference]  Processed 2420/3750 batches in 266.17s
+[agent_binary_inference]  Processed 2440/3750 batches in 268.38s
+[agent_binary_inference]  Processed 2460/3750 batches in 270.55s
+[agent_binary_inference]  Processed 2480/3750 batches in 272.72s
+[agent_binary_inference]  Processed 2500/3750 batches in 274.95s
+[agent_binary_inference]  Processed 2520/3750 batches in 277.11s
+[agent_binary_inference]  Processed 2540/3750 batches in 279.31s
+[agent_binary_inference]  Processed 2560/3750 batches in 281.53s
+[agent_binary_inference]  Processed 2580/3750 batches in 283.82s
+[agent_binary_inference]  Processed 2600/3750 batches in 286.01s
+[agent_binary_inference]  Processed 2620/3750 batches in 288.16s
+[agent_binary_inference]  Processed 2640/3750 batches in 290.32s
+[agent_binary_inference]  Processed 2660/3750 batches in 292.51s
+[agent_binary_inference]  Processed 2680/3750 batches in 294.75s
+[agent_binary_inference]  Processed 2700/3750 batches in 296.98s
+[agent_binary_inference]  Processed 2720/3750 batches in 299.22s
+[agent_binary_inference]  Processed 2740/3750 batches in 301.43s
+[agent_binary_inference]  Processed 2760/3750 batches in 303.58s
+[agent_binary_inference]  Processed 2780/3750 batches in 305.77s
+[agent_binary_inference]  Processed 2800/3750 batches in 308.04s
+[agent_binary_inference]  Processed 2820/3750 batches in 310.27s
+[agent_binary_inference]  Processed 2840/3750 batches in 312.52s
+[agent_binary_inference]  Processed 2860/3750 batches in 314.68s
+[agent_binary_inference]  Processed 2880/3750 batches in 316.93s
+[agent_binary_inference]  Processed 2900/3750 batches in 319.13s
+[agent_binary_inference]  Processed 2920/3750 batches in 321.34s
+[agent_binary_inference]  Processed 2940/3750 batches in 323.52s
+[agent_binary_inference]  Processed 2960/3750 batches in 325.75s
+[agent_binary_inference]  Processed 2980/3750 batches in 327.88s
+[agent_binary_inference]  Processed 3000/3750 batches in 330.11s
+[agent_binary_inference]  Processed 3020/3750 batches in 332.32s
+[agent_binary_inference]  Processed 3040/3750 batches in 334.54s
+[agent_binary_inference]  Processed 3060/3750 batches in 336.77s
+[agent_binary_inference]  Processed 3080/3750 batches in 339.00s
+[agent_binary_inference]  Processed 3100/3750 batches in 341.24s
+[agent_binary_inference]  Processed 3120/3750 batches in 343.47s
+[agent_binary_inference]  Processed 3140/3750 batches in 345.67s
+[agent_binary_inference]  Processed 3160/3750 batches in 347.78s
+[agent_binary_inference]  Processed 3180/3750 batches in 349.95s
+[agent_binary_inference]  Processed 3200/3750 batches in 352.14s
+[agent_binary_inference]  Processed 3220/3750 batches in 354.33s
+[agent_binary_inference]  Processed 3240/3750 batches in 356.48s
+[agent_binary_inference]  Processed 3260/3750 batches in 358.74s
+[agent_binary_inference]  Processed 3280/3750 batches in 360.95s
+[agent_binary_inference]  Processed 3300/3750 batches in 363.15s
+[agent_binary_inference]  Processed 3320/3750 batches in 365.38s
+[agent_binary_inference]  Processed 3340/3750 batches in 367.58s
+[agent_binary_inference]  Processed 3360/3750 batches in 369.79s
+[agent_binary_inference]  Processed 3380/3750 batches in 371.96s
+[agent_binary_inference]  Processed 3400/3750 batches in 374.12s
+[agent_binary_inference]  Processed 3420/3750 batches in 376.33s
+[agent_binary_inference]  Processed 3440/3750 batches in 378.56s
+[agent_binary_inference]  Processed 3460/3750 batches in 380.78s
+[agent_binary_inference]  Processed 3480/3750 batches in 383.06s
+[agent_binary_inference]  Processed 3500/3750 batches in 385.25s
+[agent_binary_inference]  Processed 3520/3750 batches in 387.46s
+[agent_binary_inference]  Processed 3540/3750 batches in 389.69s
+[agent_binary_inference]  Processed 3560/3750 batches in 391.92s
+[agent_binary_inference]  Processed 3580/3750 batches in 394.12s
+[agent_binary_inference]  Processed 3600/3750 batches in 396.27s
+[agent_binary_inference]  Processed 3620/3750 batches in 398.52s
+[agent_binary_inference]  Processed 3640/3750 batches in 400.72s
+[agent_binary_inference]  Processed 3660/3750 batches in 402.89s
+[agent_binary_inference]  Processed 3680/3750 batches in 405.05s
+[agent_binary_inference]  Processed 3700/3750 batches in 407.26s
+[agent_binary_inference]  Processed 3720/3750 batches in 409.44s
+[agent_binary_inference]  Processed 3740/3750 batches in 411.63s
+[agent_binary_inference]  Processed 3750/3750 batches in 412.72s
+[agent_binary_inference] run_binary_inference: done in 412.75s
+[agent_binary_inference] overall time passed: 412.75s
+[agent_gradient_eval_debug] train D pair pool: iteration=1 available_tp=1220 available_tn=23663 available_fp=353 available_fn=4764 selected_tp=353 selected_tn=353 selected_fp=353 selected_fn=353
+[agent_gradient_eval_debug] train gradient batch built: iteration=1 pairs=1412
+[agent_gradient_eval_debug] running gradient analysis iteration=1
+[agent_gradient_token_analysis] gradient batch 1/706
+[agent_gradient_token_analysis] gradient batch 2/706
+[agent_gradient_token_analysis] gradient batch 3/706
+[agent_gradient_token_analysis] gradient batch 4/706
+[agent_gradient_token_analysis] gradient batch 5/706
+[agent_gradient_token_analysis] gradient batch 6/706
+[agent_gradient_token_analysis] gradient batch 7/706
+[agent_gradient_token_analysis] gradient batch 8/706
+[agent_gradient_token_analysis] gradient batch 9/706
+[agent_gradient_token_analysis] gradient batch 10/706
+[agent_gradient_token_analysis] gradient batch 11/706
+[agent_gradient_token_analysis] gradient batch 12/706
+[agent_gradient_token_analysis] gradient batch 13/706
+[agent_gradient_token_analysis] gradient batch 14/706
+[agent_gradient_token_analysis] gradient batch 15/706
+[agent_gradient_token_analysis] gradient batch 16/706
+[agent_gradient_token_analysis] gradient batch 17/706
+[agent_gradient_token_analysis] gradient batch 18/706
+[agent_gradient_token_analysis] gradient batch 19/706
+[agent_gradient_token_analysis] gradient batch 20/706
+[agent_gradient_token_analysis] gradient batch 21/706
+[agent_gradient_token_analysis] gradient batch 22/706
+[agent_gradient_token_analysis] gradient batch 23/706
+[agent_gradient_token_analysis] gradient batch 24/706
+[agent_gradient_token_analysis] gradient batch 25/706
+[agent_gradient_token_analysis] gradient batch 26/706
+[agent_gradient_token_analysis] gradient batch 27/706
+[agent_gradient_token_analysis] gradient batch 28/706
+[agent_gradient_token_analysis] gradient batch 29/706
+[agent_gradient_token_analysis] gradient batch 30/706
+[agent_gradient_token_analysis] gradient batch 31/706
+[agent_gradient_token_analysis] gradient batch 32/706
+[agent_gradient_token_analysis] gradient batch 33/706
+[agent_gradient_token_analysis] gradient batch 34/706
+[agent_gradient_token_analysis] gradient batch 35/706
+[agent_gradient_token_analysis] gradient batch 36/706
+[agent_gradient_token_analysis] gradient batch 37/706
+[agent_gradient_token_analysis] gradient batch 38/706
+[agent_gradient_token_analysis] gradient batch 39/706
+[agent_gradient_token_analysis] gradient batch 40/706
+[agent_gradient_token_analysis] gradient batch 41/706
+[agent_gradient_token_analysis] gradient batch 42/706
+[agent_gradient_token_analysis] gradient batch 43/706
+[agent_gradient_token_analysis] gradient batch 44/706
+[agent_gradient_token_analysis] gradient batch 45/706
+[agent_gradient_token_analysis] gradient batch 46/706
+[agent_gradient_token_analysis] gradient batch 47/706
+[agent_gradient_token_analysis] gradient batch 48/706
+[agent_gradient_token_analysis] gradient batch 49/706
+[agent_gradient_token_analysis] gradient batch 50/706
+[agent_gradient_token_analysis] gradient batch 51/706
+[agent_gradient_token_analysis] gradient batch 52/706
+[agent_gradient_token_analysis] gradient batch 53/706
+[agent_gradient_token_analysis] gradient batch 54/706
+[agent_gradient_token_analysis] gradient batch 55/706
+[agent_gradient_token_analysis] gradient batch 56/706
+[agent_gradient_token_analysis] gradient batch 57/706
+[agent_gradient_token_analysis] gradient batch 58/706
+[agent_gradient_token_analysis] gradient batch 59/706
+[agent_gradient_token_analysis] gradient batch 60/706
+[agent_gradient_token_analysis] gradient batch 61/706
+[agent_gradient_token_analysis] gradient batch 62/706
+[agent_gradient_token_analysis] gradient batch 63/706
+[agent_gradient_token_analysis] gradient batch 64/706
+[agent_gradient_token_analysis] gradient batch 65/706
+[agent_gradient_token_analysis] gradient batch 66/706
+[agent_gradient_token_analysis] gradient batch 67/706
+[agent_gradient_token_analysis] gradient batch 68/706
+[agent_gradient_token_analysis] gradient batch 69/706
+[agent_gradient_token_analysis] gradient batch 70/706
+[agent_gradient_token_analysis] gradient batch 71/706
+[agent_gradient_token_analysis] gradient batch 72/706
+[agent_gradient_token_analysis] gradient batch 73/706
+[agent_gradient_token_analysis] gradient batch 74/706
+[agent_gradient_token_analysis] gradient batch 75/706
+[agent_gradient_token_analysis] gradient batch 76/706
+[agent_gradient_token_analysis] gradient batch 77/706
+[agent_gradient_token_analysis] gradient batch 78/706
+[agent_gradient_token_analysis] gradient batch 79/706
+[agent_gradient_token_analysis] gradient batch 80/706
+[agent_gradient_token_analysis] gradient batch 81/706
+[agent_gradient_token_analysis] gradient batch 82/706
+[agent_gradient_token_analysis] gradient batch 83/706
+[agent_gradient_token_analysis] gradient batch 84/706
+[agent_gradient_token_analysis] gradient batch 85/706
+[agent_gradient_token_analysis] gradient batch 86/706
+[agent_gradient_token_analysis] gradient batch 87/706
+[agent_gradient_token_analysis] gradient batch 88/706
+[agent_gradient_token_analysis] gradient batch 89/706
+[agent_gradient_token_analysis] gradient batch 90/706
+[agent_gradient_token_analysis] gradient batch 91/706
+[agent_gradient_token_analysis] gradient batch 92/706
+[agent_gradient_token_analysis] gradient batch 93/706
+[agent_gradient_token_analysis] gradient batch 94/706
+[agent_gradient_token_analysis] gradient batch 95/706
+[agent_gradient_token_analysis] gradient batch 96/706
+[agent_gradient_token_analysis] gradient batch 97/706
+[agent_gradient_token_analysis] gradient batch 98/706
+[agent_gradient_token_analysis] gradient batch 99/706
+[agent_gradient_token_analysis] gradient batch 100/706
+[agent_gradient_token_analysis] gradient batch 101/706
+[agent_gradient_token_analysis] gradient batch 102/706
+[agent_gradient_token_analysis] gradient batch 103/706
+[agent_gradient_token_analysis] gradient batch 104/706
+[agent_gradient_token_analysis] gradient batch 105/706
+[agent_gradient_token_analysis] gradient batch 106/706
+[agent_gradient_token_analysis] gradient batch 107/706
+[agent_gradient_token_analysis] gradient batch 108/706
+[agent_gradient_token_analysis] gradient batch 109/706
+[agent_gradient_token_analysis] gradient batch 110/706
+[agent_gradient_token_analysis] gradient batch 111/706
+[agent_gradient_token_analysis] gradient batch 112/706
+[agent_gradient_token_analysis] gradient batch 113/706
+[agent_gradient_token_analysis] gradient batch 114/706
+[agent_gradient_token_analysis] gradient batch 115/706
+[agent_gradient_token_analysis] gradient batch 116/706
+[agent_gradient_token_analysis] gradient batch 117/706
+[agent_gradient_token_analysis] gradient batch 118/706
+[agent_gradient_token_analysis] gradient batch 119/706
+[agent_gradient_token_analysis] gradient batch 120/706
+[agent_gradient_token_analysis] gradient batch 121/706
+[agent_gradient_token_analysis] gradient batch 122/706
+[agent_gradient_token_analysis] gradient batch 123/706
+[agent_gradient_token_analysis] gradient batch 124/706
+[agent_gradient_token_analysis] gradient batch 125/706
+[agent_gradient_token_analysis] gradient batch 126/706
+[agent_gradient_token_analysis] gradient batch 127/706
+[agent_gradient_token_analysis] gradient batch 128/706
+[agent_gradient_token_analysis] gradient batch 129/706
+[agent_gradient_token_analysis] gradient batch 130/706
+[agent_gradient_token_analysis] gradient batch 131/706
+[agent_gradient_token_analysis] gradient batch 132/706
+[agent_gradient_token_analysis] gradient batch 133/706
+[agent_gradient_token_analysis] gradient batch 134/706
+[agent_gradient_token_analysis] gradient batch 135/706
+[agent_gradient_token_analysis] gradient batch 136/706
+[agent_gradient_token_analysis] gradient batch 137/706
+[agent_gradient_token_analysis] gradient batch 138/706
+[agent_gradient_token_analysis] gradient batch 139/706
+[agent_gradient_token_analysis] gradient batch 140/706
+[agent_gradient_token_analysis] gradient batch 141/706
+[agent_gradient_token_analysis] gradient batch 142/706
+[agent_gradient_token_analysis] gradient batch 143/706
+[agent_gradient_token_analysis] gradient batch 144/706
+[agent_gradient_token_analysis] gradient batch 145/706
+[agent_gradient_token_analysis] gradient batch 146/706
+[agent_gradient_token_analysis] gradient batch 147/706
+[agent_gradient_token_analysis] gradient batch 148/706
+[agent_gradient_token_analysis] gradient batch 149/706
+[agent_gradient_token_analysis] gradient batch 150/706
+[agent_gradient_token_analysis] gradient batch 151/706
+[agent_gradient_token_analysis] gradient batch 152/706
+[agent_gradient_token_analysis] gradient batch 153/706
+[agent_gradient_token_analysis] gradient batch 154/706
+[agent_gradient_token_analysis] gradient batch 155/706
+[agent_gradient_token_analysis] gradient batch 156/706
+[agent_gradient_token_analysis] gradient batch 157/706
+[agent_gradient_token_analysis] gradient batch 158/706
+[agent_gradient_token_analysis] gradient batch 159/706
+[agent_gradient_token_analysis] gradient batch 160/706
+[agent_gradient_token_analysis] gradient batch 161/706
+[agent_gradient_token_analysis] gradient batch 162/706
+[agent_gradient_token_analysis] gradient batch 163/706
+[agent_gradient_token_analysis] gradient batch 164/706
+[agent_gradient_token_analysis] gradient batch 165/706
+[agent_gradient_token_analysis] gradient batch 166/706
+[agent_gradient_token_analysis] gradient batch 167/706
+[agent_gradient_token_analysis] gradient batch 168/706
+[agent_gradient_token_analysis] gradient batch 169/706
+[agent_gradient_token_analysis] gradient batch 170/706
+[agent_gradient_token_analysis] gradient batch 171/706
+[agent_gradient_token_analysis] gradient batch 172/706
+[agent_gradient_token_analysis] gradient batch 173/706
+[agent_gradient_token_analysis] gradient batch 174/706
+[agent_gradient_token_analysis] gradient batch 175/706
+[agent_gradient_token_analysis] gradient batch 176/706
+[agent_gradient_token_analysis] gradient batch 177/706
+[agent_gradient_token_analysis] gradient batch 178/706
+[agent_gradient_token_analysis] gradient batch 179/706
+[agent_gradient_token_analysis] gradient batch 180/706
+[agent_gradient_token_analysis] gradient batch 181/706
+[agent_gradient_token_analysis] gradient batch 182/706
+[agent_gradient_token_analysis] gradient batch 183/706
+[agent_gradient_token_analysis] gradient batch 184/706
+[agent_gradient_token_analysis] gradient batch 185/706
+[agent_gradient_token_analysis] gradient batch 186/706
+[agent_gradient_token_analysis] gradient batch 187/706
+[agent_gradient_token_analysis] gradient batch 188/706
+[agent_gradient_token_analysis] gradient batch 189/706
+[agent_gradient_token_analysis] gradient batch 190/706
+[agent_gradient_token_analysis] gradient batch 191/706
+[agent_gradient_token_analysis] gradient batch 192/706
+[agent_gradient_token_analysis] gradient batch 193/706
+[agent_gradient_token_analysis] gradient batch 194/706
+[agent_gradient_token_analysis] gradient batch 195/706
+[agent_gradient_token_analysis] gradient batch 196/706
+[agent_gradient_token_analysis] gradient batch 197/706
+[agent_gradient_token_analysis] gradient batch 198/706
+[agent_gradient_token_analysis] gradient batch 199/706
+[agent_gradient_token_analysis] gradient batch 200/706
+[agent_gradient_token_analysis] gradient batch 201/706
+[agent_gradient_token_analysis] gradient batch 202/706
+[agent_gradient_token_analysis] gradient batch 203/706
+[agent_gradient_token_analysis] gradient batch 204/706
+[agent_gradient_token_analysis] gradient batch 205/706
+[agent_gradient_token_analysis] gradient batch 206/706
+[agent_gradient_token_analysis] gradient batch 207/706
+[agent_gradient_token_analysis] gradient batch 208/706
+[agent_gradient_token_analysis] gradient batch 209/706
+[agent_gradient_token_analysis] gradient batch 210/706
+[agent_gradient_token_analysis] gradient batch 211/706
+[agent_gradient_token_analysis] gradient batch 212/706
+[agent_gradient_token_analysis] gradient batch 213/706
+[agent_gradient_token_analysis] gradient batch 214/706
+[agent_gradient_token_analysis] gradient batch 215/706
+[agent_gradient_token_analysis] gradient batch 216/706
+[agent_gradient_token_analysis] gradient batch 217/706
+[agent_gradient_token_analysis] gradient batch 218/706
+[agent_gradient_token_analysis] gradient batch 219/706
+[agent_gradient_token_analysis] gradient batch 220/706
+[agent_gradient_token_analysis] gradient batch 221/706
+[agent_gradient_token_analysis] gradient batch 222/706
+[agent_gradient_token_analysis] gradient batch 223/706
+[agent_gradient_token_analysis] gradient batch 224/706
+[agent_gradient_token_analysis] gradient batch 225/706
+[agent_gradient_token_analysis] gradient batch 226/706
+[agent_gradient_token_analysis] gradient batch 227/706
+[agent_gradient_token_analysis] gradient batch 228/706
+[agent_gradient_token_analysis] gradient batch 229/706
+[agent_gradient_token_analysis] gradient batch 230/706
+[agent_gradient_token_analysis] gradient batch 231/706
+[agent_gradient_token_analysis] gradient batch 232/706
+[agent_gradient_token_analysis] gradient batch 233/706
+[agent_gradient_token_analysis] gradient batch 234/706
+[agent_gradient_token_analysis] gradient batch 235/706
+[agent_gradient_token_analysis] gradient batch 236/706
+[agent_gradient_token_analysis] gradient batch 237/706
+[agent_gradient_token_analysis] gradient batch 238/706
+[agent_gradient_token_analysis] gradient batch 239/706
+[agent_gradient_token_analysis] gradient batch 240/706
+[agent_gradient_token_analysis] gradient batch 241/706
+[agent_gradient_token_analysis] gradient batch 242/706
+[agent_gradient_token_analysis] gradient batch 243/706
+[agent_gradient_token_analysis] gradient batch 244/706
+[agent_gradient_token_analysis] gradient batch 245/706
+[agent_gradient_token_analysis] gradient batch 246/706
+[agent_gradient_token_analysis] gradient batch 247/706
+[agent_gradient_token_analysis] gradient batch 248/706
+[agent_gradient_token_analysis] gradient batch 249/706
+[agent_gradient_token_analysis] gradient batch 250/706
+[agent_gradient_token_analysis] gradient batch 251/706
+[agent_gradient_token_analysis] gradient batch 252/706
+[agent_gradient_token_analysis] gradient batch 253/706
+[agent_gradient_token_analysis] gradient batch 254/706
+[agent_gradient_token_analysis] gradient batch 255/706
+[agent_gradient_token_analysis] gradient batch 256/706
+[agent_gradient_token_analysis] gradient batch 257/706
+[agent_gradient_token_analysis] gradient batch 258/706
+[agent_gradient_token_analysis] gradient batch 259/706
+[agent_gradient_token_analysis] gradient batch 260/706
+[agent_gradient_token_analysis] gradient batch 261/706
+[agent_gradient_token_analysis] gradient batch 262/706
+[agent_gradient_token_analysis] gradient batch 263/706
+[agent_gradient_token_analysis] gradient batch 264/706
+[agent_gradient_token_analysis] gradient batch 265/706
+[agent_gradient_token_analysis] gradient batch 266/706
+[agent_gradient_token_analysis] gradient batch 267/706
+[agent_gradient_token_analysis] gradient batch 268/706
+[agent_gradient_token_analysis] gradient batch 269/706
+[agent_gradient_token_analysis] gradient batch 270/706
+[agent_gradient_token_analysis] gradient batch 271/706
+[agent_gradient_token_analysis] gradient batch 272/706
+[agent_gradient_token_analysis] gradient batch 273/706
+[agent_gradient_token_analysis] gradient batch 274/706
+[agent_gradient_token_analysis] gradient batch 275/706
+[agent_gradient_token_analysis] gradient batch 276/706
+[agent_gradient_token_analysis] gradient batch 277/706
+[agent_gradient_token_analysis] gradient batch 278/706
+[agent_gradient_token_analysis] gradient batch 279/706
+[agent_gradient_token_analysis] gradient batch 280/706
+[agent_gradient_token_analysis] gradient batch 281/706
+[agent_gradient_token_analysis] gradient batch 282/706
+[agent_gradient_token_analysis] gradient batch 283/706
+[agent_gradient_token_analysis] gradient batch 284/706
+[agent_gradient_token_analysis] gradient batch 285/706
+[agent_gradient_token_analysis] gradient batch 286/706
+[agent_gradient_token_analysis] gradient batch 287/706
+[agent_gradient_token_analysis] gradient batch 288/706
+[agent_gradient_token_analysis] gradient batch 289/706
+[agent_gradient_token_analysis] gradient batch 290/706
+[agent_gradient_token_analysis] gradient batch 291/706
+[agent_gradient_token_analysis] gradient batch 292/706
+[agent_gradient_token_analysis] gradient batch 293/706
+[agent_gradient_token_analysis] gradient batch 294/706
+[agent_gradient_token_analysis] gradient batch 295/706
+[agent_gradient_token_analysis] gradient batch 296/706
+[agent_gradient_token_analysis] gradient batch 297/706
+[agent_gradient_token_analysis] gradient batch 298/706
+[agent_gradient_token_analysis] gradient batch 299/706
+[agent_gradient_token_analysis] gradient batch 300/706
+[agent_gradient_token_analysis] gradient batch 301/706
+[agent_gradient_token_analysis] gradient batch 302/706
+[agent_gradient_token_analysis] gradient batch 303/706
+[agent_gradient_token_analysis] gradient batch 304/706
+[agent_gradient_token_analysis] gradient batch 305/706
+[agent_gradient_token_analysis] gradient batch 306/706
+[agent_gradient_token_analysis] gradient batch 307/706
+[agent_gradient_token_analysis] gradient batch 308/706
+[agent_gradient_token_analysis] gradient batch 309/706
+[agent_gradient_token_analysis] gradient batch 310/706
+[agent_gradient_token_analysis] gradient batch 311/706
+[agent_gradient_token_analysis] gradient batch 312/706
+[agent_gradient_token_analysis] gradient batch 313/706
+[agent_gradient_token_analysis] gradient batch 314/706
+[agent_gradient_token_analysis] gradient batch 315/706
+[agent_gradient_token_analysis] gradient batch 316/706
+[agent_gradient_token_analysis] gradient batch 317/706
+[agent_gradient_token_analysis] gradient batch 318/706
+[agent_gradient_token_analysis] gradient batch 319/706
+[agent_gradient_token_analysis] gradient batch 320/706
+[agent_gradient_token_analysis] gradient batch 321/706
+[agent_gradient_token_analysis] gradient batch 322/706
+[agent_gradient_token_analysis] gradient batch 323/706
+[agent_gradient_token_analysis] gradient batch 324/706
+[agent_gradient_token_analysis] gradient batch 325/706
+[agent_gradient_token_analysis] gradient batch 326/706
+[agent_gradient_token_analysis] gradient batch 327/706
+[agent_gradient_token_analysis] gradient batch 328/706
+[agent_gradient_token_analysis] gradient batch 329/706
+[agent_gradient_token_analysis] gradient batch 330/706
+[agent_gradient_token_analysis] gradient batch 331/706
+[agent_gradient_token_analysis] gradient batch 332/706
+[agent_gradient_token_analysis] gradient batch 333/706
+[agent_gradient_token_analysis] gradient batch 334/706
+[agent_gradient_token_analysis] gradient batch 335/706
+[agent_gradient_token_analysis] gradient batch 336/706
+[agent_gradient_token_analysis] gradient batch 337/706
+[agent_gradient_token_analysis] gradient batch 338/706
+[agent_gradient_token_analysis] gradient batch 339/706
+[agent_gradient_token_analysis] gradient batch 340/706
+[agent_gradient_token_analysis] gradient batch 341/706
+[agent_gradient_token_analysis] gradient batch 342/706
+[agent_gradient_token_analysis] gradient batch 343/706
+[agent_gradient_token_analysis] gradient batch 344/706
+[agent_gradient_token_analysis] gradient batch 345/706
+[agent_gradient_token_analysis] gradient batch 346/706
+[agent_gradient_token_analysis] gradient batch 347/706
+[agent_gradient_token_analysis] gradient batch 348/706
+[agent_gradient_token_analysis] gradient batch 349/706
+[agent_gradient_token_analysis] gradient batch 350/706
+[agent_gradient_token_analysis] gradient batch 351/706
+[agent_gradient_token_analysis] gradient batch 352/706
+[agent_gradient_token_analysis] gradient batch 353/706
+[agent_gradient_token_analysis] gradient batch 354/706
+[agent_gradient_token_analysis] gradient batch 355/706
+[agent_gradient_token_analysis] gradient batch 356/706
+[agent_gradient_token_analysis] gradient batch 357/706
+[agent_gradient_token_analysis] gradient batch 358/706
+[agent_gradient_token_analysis] gradient batch 359/706
+[agent_gradient_token_analysis] gradient batch 360/706
+[agent_gradient_token_analysis] gradient batch 361/706
+[agent_gradient_token_analysis] gradient batch 362/706
+[agent_gradient_token_analysis] gradient batch 363/706
+[agent_gradient_token_analysis] gradient batch 364/706
+[agent_gradient_token_analysis] gradient batch 365/706
+[agent_gradient_token_analysis] gradient batch 366/706
+[agent_gradient_token_analysis] gradient batch 367/706
+[agent_gradient_token_analysis] gradient batch 368/706
+[agent_gradient_token_analysis] gradient batch 369/706
+[agent_gradient_token_analysis] gradient batch 370/706
+[agent_gradient_token_analysis] gradient batch 371/706
+[agent_gradient_token_analysis] gradient batch 372/706
+[agent_gradient_token_analysis] gradient batch 373/706
+[agent_gradient_token_analysis] gradient batch 374/706
+[agent_gradient_token_analysis] gradient batch 375/706
+[agent_gradient_token_analysis] gradient batch 376/706
+[agent_gradient_token_analysis] gradient batch 377/706
+[agent_gradient_token_analysis] gradient batch 378/706
+[agent_gradient_token_analysis] gradient batch 379/706
+[agent_gradient_token_analysis] gradient batch 380/706
+[agent_gradient_token_analysis] gradient batch 381/706
+[agent_gradient_token_analysis] gradient batch 382/706
+[agent_gradient_token_analysis] gradient batch 383/706
+[agent_gradient_token_analysis] gradient batch 384/706
+[agent_gradient_token_analysis] gradient batch 385/706
+[agent_gradient_token_analysis] gradient batch 386/706
+[agent_gradient_token_analysis] gradient batch 387/706
+[agent_gradient_token_analysis] gradient batch 388/706
+[agent_gradient_token_analysis] gradient batch 389/706
+[agent_gradient_token_analysis] gradient batch 390/706
+[agent_gradient_token_analysis] gradient batch 391/706
+[agent_gradient_token_analysis] gradient batch 392/706
+[agent_gradient_token_analysis] gradient batch 393/706
+[agent_gradient_token_analysis] gradient batch 394/706
+[agent_gradient_token_analysis] gradient batch 395/706
+[agent_gradient_token_analysis] gradient batch 396/706
+[agent_gradient_token_analysis] gradient batch 397/706
+[agent_gradient_token_analysis] gradient batch 398/706
+[agent_gradient_token_analysis] gradient batch 399/706
+[agent_gradient_token_analysis] gradient batch 400/706
+[agent_gradient_token_analysis] gradient batch 401/706
+[agent_gradient_token_analysis] gradient batch 402/706
+[agent_gradient_token_analysis] gradient batch 403/706
+[agent_gradient_token_analysis] gradient batch 404/706
+[agent_gradient_token_analysis] gradient batch 405/706
+[agent_gradient_token_analysis] gradient batch 406/706
+[agent_gradient_token_analysis] gradient batch 407/706
+[agent_gradient_token_analysis] gradient batch 408/706
+[agent_gradient_token_analysis] gradient batch 409/706
+[agent_gradient_token_analysis] gradient batch 410/706
+[agent_gradient_token_analysis] gradient batch 411/706
+[agent_gradient_token_analysis] gradient batch 412/706
+[agent_gradient_token_analysis] gradient batch 413/706
+[agent_gradient_token_analysis] gradient batch 414/706
+[agent_gradient_token_analysis] gradient batch 415/706
+[agent_gradient_token_analysis] gradient batch 416/706
+[agent_gradient_token_analysis] gradient batch 417/706
+[agent_gradient_token_analysis] gradient batch 418/706
+[agent_gradient_token_analysis] gradient batch 419/706
+[agent_gradient_token_analysis] gradient batch 420/706
+[agent_gradient_token_analysis] gradient batch 421/706
+[agent_gradient_token_analysis] gradient batch 422/706
+[agent_gradient_token_analysis] gradient batch 423/706
+[agent_gradient_token_analysis] gradient batch 424/706
+[agent_gradient_token_analysis] gradient batch 425/706
+[agent_gradient_token_analysis] gradient batch 426/706
+[agent_gradient_token_analysis] gradient batch 427/706
+[agent_gradient_token_analysis] gradient batch 428/706
+[agent_gradient_token_analysis] gradient batch 429/706
+[agent_gradient_token_analysis] gradient batch 430/706
+[agent_gradient_token_analysis] gradient batch 431/706
+[agent_gradient_token_analysis] gradient batch 432/706
+[agent_gradient_token_analysis] gradient batch 433/706
+[agent_gradient_token_analysis] gradient batch 434/706
+[agent_gradient_token_analysis] gradient batch 435/706
+[agent_gradient_token_analysis] gradient batch 436/706
+[agent_gradient_token_analysis] gradient batch 437/706
+[agent_gradient_token_analysis] gradient batch 438/706
+[agent_gradient_token_analysis] gradient batch 439/706
+[agent_gradient_token_analysis] gradient batch 440/706
+[agent_gradient_token_analysis] gradient batch 441/706
+[agent_gradient_token_analysis] gradient batch 442/706
+[agent_gradient_token_analysis] gradient batch 443/706
+[agent_gradient_token_analysis] gradient batch 444/706
+[agent_gradient_token_analysis] gradient batch 445/706
+[agent_gradient_token_analysis] gradient batch 446/706
+[agent_gradient_token_analysis] gradient batch 447/706
+[agent_gradient_token_analysis] gradient batch 448/706
+[agent_gradient_token_analysis] gradient batch 449/706
+[agent_gradient_token_analysis] gradient batch 450/706
+[agent_gradient_token_analysis] gradient batch 451/706
+[agent_gradient_token_analysis] gradient batch 452/706
+[agent_gradient_token_analysis] gradient batch 453/706
+[agent_gradient_token_analysis] gradient batch 454/706
+[agent_gradient_token_analysis] gradient batch 455/706
+[agent_gradient_token_analysis] gradient batch 456/706
+[agent_gradient_token_analysis] gradient batch 457/706
+[agent_gradient_token_analysis] gradient batch 458/706
+[agent_gradient_token_analysis] gradient batch 459/706
+[agent_gradient_token_analysis] gradient batch 460/706
+[agent_gradient_token_analysis] gradient batch 461/706
+[agent_gradient_token_analysis] gradient batch 462/706
+[agent_gradient_token_analysis] gradient batch 463/706
+[agent_gradient_token_analysis] gradient batch 464/706
+[agent_gradient_token_analysis] gradient batch 465/706
+[agent_gradient_token_analysis] gradient batch 466/706
+[agent_gradient_token_analysis] gradient batch 467/706
+[agent_gradient_token_analysis] gradient batch 468/706
+[agent_gradient_token_analysis] gradient batch 469/706
+[agent_gradient_token_analysis] gradient batch 470/706
+[agent_gradient_token_analysis] gradient batch 471/706
+[agent_gradient_token_analysis] gradient batch 472/706
+[agent_gradient_token_analysis] gradient batch 473/706
+[agent_gradient_token_analysis] gradient batch 474/706
+[agent_gradient_token_analysis] gradient batch 475/706
+[agent_gradient_token_analysis] gradient batch 476/706
+[agent_gradient_token_analysis] gradient batch 477/706
+[agent_gradient_token_analysis] gradient batch 478/706
+[agent_gradient_token_analysis] gradient batch 479/706
+[agent_gradient_token_analysis] gradient batch 480/706
+[agent_gradient_token_analysis] gradient batch 481/706
+[agent_gradient_token_analysis] gradient batch 482/706
+[agent_gradient_token_analysis] gradient batch 483/706
+[agent_gradient_token_analysis] gradient batch 484/706
+[agent_gradient_token_analysis] gradient batch 485/706
+[agent_gradient_token_analysis] gradient batch 486/706
+[agent_gradient_token_analysis] gradient batch 487/706
+[agent_gradient_token_analysis] gradient batch 488/706
+[agent_gradient_token_analysis] gradient batch 489/706
+[agent_gradient_token_analysis] gradient batch 490/706
+[agent_gradient_token_analysis] gradient batch 491/706
+[agent_gradient_token_analysis] gradient batch 492/706
+[agent_gradient_token_analysis] gradient batch 493/706
+[agent_gradient_token_analysis] gradient batch 494/706
+[agent_gradient_token_analysis] gradient batch 495/706
+[agent_gradient_token_analysis] gradient batch 496/706
+[agent_gradient_token_analysis] gradient batch 497/706
+[agent_gradient_token_analysis] gradient batch 498/706
+[agent_gradient_token_analysis] gradient batch 499/706
+[agent_gradient_token_analysis] gradient batch 500/706
+[agent_gradient_token_analysis] gradient batch 501/706
+[agent_gradient_token_analysis] gradient batch 502/706
+[agent_gradient_token_analysis] gradient batch 503/706
+[agent_gradient_token_analysis] gradient batch 504/706
+[agent_gradient_token_analysis] gradient batch 505/706
+[agent_gradient_token_analysis] gradient batch 506/706
+[agent_gradient_token_analysis] gradient batch 507/706
+[agent_gradient_token_analysis] gradient batch 508/706
+[agent_gradient_token_analysis] gradient batch 509/706
+[agent_gradient_token_analysis] gradient batch 510/706
+[agent_gradient_token_analysis] gradient batch 511/706
+[agent_gradient_token_analysis] gradient batch 512/706
+[agent_gradient_token_analysis] gradient batch 513/706
+[agent_gradient_token_analysis] gradient batch 514/706
+[agent_gradient_token_analysis] gradient batch 515/706
+[agent_gradient_token_analysis] gradient batch 516/706
+[agent_gradient_token_analysis] gradient batch 517/706
+[agent_gradient_token_analysis] gradient batch 518/706
+[agent_gradient_token_analysis] gradient batch 519/706
+[agent_gradient_token_analysis] gradient batch 520/706
+[agent_gradient_token_analysis] gradient batch 521/706
+[agent_gradient_token_analysis] gradient batch 522/706
+[agent_gradient_token_analysis] gradient batch 523/706
+[agent_gradient_token_analysis] gradient batch 524/706
+[agent_gradient_token_analysis] gradient batch 525/706
+[agent_gradient_token_analysis] gradient batch 526/706
+[agent_gradient_token_analysis] gradient batch 527/706
+[agent_gradient_token_analysis] gradient batch 528/706
+[agent_gradient_token_analysis] gradient batch 529/706
+[agent_gradient_token_analysis] gradient batch 530/706
+[agent_gradient_token_analysis] gradient batch 531/706
+[agent_gradient_token_analysis] gradient batch 532/706
+[agent_gradient_token_analysis] gradient batch 533/706
+[agent_gradient_token_analysis] gradient batch 534/706
+[agent_gradient_token_analysis] gradient batch 535/706
+[agent_gradient_token_analysis] gradient batch 536/706
+[agent_gradient_token_analysis] gradient batch 537/706
+[agent_gradient_token_analysis] gradient batch 538/706
+[agent_gradient_token_analysis] gradient batch 539/706
+[agent_gradient_token_analysis] gradient batch 540/706
+[agent_gradient_token_analysis] gradient batch 541/706
+[agent_gradient_token_analysis] gradient batch 542/706
+[agent_gradient_token_analysis] gradient batch 543/706
+[agent_gradient_token_analysis] gradient batch 544/706
+[agent_gradient_token_analysis] gradient batch 545/706
+[agent_gradient_token_analysis] gradient batch 546/706
+[agent_gradient_token_analysis] gradient batch 547/706
+[agent_gradient_token_analysis] gradient batch 548/706
+[agent_gradient_token_analysis] gradient batch 549/706
+[agent_gradient_token_analysis] gradient batch 550/706
+[agent_gradient_token_analysis] gradient batch 551/706
+[agent_gradient_token_analysis] gradient batch 552/706
+[agent_gradient_token_analysis] gradient batch 553/706
+[agent_gradient_token_analysis] gradient batch 554/706
+[agent_gradient_token_analysis] gradient batch 555/706
+[agent_gradient_token_analysis] gradient batch 556/706
+[agent_gradient_token_analysis] gradient batch 557/706
+[agent_gradient_token_analysis] gradient batch 558/706
+[agent_gradient_token_analysis] gradient batch 559/706
+[agent_gradient_token_analysis] gradient batch 560/706
+[agent_gradient_token_analysis] gradient batch 561/706
+[agent_gradient_token_analysis] gradient batch 562/706
+[agent_gradient_token_analysis] gradient batch 563/706
+[agent_gradient_token_analysis] gradient batch 564/706
+[agent_gradient_token_analysis] gradient batch 565/706
+[agent_gradient_token_analysis] gradient batch 566/706
+[agent_gradient_token_analysis] gradient batch 567/706
+[agent_gradient_token_analysis] gradient batch 568/706
+[agent_gradient_token_analysis] gradient batch 569/706
+[agent_gradient_token_analysis] gradient batch 570/706
+[agent_gradient_token_analysis] gradient batch 571/706
+[agent_gradient_token_analysis] gradient batch 572/706
+[agent_gradient_token_analysis] gradient batch 573/706
+[agent_gradient_token_analysis] gradient batch 574/706
+[agent_gradient_token_analysis] gradient batch 575/706
+[agent_gradient_token_analysis] gradient batch 576/706
+[agent_gradient_token_analysis] gradient batch 577/706
+[agent_gradient_token_analysis] gradient batch 578/706
+[agent_gradient_token_analysis] gradient batch 579/706
+[agent_gradient_token_analysis] gradient batch 580/706
+[agent_gradient_token_analysis] gradient batch 581/706
+[agent_gradient_token_analysis] gradient batch 582/706
+[agent_gradient_token_analysis] gradient batch 583/706
+[agent_gradient_token_analysis] gradient batch 584/706
+[agent_gradient_token_analysis] gradient batch 585/706
+[agent_gradient_token_analysis] gradient batch 586/706
+[agent_gradient_token_analysis] gradient batch 587/706
+[agent_gradient_token_analysis] gradient batch 588/706
+[agent_gradient_token_analysis] gradient batch 589/706
+[agent_gradient_token_analysis] gradient batch 590/706
+[agent_gradient_token_analysis] gradient batch 591/706
+[agent_gradient_token_analysis] gradient batch 592/706
+[agent_gradient_token_analysis] gradient batch 593/706
+[agent_gradient_token_analysis] gradient batch 594/706
+[agent_gradient_token_analysis] gradient batch 595/706
+[agent_gradient_token_analysis] gradient batch 596/706
+[agent_gradient_token_analysis] gradient batch 597/706
+[agent_gradient_token_analysis] gradient batch 598/706
+[agent_gradient_token_analysis] gradient batch 599/706
+[agent_gradient_token_analysis] gradient batch 600/706
+[agent_gradient_token_analysis] gradient batch 601/706
+[agent_gradient_token_analysis] gradient batch 602/706
+[agent_gradient_token_analysis] gradient batch 603/706
+[agent_gradient_token_analysis] gradient batch 604/706
+[agent_gradient_token_analysis] gradient batch 605/706
+[agent_gradient_token_analysis] gradient batch 606/706
+[agent_gradient_token_analysis] gradient batch 607/706
+[agent_gradient_token_analysis] gradient batch 608/706
+[agent_gradient_token_analysis] gradient batch 609/706
+[agent_gradient_token_analysis] gradient batch 610/706
+[agent_gradient_token_analysis] gradient batch 611/706
+[agent_gradient_token_analysis] gradient batch 612/706
+[agent_gradient_token_analysis] gradient batch 613/706
+[agent_gradient_token_analysis] gradient batch 614/706
+[agent_gradient_token_analysis] gradient batch 615/706
+[agent_gradient_token_analysis] gradient batch 616/706
+[agent_gradient_token_analysis] gradient batch 617/706
+[agent_gradient_token_analysis] gradient batch 618/706
+[agent_gradient_token_analysis] gradient batch 619/706
+[agent_gradient_token_analysis] gradient batch 620/706
+[agent_gradient_token_analysis] gradient batch 621/706
+[agent_gradient_token_analysis] gradient batch 622/706
+[agent_gradient_token_analysis] gradient batch 623/706
+[agent_gradient_token_analysis] gradient batch 624/706
+[agent_gradient_token_analysis] gradient batch 625/706
+[agent_gradient_token_analysis] gradient batch 626/706
+[agent_gradient_token_analysis] gradient batch 627/706
+[agent_gradient_token_analysis] gradient batch 628/706
+[agent_gradient_token_analysis] gradient batch 629/706
+[agent_gradient_token_analysis] gradient batch 630/706
+[agent_gradient_token_analysis] gradient batch 631/706
+[agent_gradient_token_analysis] gradient batch 632/706
+[agent_gradient_token_analysis] gradient batch 633/706
+[agent_gradient_token_analysis] gradient batch 634/706
+[agent_gradient_token_analysis] gradient batch 635/706
+[agent_gradient_token_analysis] gradient batch 636/706
+[agent_gradient_token_analysis] gradient batch 637/706
+[agent_gradient_token_analysis] gradient batch 638/706
+[agent_gradient_token_analysis] gradient batch 639/706
+[agent_gradient_token_analysis] gradient batch 640/706
+[agent_gradient_token_analysis] gradient batch 641/706
+[agent_gradient_token_analysis] gradient batch 642/706
+[agent_gradient_token_analysis] gradient batch 643/706
+[agent_gradient_token_analysis] gradient batch 644/706
+[agent_gradient_token_analysis] gradient batch 645/706
+[agent_gradient_token_analysis] gradient batch 646/706
+[agent_gradient_token_analysis] gradient batch 647/706
+[agent_gradient_token_analysis] gradient batch 648/706
+[agent_gradient_token_analysis] gradient batch 649/706
+[agent_gradient_token_analysis] gradient batch 650/706
+[agent_gradient_token_analysis] gradient batch 651/706
+[agent_gradient_token_analysis] gradient batch 652/706
+[agent_gradient_token_analysis] gradient batch 653/706
+[agent_gradient_token_analysis] gradient batch 654/706
+[agent_gradient_token_analysis] gradient batch 655/706
+[agent_gradient_token_analysis] gradient batch 656/706
+[agent_gradient_token_analysis] gradient batch 657/706
+[agent_gradient_token_analysis] gradient batch 658/706
+[agent_gradient_token_analysis] gradient batch 659/706
+[agent_gradient_token_analysis] gradient batch 660/706
+[agent_gradient_token_analysis] gradient batch 661/706
+[agent_gradient_token_analysis] gradient batch 662/706
+[agent_gradient_token_analysis] gradient batch 663/706
+[agent_gradient_token_analysis] gradient batch 664/706
+[agent_gradient_token_analysis] gradient batch 665/706
+[agent_gradient_token_analysis] gradient batch 666/706
+[agent_gradient_token_analysis] gradient batch 667/706
+[agent_gradient_token_analysis] gradient batch 668/706
+[agent_gradient_token_analysis] gradient batch 669/706
+[agent_gradient_token_analysis] gradient batch 670/706
+[agent_gradient_token_analysis] gradient batch 671/706
+[agent_gradient_token_analysis] gradient batch 672/706
+[agent_gradient_token_analysis] gradient batch 673/706
+[agent_gradient_token_analysis] gradient batch 674/706
+[agent_gradient_token_analysis] gradient batch 675/706
+[agent_gradient_token_analysis] gradient batch 676/706
+[agent_gradient_token_analysis] gradient batch 677/706
+[agent_gradient_token_analysis] gradient batch 678/706
+[agent_gradient_token_analysis] gradient batch 679/706
+[agent_gradient_token_analysis] gradient batch 680/706
+[agent_gradient_token_analysis] gradient batch 681/706
+[agent_gradient_token_analysis] gradient batch 682/706
+[agent_gradient_token_analysis] gradient batch 683/706
+[agent_gradient_token_analysis] gradient batch 684/706
+[agent_gradient_token_analysis] gradient batch 685/706
+[agent_gradient_token_analysis] gradient batch 686/706
+[agent_gradient_token_analysis] gradient batch 687/706
+[agent_gradient_token_analysis] gradient batch 688/706
+[agent_gradient_token_analysis] gradient batch 689/706
+[agent_gradient_token_analysis] gradient batch 690/706
+[agent_gradient_token_analysis] gradient batch 691/706
+[agent_gradient_token_analysis] gradient batch 692/706
+[agent_gradient_token_analysis] gradient batch 693/706
+[agent_gradient_token_analysis] gradient batch 694/706
+[agent_gradient_token_analysis] gradient batch 695/706
+[agent_gradient_token_analysis] gradient batch 696/706
+[agent_gradient_token_analysis] gradient batch 697/706
+[agent_gradient_token_analysis] gradient batch 698/706
+[agent_gradient_token_analysis] gradient batch 699/706
+[agent_gradient_token_analysis] gradient batch 700/706
+[agent_gradient_token_analysis] gradient batch 701/706
+[agent_gradient_token_analysis] gradient batch 702/706
+[agent_gradient_token_analysis] gradient batch 703/706
+[agent_gradient_token_analysis] gradient batch 704/706
+[agent_gradient_token_analysis] gradient batch 705/706
+[agent_gradient_token_analysis] gradient batch 706/706
+[agent_gradient_eval_debug] gradient analysis done: iteration=1 instances=1412 candidate_mode=nearest_updated token_gradients=175 top_regions=10
+[agent_gradient_eval_debug] baseline validation: iteration=1 precision=50.18 ± 3.34, recall=50.02 ± 1.35, f1=50.04 ± 1.92 overall_accuracy=0.5000 fixes_from_mistakes=0 regressions_from_correct=0
+[agent_gradient_eval_debug] baseline validation: iteration=1 stable_f1=46.19 (k=2)
+[agent_gradient_eval_debug] generating LM probability region candidates: regions=[1, 2, 3, 4] num_region_candidates=5 beam_width=5 lm_probability_submode=FULL_PROMPT_AS_CONTEXT lm_probability_top_p=0.95
+[agent_gradient_eval_debug] LM probability first-token selection: region_rank=1 submode=FULL_PROMPT_AS_CONTEXT top_p=0.95 min_non_original_first_tokens=1 candidate_pool_size=2 selected_first_tokens=[" to", " illustrating"]
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=1 generation_index=0 candidate_text=' to'
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=1 generation_index=1 candidate_text=' illustrating'
+[agent_gradient_eval_debug] parsed LM probability region candidates: region_rank=1 candidates=["to", "illustrating"]
+[agent_gradient_eval_debug] LM probability first-token selection: region_rank=2 submode=FULL_PROMPT_AS_CONTEXT top_p=0.95 min_non_original_first_tokens=1 candidate_pool_size=2 selected_first_tokens=[" Subject", " subject"]
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=2 generation_index=0 candidate_text=' Subject'
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=2 generation_index=1 candidate_text=' subject'
+[agent_gradient_eval_debug] parsed LM probability region candidates: region_rank=2 candidates=["Subject", "subject"]
+[agent_gradient_eval_debug] LM probability first-token selection: region_rank=3 submode=FULL_PROMPT_AS_CONTEXT top_p=0.95 min_non_original_first_tokens=1 candidate_pool_size=2 selected_first_tokens=[" the", " this"]
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=3 generation_index=0 candidate_text=' the'
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=3 generation_index=1 candidate_text=' this'
+[agent_gradient_eval_debug] parsed LM probability region candidates: region_rank=3 candidates=["the", "this"]
+[agent_gradient_eval_debug] LM probability first-token selection: region_rank=4 submode=FULL_PROMPT_AS_CONTEXT top_p=0.95 min_non_original_first_tokens=1 candidate_pool_size=2 selected_first_tokens=[" information", " informational"]
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=4 generation_index=0 candidate_text=' information'
+[agent_gradient_eval_debug] LM probability candidate span: region_rank=4 generation_index=1 candidate_text=' informational'
+[agent_gradient_eval_debug] parsed LM probability region candidates: region_rank=4 candidates=["information", "informational"]
+[agent_gradient_eval_debug] beam search expanding region: step_index=1 region_rank=1 beam_size=1 num_candidates=2
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+
+[agent_gradient_eval_debug_region_synthesis] sample first prompt:
+You are an expert prompt generator for a relation extraction inference task.
+
+A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object entities.
+
+You are given the current instruction prompt with targeted spans below:
+```
+You will be provided with a relation name, a detailed description of the relation, a support sentence <span_1>to</span_1> illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged <span_2>Subject</span_2> and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the <span_4>information</span_4> presented within the query sentence; external information is irrelevant. Treat <span_3>the</span_3> support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+```
+Each editable span is marked with tags such as <span_1>...</span_1>, <span_2>...</span_2>, and so on.
+
+Replacements for each spans are given below:
+Span 1
+Text: ```to```
+Replace with: ```illustrating```
+
+Span 2
+Text: ```Subject```
+Replace with: ```Subject```
+
+Span 3
+Text: ```the```
+Replace with: ```the```
+
+Span 4
+Text: ```information```
+Replace with: ```information```
+
+Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
+Use the replacements exactly as provided, except for minimal local adjustments if necessary for spelling and grammatical correctness or coherence.
+Do not modify any other parts of the prompt (but remove the span tags).
+
+*** Remove the span tags (e.g., <span_1>...</span_1>, <span_2>...</span_2>, and so on.) from the revised prompt. ***
+
+Output only the revised prompt.
+
+
+[agent_gradient_eval_debug_region_synthesis] sample first output:
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. First, identify the Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_gradient_eval_debug] beam step retained prompts:
+[beam_node] step_index=1 beam_index=0 parent_beam_index=0 region_rank=1 perplexity=4.218750, loss=3.822667, combined_score=5.932042, fluency_metric=prompt_fluency_log_score num_changed_spans=0
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=1 beam_index=1 parent_beam_index=0 region_rank=1 perplexity=4.218750, loss=4.146228, combined_score=6.255603, fluency_metric=prompt_fluency_log_score num_changed_spans=1
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. First, identify the Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_gradient_eval_debug] beam search expanding region: step_index=2 region_rank=2 beam_size=2 num_candidates=1
+[agent_gradient_eval_debug] beam step retained prompts:
+[beam_node] step_index=2 beam_index=0 parent_beam_index=0 region_rank=2 perplexity=4.218750, loss=3.822667, combined_score=5.932042, fluency_metric=prompt_fluency_log_score num_changed_spans=0
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=2 beam_index=1 parent_beam_index=1 region_rank=2 perplexity=4.218750, loss=4.146228, combined_score=6.255603, fluency_metric=prompt_fluency_log_score num_changed_spans=1
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. First, identify the Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_gradient_eval_debug] beam search expanding region: step_index=3 region_rank=3 beam_size=2 num_candidates=2
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+[agent_gradient_eval_debug] beam step retained prompts:
+[beam_node] step_index=3 beam_index=0 parent_beam_index=0 region_rank=3 perplexity=4.218750, loss=3.822667, combined_score=5.932042, fluency_metric=prompt_fluency_log_score num_changed_spans=0
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=3 beam_index=1 parent_beam_index=0 region_rank=3 perplexity=4.218750, loss=3.863902, combined_score=5.973277, fluency_metric=prompt_fluency_log_score num_changed_spans=1
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=3 beam_index=2 parent_beam_index=1 region_rank=3 perplexity=4.218750, loss=4.146228, combined_score=6.255603, fluency_metric=prompt_fluency_log_score num_changed_spans=1
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. First, identify the Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=3 beam_index=3 parent_beam_index=1 region_rank=3 perplexity=4.250000, loss=4.169628, combined_score=6.294628, fluency_metric=prompt_fluency_log_score num_changed_spans=2
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. First, identify the Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat this support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_gradient_eval_debug] beam search expanding region: step_index=4 region_rank=4 beam_size=4 num_candidates=2
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+[agent_llm_prompting] processing prompts batch 1/1 (batch_size=1, elapsed=0.00s)
+[agent_gradient_eval_debug] beam step retained prompts:
+[beam_node] step_index=4 beam_index=0 parent_beam_index=0 region_rank=4 perplexity=4.218750, loss=3.822667, combined_score=5.932042, fluency_metric=prompt_fluency_log_score num_changed_spans=0
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=4 beam_index=1 parent_beam_index=1 region_rank=4 perplexity=4.218750, loss=3.863902, combined_score=5.973277, fluency_metric=prompt_fluency_log_score num_changed_spans=1
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_node] step_index=4 beam_index=2 parent_beam_index=0 region_rank=4 perplexity=4.343750, loss=3.814268, combined_score=5.986143, fluency_metric=prompt_fluency_log_score num_changed_spans=1
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the informational presented within the query sentence.
+[beam_node] step_index=4 beam_index=3 parent_beam_index=1 region_rank=4 perplexity=4.343750, loss=3.879281, combined_score=6.051156, fluency_metric=prompt_fluency_log_score num_changed_spans=2
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat this support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear ‘yes’ or ‘no’ to indicate whether the relation is confirmed, considering only the informational presented within the query sentence.
+[beam_node] step_index=4 beam_index=4 parent_beam_index=2 region_rank=4 perplexity=4.343750, loss=3.910432, combined_score=6.082307, fluency_metric=prompt_fluency_log_score num_changed_spans=2
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear ‘yes’ or ‘no’ to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_gradient_eval_debug] final beam prompts:
+[beam_prompt 0]
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_prompt 1]
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[beam_prompt 2]
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the informational presented within the query sentence.
+[beam_prompt 3]
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat this support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear ‘yes’ or ‘no’ to indicate whether the relation is confirmed, considering only the informational presented within the query sentence.
+[beam_prompt 4]
+You will be provided with a relation name, a detailed description of the relation, a support sentence illustrating the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear ‘yes’ or ‘no’ to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+[agent_binary_inference] run_binary_inference: 1412 prompts, batch_size=8, batches=177
+
+[gradient_eval_debug] sample first prompt:
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
+
+Output only "yes" or "no" as answer, with no explanation or additional text.
+
+==
+
+Relation name: "org:members" (an organization's members)
+
+Support Sentence: A year after finishing in last place , the <object>Bucs</object> should win the <subject>NFC South</subject> .
+
+Query Sentence: The world needs radical change , '' Ahmadinejad told a one-day economic summit of the Organisation of the <object>Islamic Conference</object> ( <subject>OIC</subject> ) .
+
+Answer: 
+
+[gradient_eval_debug] sample first output:
+yes
+[agent_binary_inference]  Processed 20/177 batches in 2.17s
+[agent_binary_inference]  Processed 40/177 batches in 4.39s
+[agent_binary_inference]  Processed 60/177 batches in 6.57s
+[agent_binary_inference]  Processed 80/177 batches in 8.73s
+[agent_binary_inference]  Processed 100/177 batches in 10.96s
+[agent_binary_inference]  Processed 120/177 batches in 13.17s
+[agent_binary_inference]  Processed 140/177 batches in 15.40s
+[agent_binary_inference]  Processed 160/177 batches in 17.64s
+[agent_binary_inference]  Processed 177/177 batches in 19.45s
+[agent_binary_inference] run_binary_inference: done in 19.48s
+[agent_binary_inference] overall time passed: 19.48s
+[agent_gradient_eval_debug] prompt validation: generation_index=0 beam_index=0 done in 19.48s, precision=50.24 ± 3.51, recall=49.30 ± 1.50, f1=49.72 ± 2.22, overall_accuracy=0.5007, fixes_from_mistakes=7, regressions_from_correct=6
+[agent_gradient_eval_debug] prompt validation: generation_index=0 beam_index=0 stable_f1=45.28 (k=2)
+[agent_binary_inference] run_binary_inference: 45000 prompts, batch_size=8, batches=5625
+[agent_binary_inference]  Processed 20/5625 batches in 2.11s
+[agent_binary_inference]  Processed 40/5625 batches in 4.25s
+[agent_binary_inference]  Processed 60/5625 batches in 6.42s
+[agent_binary_inference]  Processed 80/5625 batches in 8.56s
+[agent_binary_inference]  Processed 100/5625 batches in 10.71s
+[agent_binary_inference]  Processed 120/5625 batches in 12.85s
+[agent_binary_inference]  Processed 140/5625 batches in 15.02s
+[agent_binary_inference]  Processed 160/5625 batches in 17.15s
+[agent_binary_inference]  Processed 180/5625 batches in 19.26s
+[agent_binary_inference]  Processed 200/5625 batches in 21.42s
+[agent_binary_inference]  Processed 220/5625 batches in 23.56s
+[agent_binary_inference]  Processed 240/5625 batches in 25.78s
+[agent_binary_inference]  Processed 260/5625 batches in 27.91s
+[agent_binary_inference]  Processed 280/5625 batches in 30.06s
+[agent_binary_inference]  Processed 300/5625 batches in 32.14s
+[agent_binary_inference]  Processed 320/5625 batches in 34.23s
+[agent_binary_inference]  Processed 340/5625 batches in 36.35s
+[agent_binary_inference]  Processed 360/5625 batches in 38.49s
+[agent_binary_inference]  Processed 380/5625 batches in 40.66s
+[agent_binary_inference]  Processed 400/5625 batches in 42.82s
+[agent_binary_inference]  Processed 420/5625 batches in 45.00s
+[agent_binary_inference]  Processed 440/5625 batches in 47.21s
+[agent_binary_inference]  Processed 460/5625 batches in 49.31s
+[agent_binary_inference]  Processed 480/5625 batches in 51.49s
+[agent_binary_inference]  Processed 500/5625 batches in 53.57s
+[agent_binary_inference]  Processed 520/5625 batches in 55.65s
+[agent_binary_inference]  Processed 540/5625 batches in 57.77s
+[agent_binary_inference]  Processed 560/5625 batches in 59.91s
+[agent_binary_inference]  Processed 580/5625 batches in 62.01s
+[agent_binary_inference]  Processed 600/5625 batches in 64.16s
+[agent_binary_inference]  Processed 620/5625 batches in 66.35s
+[agent_binary_inference]  Processed 640/5625 batches in 68.45s
+[agent_binary_inference]  Processed 660/5625 batches in 70.57s
+[agent_binary_inference]  Processed 680/5625 batches in 72.70s
+[agent_binary_inference]  Processed 700/5625 batches in 74.82s
+[agent_binary_inference]  Processed 720/5625 batches in 76.96s
+[agent_binary_inference]  Processed 740/5625 batches in 79.07s
+[agent_binary_inference]  Processed 760/5625 batches in 81.19s
+[agent_binary_inference]  Processed 780/5625 batches in 83.34s
+[agent_binary_inference]  Processed 800/5625 batches in 85.50s
+[agent_binary_inference]  Processed 820/5625 batches in 87.66s
+[agent_binary_inference]  Processed 840/5625 batches in 89.77s
+[agent_binary_inference]  Processed 860/5625 batches in 91.93s
+[agent_binary_inference]  Processed 880/5625 batches in 94.11s
+[agent_binary_inference]  Processed 900/5625 batches in 96.29s
+[agent_binary_inference]  Processed 920/5625 batches in 98.41s
+[agent_binary_inference]  Processed 940/5625 batches in 100.49s
+[agent_binary_inference]  Processed 960/5625 batches in 102.63s
+[agent_binary_inference]  Processed 980/5625 batches in 104.76s
+[agent_binary_inference]  Processed 1000/5625 batches in 106.97s
+[agent_binary_inference]  Processed 1020/5625 batches in 109.11s
+[agent_binary_inference]  Processed 1040/5625 batches in 111.25s
+[agent_binary_inference]  Processed 1060/5625 batches in 113.44s
+[agent_binary_inference]  Processed 1080/5625 batches in 115.54s
+[agent_binary_inference]  Processed 1100/5625 batches in 117.70s
+[agent_binary_inference]  Processed 1120/5625 batches in 119.84s
+[agent_binary_inference]  Processed 1140/5625 batches in 122.00s
+[agent_binary_inference]  Processed 1160/5625 batches in 124.17s
+[agent_binary_inference]  Processed 1180/5625 batches in 126.26s
+[agent_binary_inference]  Processed 1200/5625 batches in 128.41s
+[agent_binary_inference]  Processed 1220/5625 batches in 130.56s
+[agent_binary_inference]  Processed 1240/5625 batches in 132.65s
+[agent_binary_inference]  Processed 1260/5625 batches in 134.73s
+[agent_binary_inference]  Processed 1280/5625 batches in 136.81s
+[agent_binary_inference]  Processed 1300/5625 batches in 138.95s
+[agent_binary_inference]  Processed 1320/5625 batches in 141.07s
+[agent_binary_inference]  Processed 1340/5625 batches in 143.22s
+[agent_binary_inference]  Processed 1360/5625 batches in 145.34s
+[agent_binary_inference]  Processed 1380/5625 batches in 147.50s
+[agent_binary_inference]  Processed 1400/5625 batches in 149.64s
+[agent_binary_inference]  Processed 1420/5625 batches in 151.77s
+[agent_binary_inference]  Processed 1440/5625 batches in 153.93s
+[agent_binary_inference]  Processed 1460/5625 batches in 156.13s
+[agent_binary_inference]  Processed 1480/5625 batches in 158.28s
+[agent_binary_inference]  Processed 1500/5625 batches in 160.49s
+[agent_binary_inference]  Processed 1520/5625 batches in 162.61s
+[agent_binary_inference]  Processed 1540/5625 batches in 164.72s
+[agent_binary_inference]  Processed 1560/5625 batches in 166.84s
+[agent_binary_inference]  Processed 1580/5625 batches in 169.08s
+[agent_binary_inference]  Processed 1600/5625 batches in 171.23s
+[agent_binary_inference]  Processed 1620/5625 batches in 173.38s
+[agent_binary_inference]  Processed 1640/5625 batches in 175.55s
+[agent_binary_inference]  Processed 1660/5625 batches in 177.67s
+[agent_binary_inference]  Processed 1680/5625 batches in 179.88s
+[agent_binary_inference]  Processed 1700/5625 batches in 182.07s
+[agent_binary_inference]  Processed 1720/5625 batches in 184.23s
+[agent_binary_inference]  Processed 1740/5625 batches in 186.33s
+[agent_binary_inference]  Processed 1760/5625 batches in 188.45s
+[agent_binary_inference]  Processed 1780/5625 batches in 190.68s
+[agent_binary_inference]  Processed 1800/5625 batches in 192.74s
+[agent_binary_inference]  Processed 1820/5625 batches in 194.85s
+[agent_binary_inference]  Processed 1840/5625 batches in 196.99s
+[agent_binary_inference]  Processed 1860/5625 batches in 199.06s
+[agent_binary_inference]  Processed 1880/5625 batches in 201.19s
+[agent_binary_inference]  Processed 1900/5625 batches in 203.35s
+[agent_binary_inference]  Processed 1920/5625 batches in 205.47s
+[agent_binary_inference]  Processed 1940/5625 batches in 207.57s
+[agent_binary_inference]  Processed 1960/5625 batches in 209.69s
+[agent_binary_inference]  Processed 1980/5625 batches in 211.86s
+[agent_binary_inference]  Processed 2000/5625 batches in 214.06s
+[agent_binary_inference]  Processed 2020/5625 batches in 216.19s
+[agent_binary_inference]  Processed 2040/5625 batches in 218.31s
+[agent_binary_inference]  Processed 2060/5625 batches in 220.45s
+[agent_binary_inference]  Processed 2080/5625 batches in 222.57s
+[agent_binary_inference]  Processed 2100/5625 batches in 224.71s
+[agent_binary_inference]  Processed 2120/5625 batches in 226.90s
+[agent_binary_inference]  Processed 2140/5625 batches in 229.09s
+[agent_binary_inference]  Processed 2160/5625 batches in 231.25s
+[agent_binary_inference]  Processed 2180/5625 batches in 233.37s
+[agent_binary_inference]  Processed 2200/5625 batches in 235.45s
+[agent_binary_inference]  Processed 2220/5625 batches in 237.52s
+[agent_binary_inference]  Processed 2240/5625 batches in 239.66s
+[agent_binary_inference]  Processed 2260/5625 batches in 241.83s
+[agent_binary_inference]  Processed 2280/5625 batches in 244.07s
+[agent_binary_inference]  Processed 2300/5625 batches in 246.24s
+[agent_binary_inference]  Processed 2320/5625 batches in 248.38s
+[agent_binary_inference]  Processed 2340/5625 batches in 250.53s
+[agent_binary_inference]  Processed 2360/5625 batches in 252.66s
+[agent_binary_inference]  Processed 2380/5625 batches in 254.70s
+[agent_binary_inference]  Processed 2400/5625 batches in 256.80s
+[agent_binary_inference]  Processed 2420/5625 batches in 258.92s
+[agent_binary_inference]  Processed 2440/5625 batches in 261.05s
+[agent_binary_inference]  Processed 2460/5625 batches in 263.13s
+[agent_binary_inference]  Processed 2480/5625 batches in 265.28s
+[agent_binary_inference]  Processed 2500/5625 batches in 267.38s
+[agent_binary_inference]  Processed 2520/5625 batches in 269.47s
+[agent_binary_inference]  Processed 2540/5625 batches in 271.60s
+[agent_binary_inference]  Processed 2560/5625 batches in 273.76s
+[agent_binary_inference]  Processed 2580/5625 batches in 275.88s
+[agent_binary_inference]  Processed 2600/5625 batches in 278.07s
+[agent_binary_inference]  Processed 2620/5625 batches in 280.20s
+[agent_binary_inference]  Processed 2640/5625 batches in 282.36s
+[agent_binary_inference]  Processed 2660/5625 batches in 284.43s
+[agent_binary_inference]  Processed 2680/5625 batches in 286.54s
+[agent_binary_inference]  Processed 2700/5625 batches in 288.72s
+[agent_binary_inference]  Processed 2720/5625 batches in 290.92s
+[agent_binary_inference]  Processed 2740/5625 batches in 293.11s
+[agent_binary_inference]  Processed 2760/5625 batches in 295.30s
+[agent_binary_inference]  Processed 2780/5625 batches in 297.43s
+[agent_binary_inference]  Processed 2800/5625 batches in 299.60s
+[agent_binary_inference]  Processed 2820/5625 batches in 301.71s
+[agent_binary_inference]  Processed 2840/5625 batches in 303.82s
+[agent_binary_inference]  Processed 2860/5625 batches in 306.04s
+[agent_binary_inference]  Processed 2880/5625 batches in 308.17s
+[agent_binary_inference]  Processed 2900/5625 batches in 310.28s
+[agent_binary_inference]  Processed 2920/5625 batches in 312.47s
+[agent_binary_inference]  Processed 2940/5625 batches in 314.63s
+[agent_binary_inference]  Processed 2960/5625 batches in 316.80s
+[agent_binary_inference]  Processed 2980/5625 batches in 318.92s
+[agent_binary_inference]  Processed 3000/5625 batches in 321.04s
+[agent_binary_inference]  Processed 3020/5625 batches in 323.17s
+[agent_binary_inference]  Processed 3040/5625 batches in 325.32s
+[agent_binary_inference]  Processed 3060/5625 batches in 327.44s
+[agent_binary_inference]  Processed 3080/5625 batches in 329.60s
+[agent_binary_inference]  Processed 3100/5625 batches in 331.77s
+[agent_binary_inference]  Processed 3120/5625 batches in 333.94s
+[agent_binary_inference]  Processed 3140/5625 batches in 336.07s
+[agent_binary_inference]  Processed 3160/5625 batches in 338.16s
+[agent_binary_inference]  Processed 3180/5625 batches in 340.32s
+[agent_binary_inference]  Processed 3200/5625 batches in 342.51s
+[agent_binary_inference]  Processed 3220/5625 batches in 344.70s
+[agent_binary_inference]  Processed 3240/5625 batches in 346.78s
+[agent_binary_inference]  Processed 3260/5625 batches in 348.92s
+[agent_binary_inference]  Processed 3280/5625 batches in 350.98s
+[agent_binary_inference]  Processed 3300/5625 batches in 353.15s
+[agent_binary_inference]  Processed 3320/5625 batches in 355.24s
+[agent_binary_inference]  Processed 3340/5625 batches in 357.42s
+[agent_binary_inference]  Processed 3360/5625 batches in 359.59s
+[agent_binary_inference]  Processed 3380/5625 batches in 361.71s
+[agent_binary_inference]  Processed 3400/5625 batches in 363.85s
+[agent_binary_inference]  Processed 3420/5625 batches in 366.04s
+[agent_binary_inference]  Processed 3440/5625 batches in 368.16s
+[agent_binary_inference]  Processed 3460/5625 batches in 370.28s
+[agent_binary_inference]  Processed 3480/5625 batches in 372.46s
+[agent_binary_inference]  Processed 3500/5625 batches in 374.69s
+[agent_binary_inference]  Processed 3520/5625 batches in 376.82s
+[agent_binary_inference]  Processed 3540/5625 batches in 378.95s
+[agent_binary_inference]  Processed 3560/5625 batches in 381.12s
+[agent_binary_inference]  Processed 3580/5625 batches in 383.28s
+[agent_binary_inference]  Processed 3600/5625 batches in 385.47s
+[agent_binary_inference]  Processed 3620/5625 batches in 387.56s
+[agent_binary_inference]  Processed 3640/5625 batches in 389.67s
+[agent_binary_inference]  Processed 3660/5625 batches in 391.74s
+[agent_binary_inference]  Processed 3680/5625 batches in 393.87s
+[agent_binary_inference]  Processed 3700/5625 batches in 396.00s
+[agent_binary_inference]  Processed 3720/5625 batches in 398.06s
+[agent_binary_inference]  Processed 3740/5625 batches in 400.19s
+[agent_binary_inference]  Processed 3760/5625 batches in 402.41s
+[agent_binary_inference]  Processed 3780/5625 batches in 404.57s
+[agent_binary_inference]  Processed 3800/5625 batches in 406.65s
+[agent_binary_inference]  Processed 3820/5625 batches in 408.77s
+[agent_binary_inference]  Processed 3840/5625 batches in 410.84s
+[agent_binary_inference]  Processed 3860/5625 batches in 412.87s
+[agent_binary_inference]  Processed 3880/5625 batches in 415.06s
+[agent_binary_inference]  Processed 3900/5625 batches in 417.21s
+[agent_binary_inference]  Processed 3920/5625 batches in 419.41s
+[agent_binary_inference]  Processed 3940/5625 batches in 421.56s
+[agent_binary_inference]  Processed 3960/5625 batches in 423.69s
+[agent_binary_inference]  Processed 3980/5625 batches in 425.86s
+[agent_binary_inference]  Processed 4000/5625 batches in 428.00s
+[agent_binary_inference]  Processed 4020/5625 batches in 430.17s
+[agent_binary_inference]  Processed 4040/5625 batches in 432.27s
+[agent_binary_inference]  Processed 4060/5625 batches in 434.41s
+[agent_binary_inference]  Processed 4080/5625 batches in 436.57s
+[agent_binary_inference]  Processed 4100/5625 batches in 438.65s
+[agent_binary_inference]  Processed 4120/5625 batches in 440.81s
+[agent_binary_inference]  Processed 4140/5625 batches in 442.99s
+[agent_binary_inference]  Processed 4160/5625 batches in 445.14s
+[agent_binary_inference]  Processed 4180/5625 batches in 447.30s
+[agent_binary_inference]  Processed 4200/5625 batches in 449.47s
+[agent_binary_inference]  Processed 4220/5625 batches in 451.65s
+[agent_binary_inference]  Processed 4240/5625 batches in 453.73s
+[agent_binary_inference]  Processed 4260/5625 batches in 455.93s
+[agent_binary_inference]  Processed 4280/5625 batches in 458.06s
+[agent_binary_inference]  Processed 4300/5625 batches in 460.19s
+[agent_binary_inference]  Processed 4320/5625 batches in 462.28s
+[agent_binary_inference]  Processed 4340/5625 batches in 464.40s
+[agent_binary_inference]  Processed 4360/5625 batches in 466.54s
+[agent_binary_inference]  Processed 4380/5625 batches in 468.73s
+[agent_binary_inference]  Processed 4400/5625 batches in 470.91s
+[agent_binary_inference]  Processed 4420/5625 batches in 473.10s
+[agent_binary_inference]  Processed 4440/5625 batches in 475.26s
+[agent_binary_inference]  Processed 4460/5625 batches in 477.38s
+[agent_binary_inference]  Processed 4480/5625 batches in 479.44s
+[agent_binary_inference]  Processed 4500/5625 batches in 481.64s
+[agent_binary_inference]  Processed 4520/5625 batches in 483.77s
+[agent_binary_inference]  Processed 4540/5625 batches in 485.93s
+[agent_binary_inference]  Processed 4560/5625 batches in 488.03s
+[agent_binary_inference]  Processed 4580/5625 batches in 490.17s
+[agent_binary_inference]  Processed 4600/5625 batches in 492.25s
+[agent_binary_inference]  Processed 4620/5625 batches in 494.33s
+[agent_binary_inference]  Processed 4640/5625 batches in 496.50s
+[agent_binary_inference]  Processed 4660/5625 batches in 498.60s
+[agent_binary_inference]  Processed 4680/5625 batches in 500.76s
+[agent_binary_inference]  Processed 4700/5625 batches in 502.91s
+[agent_binary_inference]  Processed 4720/5625 batches in 504.98s
+[agent_binary_inference]  Processed 4740/5625 batches in 507.15s
+[agent_binary_inference]  Processed 4760/5625 batches in 509.22s
+[agent_binary_inference]  Processed 4780/5625 batches in 511.39s
+[agent_binary_inference]  Processed 4800/5625 batches in 513.58s
+[agent_binary_inference]  Processed 4820/5625 batches in 515.78s
+[agent_binary_inference]  Processed 4840/5625 batches in 517.99s
+[agent_binary_inference]  Processed 4860/5625 batches in 520.24s
+[agent_binary_inference]  Processed 4880/5625 batches in 522.39s
+[agent_binary_inference]  Processed 4900/5625 batches in 524.49s
+[agent_binary_inference]  Processed 4920/5625 batches in 526.62s
+[agent_binary_inference]  Processed 4940/5625 batches in 528.74s
+[agent_binary_inference]  Processed 4960/5625 batches in 530.88s
+[agent_binary_inference]  Processed 4980/5625 batches in 533.05s
+[agent_binary_inference]  Processed 5000/5625 batches in 535.19s
+[agent_binary_inference]  Processed 5020/5625 batches in 537.37s
+[agent_binary_inference]  Processed 5040/5625 batches in 539.50s
+[agent_binary_inference]  Processed 5060/5625 batches in 541.71s
+[agent_binary_inference]  Processed 5080/5625 batches in 543.82s
+[agent_binary_inference]  Processed 5100/5625 batches in 545.92s
+[agent_binary_inference]  Processed 5120/5625 batches in 548.07s
+[agent_binary_inference]  Processed 5140/5625 batches in 550.25s
+[agent_binary_inference]  Processed 5160/5625 batches in 552.40s
+[agent_binary_inference]  Processed 5180/5625 batches in 554.61s
+[agent_binary_inference]  Processed 5200/5625 batches in 556.69s
+[agent_binary_inference]  Processed 5220/5625 batches in 558.85s
+[agent_binary_inference]  Processed 5240/5625 batches in 560.99s
+[agent_binary_inference]  Processed 5260/5625 batches in 563.14s
+[agent_binary_inference]  Processed 5280/5625 batches in 565.25s
+[agent_binary_inference]  Processed 5300/5625 batches in 567.34s
+[agent_binary_inference]  Processed 5320/5625 batches in 569.53s
+[agent_binary_inference]  Processed 5340/5625 batches in 571.68s
+[agent_binary_inference]  Processed 5360/5625 batches in 573.74s
+[agent_binary_inference]  Processed 5380/5625 batches in 575.91s
+[agent_binary_inference]  Processed 5400/5625 batches in 578.07s
+[agent_binary_inference]  Processed 5420/5625 batches in 580.25s
+[agent_binary_inference]  Processed 5440/5625 batches in 582.39s
+[agent_binary_inference]  Processed 5460/5625 batches in 584.49s
+[agent_binary_inference]  Processed 5480/5625 batches in 586.66s
+[agent_binary_inference]  Processed 5500/5625 batches in 588.84s
+[agent_binary_inference]  Processed 5520/5625 batches in 590.94s
+[agent_binary_inference]  Processed 5540/5625 batches in 593.10s
+[agent_binary_inference]  Processed 5560/5625 batches in 595.19s
+[agent_binary_inference]  Processed 5580/5625 batches in 597.29s
+[agent_binary_inference]  Processed 5600/5625 batches in 599.49s
+[agent_binary_inference]  Processed 5620/5625 batches in 601.60s
+[agent_binary_inference]  Processed 5625/5625 batches in 602.12s
+[agent_binary_inference] run_binary_inference: done in 602.14s
+[agent_binary_inference] overall time passed: 602.14s
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=0 beam_index=0 split=final_step_dev done in 602.56s, precision=14.33 ± 1.25, recall=31.73 ± 2.27, f1=19.74 ± 1.56
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=0 beam_index=0 stable_f1=16.61 (k=2)
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=0 beam_index=0 perplexity=4.218750, loss=3.822667, combined_score=5.932042, fluency_metric=prompt_fluency_log_score
+[agent_binary_inference] run_binary_inference: 1412 prompts, batch_size=8, batches=177
+[agent_binary_inference]  Processed 20/177 batches in 2.16s
+[agent_binary_inference]  Processed 40/177 batches in 4.38s
+[agent_binary_inference]  Processed 60/177 batches in 6.57s
+[agent_binary_inference]  Processed 80/177 batches in 8.73s
+[agent_binary_inference]  Processed 100/177 batches in 10.95s
+[agent_binary_inference]  Processed 120/177 batches in 13.16s
+[agent_binary_inference]  Processed 140/177 batches in 15.39s
+[agent_binary_inference]  Processed 160/177 batches in 17.63s
+[agent_binary_inference]  Processed 177/177 batches in 19.44s
+[agent_binary_inference] run_binary_inference: done in 19.46s
+[agent_binary_inference] overall time passed: 19.46s
+[agent_gradient_eval_debug] prompt validation: generation_index=1 beam_index=1 done in 19.46s, precision=50.61 ± 3.75, recall=50.01 ± 1.47, f1=50.26 ± 2.38, overall_accuracy=0.5042, fixes_from_mistakes=10, regressions_from_correct=4
+[agent_gradient_eval_debug] prompt validation: generation_index=1 beam_index=1 stable_f1=45.50 (k=2)
+[agent_binary_inference] run_binary_inference: 45000 prompts, batch_size=8, batches=5625
+[agent_binary_inference]  Processed 20/5625 batches in 2.10s
+[agent_binary_inference]  Processed 40/5625 batches in 4.25s
+[agent_binary_inference]  Processed 60/5625 batches in 6.42s
+[agent_binary_inference]  Processed 80/5625 batches in 8.56s
+[agent_binary_inference]  Processed 100/5625 batches in 10.71s
+[agent_binary_inference]  Processed 120/5625 batches in 12.84s
+[agent_binary_inference]  Processed 140/5625 batches in 15.01s
+[agent_binary_inference]  Processed 160/5625 batches in 17.15s
+[agent_binary_inference]  Processed 180/5625 batches in 19.26s
+[agent_binary_inference]  Processed 200/5625 batches in 21.42s
+[agent_binary_inference]  Processed 220/5625 batches in 23.56s
+[agent_binary_inference]  Processed 240/5625 batches in 25.77s
+[agent_binary_inference]  Processed 260/5625 batches in 27.91s
+[agent_binary_inference]  Processed 280/5625 batches in 30.06s
+[agent_binary_inference]  Processed 300/5625 batches in 32.14s
+[agent_binary_inference]  Processed 320/5625 batches in 34.23s
+[agent_binary_inference]  Processed 340/5625 batches in 36.35s
+[agent_binary_inference]  Processed 360/5625 batches in 38.49s
+[agent_binary_inference]  Processed 380/5625 batches in 40.67s
+[agent_binary_inference]  Processed 400/5625 batches in 42.83s
+[agent_binary_inference]  Processed 420/5625 batches in 45.01s
+[agent_binary_inference]  Processed 440/5625 batches in 47.21s
+[agent_binary_inference]  Processed 460/5625 batches in 49.32s
+[agent_binary_inference]  Processed 480/5625 batches in 51.49s
+[agent_binary_inference]  Processed 500/5625 batches in 53.57s
+[agent_binary_inference]  Processed 520/5625 batches in 55.66s
+[agent_binary_inference]  Processed 540/5625 batches in 57.78s
+[agent_binary_inference]  Processed 560/5625 batches in 59.92s
+[agent_binary_inference]  Processed 580/5625 batches in 62.02s
+[agent_binary_inference]  Processed 600/5625 batches in 64.17s
+[agent_binary_inference]  Processed 620/5625 batches in 66.36s
+[agent_binary_inference]  Processed 640/5625 batches in 68.46s
+[agent_binary_inference]  Processed 660/5625 batches in 70.58s
+[agent_binary_inference]  Processed 680/5625 batches in 72.71s
+[agent_binary_inference]  Processed 700/5625 batches in 74.82s
+[agent_binary_inference]  Processed 720/5625 batches in 76.97s
+[agent_binary_inference]  Processed 740/5625 batches in 79.07s
+[agent_binary_inference]  Processed 760/5625 batches in 81.20s
+[agent_binary_inference]  Processed 780/5625 batches in 83.35s
+[agent_binary_inference]  Processed 800/5625 batches in 85.50s
+[agent_binary_inference]  Processed 820/5625 batches in 87.67s
+[agent_binary_inference]  Processed 840/5625 batches in 89.78s
+[agent_binary_inference]  Processed 860/5625 batches in 91.94s
+[agent_binary_inference]  Processed 880/5625 batches in 94.12s
+[agent_binary_inference]  Processed 900/5625 batches in 96.29s
+[agent_binary_inference]  Processed 920/5625 batches in 98.41s
+[agent_binary_inference]  Processed 940/5625 batches in 100.49s
+[agent_binary_inference]  Processed 960/5625 batches in 102.64s
+[agent_binary_inference]  Processed 980/5625 batches in 104.76s
+[agent_binary_inference]  Processed 1000/5625 batches in 106.98s
+[agent_binary_inference]  Processed 1020/5625 batches in 109.11s
+[agent_binary_inference]  Processed 1040/5625 batches in 111.25s
+[agent_binary_inference]  Processed 1060/5625 batches in 113.44s
+[agent_binary_inference]  Processed 1080/5625 batches in 115.55s
+[agent_binary_inference]  Processed 1100/5625 batches in 117.70s
+[agent_binary_inference]  Processed 1120/5625 batches in 119.84s
+[agent_binary_inference]  Processed 1140/5625 batches in 122.01s
+[agent_binary_inference]  Processed 1160/5625 batches in 124.18s
+[agent_binary_inference]  Processed 1180/5625 batches in 126.27s
+[agent_binary_inference]  Processed 1200/5625 batches in 128.42s
+[agent_binary_inference]  Processed 1220/5625 batches in 130.57s
+[agent_binary_inference]  Processed 1240/5625 batches in 132.66s
+[agent_binary_inference]  Processed 1260/5625 batches in 134.74s
+[agent_binary_inference]  Processed 1280/5625 batches in 136.82s
+[agent_binary_inference]  Processed 1300/5625 batches in 138.96s
+[agent_binary_inference]  Processed 1320/5625 batches in 141.08s
+[agent_binary_inference]  Processed 1340/5625 batches in 143.23s
+[agent_binary_inference]  Processed 1360/5625 batches in 145.35s
+[agent_binary_inference]  Processed 1380/5625 batches in 147.51s
+[agent_binary_inference]  Processed 1400/5625 batches in 149.65s
+[agent_binary_inference]  Processed 1420/5625 batches in 151.78s
+[agent_binary_inference]  Processed 1440/5625 batches in 153.93s
+[agent_binary_inference]  Processed 1460/5625 batches in 156.13s
+[agent_binary_inference]  Processed 1480/5625 batches in 158.28s
+[agent_binary_inference]  Processed 1500/5625 batches in 160.50s
+[agent_binary_inference]  Processed 1520/5625 batches in 162.61s
+[agent_binary_inference]  Processed 1540/5625 batches in 164.73s
+[agent_binary_inference]  Processed 1560/5625 batches in 166.84s
+[agent_binary_inference]  Processed 1580/5625 batches in 169.08s
+[agent_binary_inference]  Processed 1600/5625 batches in 171.23s
+[agent_binary_inference]  Processed 1620/5625 batches in 173.37s
+[agent_binary_inference]  Processed 1640/5625 batches in 175.55s
+[agent_binary_inference]  Processed 1660/5625 batches in 177.67s
+[agent_binary_inference]  Processed 1680/5625 batches in 179.88s
+[agent_binary_inference]  Processed 1700/5625 batches in 182.07s
+[agent_binary_inference]  Processed 1720/5625 batches in 184.23s
+[agent_binary_inference]  Processed 1740/5625 batches in 186.32s
+[agent_binary_inference]  Processed 1760/5625 batches in 188.45s
+[agent_binary_inference]  Processed 1780/5625 batches in 190.67s
+[agent_binary_inference]  Processed 1800/5625 batches in 192.73s
+[agent_binary_inference]  Processed 1820/5625 batches in 194.84s
+[agent_binary_inference]  Processed 1840/5625 batches in 196.97s
+[agent_binary_inference]  Processed 1860/5625 batches in 199.05s
+[agent_binary_inference]  Processed 1880/5625 batches in 201.18s
+[agent_binary_inference]  Processed 1900/5625 batches in 203.34s
+[agent_binary_inference]  Processed 1920/5625 batches in 205.46s
+[agent_binary_inference]  Processed 1940/5625 batches in 207.55s
+[agent_binary_inference]  Processed 1960/5625 batches in 209.68s
+[agent_binary_inference]  Processed 1980/5625 batches in 211.85s
+[agent_binary_inference]  Processed 2000/5625 batches in 214.05s
+[agent_binary_inference]  Processed 2020/5625 batches in 216.18s
+[agent_binary_inference]  Processed 2040/5625 batches in 218.30s
+[agent_binary_inference]  Processed 2060/5625 batches in 220.45s
+[agent_binary_inference]  Processed 2080/5625 batches in 222.56s
+[agent_binary_inference]  Processed 2100/5625 batches in 224.71s
+[agent_binary_inference]  Processed 2120/5625 batches in 226.89s
+[agent_binary_inference]  Processed 2140/5625 batches in 229.08s
+[agent_binary_inference]  Processed 2160/5625 batches in 231.24s
+[agent_binary_inference]  Processed 2180/5625 batches in 233.37s
+[agent_binary_inference]  Processed 2200/5625 batches in 235.44s
+[agent_binary_inference]  Processed 2220/5625 batches in 237.51s
+[agent_binary_inference]  Processed 2240/5625 batches in 239.66s
+[agent_binary_inference]  Processed 2260/5625 batches in 241.83s
+[agent_binary_inference]  Processed 2280/5625 batches in 244.07s
+[agent_binary_inference]  Processed 2300/5625 batches in 246.24s
+[agent_binary_inference]  Processed 2320/5625 batches in 248.38s
+[agent_binary_inference]  Processed 2340/5625 batches in 250.53s
+[agent_binary_inference]  Processed 2360/5625 batches in 252.66s
+[agent_binary_inference]  Processed 2380/5625 batches in 254.70s
+[agent_binary_inference]  Processed 2400/5625 batches in 256.81s
+[agent_binary_inference]  Processed 2420/5625 batches in 258.93s
+[agent_binary_inference]  Processed 2440/5625 batches in 261.06s
+[agent_binary_inference]  Processed 2460/5625 batches in 263.14s
+[agent_binary_inference]  Processed 2480/5625 batches in 265.29s
+[agent_binary_inference]  Processed 2500/5625 batches in 267.39s
+[agent_binary_inference]  Processed 2520/5625 batches in 269.49s
+[agent_binary_inference]  Processed 2540/5625 batches in 271.62s
+[agent_binary_inference]  Processed 2560/5625 batches in 273.78s
+[agent_binary_inference]  Processed 2580/5625 batches in 275.90s
+[agent_binary_inference]  Processed 2600/5625 batches in 278.09s
+[agent_binary_inference]  Processed 2620/5625 batches in 280.22s
+[agent_binary_inference]  Processed 2640/5625 batches in 282.38s
+[agent_binary_inference]  Processed 2660/5625 batches in 284.46s
+[agent_binary_inference]  Processed 2680/5625 batches in 286.57s
+[agent_binary_inference]  Processed 2700/5625 batches in 288.75s
+[agent_binary_inference]  Processed 2720/5625 batches in 290.95s
+[agent_binary_inference]  Processed 2740/5625 batches in 293.14s
+[agent_binary_inference]  Processed 2760/5625 batches in 295.33s
+[agent_binary_inference]  Processed 2780/5625 batches in 297.46s
+[agent_binary_inference]  Processed 2800/5625 batches in 299.63s
+[agent_binary_inference]  Processed 2820/5625 batches in 301.75s
+[agent_binary_inference]  Processed 2840/5625 batches in 303.85s
+[agent_binary_inference]  Processed 2860/5625 batches in 306.08s
+[agent_binary_inference]  Processed 2880/5625 batches in 308.20s
+[agent_binary_inference]  Processed 2900/5625 batches in 310.31s
+[agent_binary_inference]  Processed 2920/5625 batches in 312.51s
+[agent_binary_inference]  Processed 2940/5625 batches in 314.66s
+[agent_binary_inference]  Processed 2960/5625 batches in 316.84s
+[agent_binary_inference]  Processed 2980/5625 batches in 318.96s
+[agent_binary_inference]  Processed 3000/5625 batches in 321.07s
+[agent_binary_inference]  Processed 3020/5625 batches in 323.21s
+[agent_binary_inference]  Processed 3040/5625 batches in 325.36s
+[agent_binary_inference]  Processed 3060/5625 batches in 327.48s
+[agent_binary_inference]  Processed 3080/5625 batches in 329.64s
+[agent_binary_inference]  Processed 3100/5625 batches in 331.82s
+[agent_binary_inference]  Processed 3120/5625 batches in 333.98s
+[agent_binary_inference]  Processed 3140/5625 batches in 336.11s
+[agent_binary_inference]  Processed 3160/5625 batches in 338.21s
+[agent_binary_inference]  Processed 3180/5625 batches in 340.37s
+[agent_binary_inference]  Processed 3200/5625 batches in 342.55s
+[agent_binary_inference]  Processed 3220/5625 batches in 344.75s
+[agent_binary_inference]  Processed 3240/5625 batches in 346.82s
+[agent_binary_inference]  Processed 3260/5625 batches in 348.96s
+[agent_binary_inference]  Processed 3280/5625 batches in 351.03s
+[agent_binary_inference]  Processed 3300/5625 batches in 353.19s
+[agent_binary_inference]  Processed 3320/5625 batches in 355.29s
+[agent_binary_inference]  Processed 3340/5625 batches in 357.46s
+[agent_binary_inference]  Processed 3360/5625 batches in 359.64s
+[agent_binary_inference]  Processed 3380/5625 batches in 361.76s
+[agent_binary_inference]  Processed 3400/5625 batches in 363.90s
+[agent_binary_inference]  Processed 3420/5625 batches in 366.09s
+[agent_binary_inference]  Processed 3440/5625 batches in 368.22s
+[agent_binary_inference]  Processed 3460/5625 batches in 370.34s
+[agent_binary_inference]  Processed 3480/5625 batches in 372.52s
+[agent_binary_inference]  Processed 3500/5625 batches in 374.75s
+[agent_binary_inference]  Processed 3520/5625 batches in 376.88s
+[agent_binary_inference]  Processed 3540/5625 batches in 379.02s
+[agent_binary_inference]  Processed 3560/5625 batches in 381.19s
+[agent_binary_inference]  Processed 3580/5625 batches in 383.35s
+[agent_binary_inference]  Processed 3600/5625 batches in 385.54s
+[agent_binary_inference]  Processed 3620/5625 batches in 387.63s
+[agent_binary_inference]  Processed 3640/5625 batches in 389.74s
+[agent_binary_inference]  Processed 3660/5625 batches in 391.82s
+[agent_binary_inference]  Processed 3680/5625 batches in 393.94s
+[agent_binary_inference]  Processed 3700/5625 batches in 396.08s
+[agent_binary_inference]  Processed 3720/5625 batches in 398.14s
+[agent_binary_inference]  Processed 3740/5625 batches in 400.27s
+[agent_binary_inference]  Processed 3760/5625 batches in 402.50s
+[agent_binary_inference]  Processed 3780/5625 batches in 404.65s
+[agent_binary_inference]  Processed 3800/5625 batches in 406.74s
+[agent_binary_inference]  Processed 3820/5625 batches in 408.85s
+[agent_binary_inference]  Processed 3840/5625 batches in 410.92s
+[agent_binary_inference]  Processed 3860/5625 batches in 412.96s
+[agent_binary_inference]  Processed 3880/5625 batches in 415.15s
+[agent_binary_inference]  Processed 3900/5625 batches in 417.30s
+[agent_binary_inference]  Processed 3920/5625 batches in 419.49s
+[agent_binary_inference]  Processed 3940/5625 batches in 421.65s
+[agent_binary_inference]  Processed 3960/5625 batches in 423.78s
+[agent_binary_inference]  Processed 3980/5625 batches in 425.95s
+[agent_binary_inference]  Processed 4000/5625 batches in 428.09s
+[agent_binary_inference]  Processed 4020/5625 batches in 430.26s
+[agent_binary_inference]  Processed 4040/5625 batches in 432.36s
+[agent_binary_inference]  Processed 4060/5625 batches in 434.50s
+[agent_binary_inference]  Processed 4080/5625 batches in 436.66s
+[agent_binary_inference]  Processed 4100/5625 batches in 438.75s
+[agent_binary_inference]  Processed 4120/5625 batches in 440.91s
+[agent_binary_inference]  Processed 4140/5625 batches in 443.09s
+[agent_binary_inference]  Processed 4160/5625 batches in 445.24s
+[agent_binary_inference]  Processed 4180/5625 batches in 447.40s
+[agent_binary_inference]  Processed 4200/5625 batches in 449.57s
+[agent_binary_inference]  Processed 4220/5625 batches in 451.75s
+[agent_binary_inference]  Processed 4240/5625 batches in 453.83s
+[agent_binary_inference]  Processed 4260/5625 batches in 456.03s
+[agent_binary_inference]  Processed 4280/5625 batches in 458.16s
+[agent_binary_inference]  Processed 4300/5625 batches in 460.28s
+[agent_binary_inference]  Processed 4320/5625 batches in 462.36s
+[agent_binary_inference]  Processed 4340/5625 batches in 464.49s
+[agent_binary_inference]  Processed 4360/5625 batches in 466.63s
+[agent_binary_inference]  Processed 4380/5625 batches in 468.82s
+[agent_binary_inference]  Processed 4400/5625 batches in 471.00s
+[agent_binary_inference]  Processed 4420/5625 batches in 473.18s
+[agent_binary_inference]  Processed 4440/5625 batches in 475.34s
+[agent_binary_inference]  Processed 4460/5625 batches in 477.46s
+[agent_binary_inference]  Processed 4480/5625 batches in 479.53s
+[agent_binary_inference]  Processed 4500/5625 batches in 481.72s
+[agent_binary_inference]  Processed 4520/5625 batches in 483.85s
+[agent_binary_inference]  Processed 4540/5625 batches in 486.01s
+[agent_binary_inference]  Processed 4560/5625 batches in 488.11s
+[agent_binary_inference]  Processed 4580/5625 batches in 490.24s
+[agent_binary_inference]  Processed 4600/5625 batches in 492.33s
+[agent_binary_inference]  Processed 4620/5625 batches in 494.40s
+[agent_binary_inference]  Processed 4640/5625 batches in 496.57s
+[agent_binary_inference]  Processed 4660/5625 batches in 498.67s
+[agent_binary_inference]  Processed 4680/5625 batches in 500.82s
+[agent_binary_inference]  Processed 4700/5625 batches in 502.98s
+[agent_binary_inference]  Processed 4720/5625 batches in 505.05s
+[agent_binary_inference]  Processed 4740/5625 batches in 507.21s
+[agent_binary_inference]  Processed 4760/5625 batches in 509.29s
+[agent_binary_inference]  Processed 4780/5625 batches in 511.45s
+[agent_binary_inference]  Processed 4800/5625 batches in 513.64s
+[agent_binary_inference]  Processed 4820/5625 batches in 515.84s
+[agent_binary_inference]  Processed 4840/5625 batches in 518.05s
+[agent_binary_inference]  Processed 4860/5625 batches in 520.29s
+[agent_binary_inference]  Processed 4880/5625 batches in 522.44s
+[agent_binary_inference]  Processed 4900/5625 batches in 524.54s
+[agent_binary_inference]  Processed 4920/5625 batches in 526.66s
+[agent_binary_inference]  Processed 4940/5625 batches in 528.79s
+[agent_binary_inference]  Processed 4960/5625 batches in 530.93s
+[agent_binary_inference]  Processed 4980/5625 batches in 533.10s
+[agent_binary_inference]  Processed 5000/5625 batches in 535.23s
+[agent_binary_inference]  Processed 5020/5625 batches in 537.41s
+[agent_binary_inference]  Processed 5040/5625 batches in 539.54s
+[agent_binary_inference]  Processed 5060/5625 batches in 541.75s
+[agent_binary_inference]  Processed 5080/5625 batches in 543.86s
+[agent_binary_inference]  Processed 5100/5625 batches in 545.97s
+[agent_binary_inference]  Processed 5120/5625 batches in 548.11s
+[agent_binary_inference]  Processed 5140/5625 batches in 550.29s
+[agent_binary_inference]  Processed 5160/5625 batches in 552.45s
+[agent_binary_inference]  Processed 5180/5625 batches in 554.65s
+[agent_binary_inference]  Processed 5200/5625 batches in 556.74s
+[agent_binary_inference]  Processed 5220/5625 batches in 558.89s
+[agent_binary_inference]  Processed 5240/5625 batches in 561.03s
+[agent_binary_inference]  Processed 5260/5625 batches in 563.18s
+[agent_binary_inference]  Processed 5280/5625 batches in 565.29s
+[agent_binary_inference]  Processed 5300/5625 batches in 567.38s
+[agent_binary_inference]  Processed 5320/5625 batches in 569.56s
+[agent_binary_inference]  Processed 5340/5625 batches in 571.72s
+[agent_binary_inference]  Processed 5360/5625 batches in 573.78s
+[agent_binary_inference]  Processed 5380/5625 batches in 575.95s
+[agent_binary_inference]  Processed 5400/5625 batches in 578.10s
+[agent_binary_inference]  Processed 5420/5625 batches in 580.28s
+[agent_binary_inference]  Processed 5440/5625 batches in 582.42s
+[agent_binary_inference]  Processed 5460/5625 batches in 584.51s
+[agent_binary_inference]  Processed 5480/5625 batches in 586.69s
+[agent_binary_inference]  Processed 5500/5625 batches in 588.86s
+[agent_binary_inference]  Processed 5520/5625 batches in 590.96s
+[agent_binary_inference]  Processed 5540/5625 batches in 593.12s
+[agent_binary_inference]  Processed 5560/5625 batches in 595.21s
+[agent_binary_inference]  Processed 5580/5625 batches in 597.31s
+[agent_binary_inference]  Processed 5600/5625 batches in 599.51s
+[agent_binary_inference]  Processed 5620/5625 batches in 601.61s
+[agent_binary_inference]  Processed 5625/5625 batches in 602.14s
+[agent_binary_inference] run_binary_inference: done in 602.16s
+[agent_binary_inference] overall time passed: 602.16s
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=1 beam_index=1 split=final_step_dev done in 602.24s, precision=14.61 ± 1.40, recall=34.19 ± 2.31, f1=20.45 ± 1.67
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=1 beam_index=1 stable_f1=17.10 (k=2)
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=1 beam_index=1 perplexity=4.218750, loss=3.863902, combined_score=5.973277, fluency_metric=prompt_fluency_log_score
+[agent_binary_inference] run_binary_inference: 1412 prompts, batch_size=8, batches=177
+[agent_binary_inference]  Processed 20/177 batches in 2.17s
+[agent_binary_inference]  Processed 40/177 batches in 4.39s
+[agent_binary_inference]  Processed 60/177 batches in 6.57s
+[agent_binary_inference]  Processed 80/177 batches in 8.73s
+[agent_binary_inference]  Processed 100/177 batches in 10.95s
+[agent_binary_inference]  Processed 120/177 batches in 13.16s
+[agent_binary_inference]  Processed 140/177 batches in 15.40s
+[agent_binary_inference]  Processed 160/177 batches in 17.63s
+[agent_binary_inference]  Processed 177/177 batches in 19.44s
+[agent_binary_inference] run_binary_inference: done in 19.46s
+[agent_binary_inference] overall time passed: 19.46s
+[agent_gradient_eval_debug] prompt validation: generation_index=2 beam_index=2 done in 19.46s, precision=51.01 ± 4.05, recall=48.17 ± 1.80, f1=49.50 ± 2.66, overall_accuracy=0.5078, fixes_from_mistakes=28, regressions_from_correct=17
+[agent_gradient_eval_debug] prompt validation: generation_index=2 beam_index=2 stable_f1=44.19 (k=2)
+[agent_binary_inference] run_binary_inference: 45000 prompts, batch_size=8, batches=5625
+[agent_binary_inference]  Processed 20/5625 batches in 2.10s
+[agent_binary_inference]  Processed 40/5625 batches in 4.25s
+[agent_binary_inference]  Processed 60/5625 batches in 6.42s
+[agent_binary_inference]  Processed 80/5625 batches in 8.56s
+[agent_binary_inference]  Processed 100/5625 batches in 10.70s
+[agent_binary_inference]  Processed 120/5625 batches in 12.84s
+[agent_binary_inference]  Processed 140/5625 batches in 15.01s
+[agent_binary_inference]  Processed 160/5625 batches in 17.15s
+[agent_binary_inference]  Processed 180/5625 batches in 19.26s
+[agent_binary_inference]  Processed 200/5625 batches in 21.41s
+[agent_binary_inference]  Processed 220/5625 batches in 23.56s
+[agent_binary_inference]  Processed 240/5625 batches in 25.78s
+[agent_binary_inference]  Processed 260/5625 batches in 27.91s
+[agent_binary_inference]  Processed 280/5625 batches in 30.07s
+[agent_binary_inference]  Processed 300/5625 batches in 32.14s
+[agent_binary_inference]  Processed 320/5625 batches in 34.24s
+[agent_binary_inference]  Processed 340/5625 batches in 36.35s
+[agent_binary_inference]  Processed 360/5625 batches in 38.50s
+[agent_binary_inference]  Processed 380/5625 batches in 40.67s
+[agent_binary_inference]  Processed 400/5625 batches in 42.83s
+[agent_binary_inference]  Processed 420/5625 batches in 45.01s
+[agent_binary_inference]  Processed 440/5625 batches in 47.22s
+[agent_binary_inference]  Processed 460/5625 batches in 49.32s
+[agent_binary_inference]  Processed 480/5625 batches in 51.50s
+[agent_binary_inference]  Processed 500/5625 batches in 53.58s
+[agent_binary_inference]  Processed 520/5625 batches in 55.67s
+[agent_binary_inference]  Processed 540/5625 batches in 57.79s
+[agent_binary_inference]  Processed 560/5625 batches in 59.92s
+[agent_binary_inference]  Processed 580/5625 batches in 62.03s
+[agent_binary_inference]  Processed 600/5625 batches in 64.18s
+[agent_binary_inference]  Processed 620/5625 batches in 66.36s
+[agent_binary_inference]  Processed 640/5625 batches in 68.46s
+[agent_binary_inference]  Processed 660/5625 batches in 70.59s
+[agent_binary_inference]  Processed 680/5625 batches in 72.72s
+[agent_binary_inference]  Processed 700/5625 batches in 74.83s
+[agent_binary_inference]  Processed 720/5625 batches in 76.98s
+[agent_binary_inference]  Processed 740/5625 batches in 79.08s
+[agent_binary_inference]  Processed 760/5625 batches in 81.21s
+[agent_binary_inference]  Processed 780/5625 batches in 83.36s
+[agent_binary_inference]  Processed 800/5625 batches in 85.51s
+[agent_binary_inference]  Processed 820/5625 batches in 87.68s
+[agent_binary_inference]  Processed 840/5625 batches in 89.79s
+[agent_binary_inference]  Processed 860/5625 batches in 91.95s
+[agent_binary_inference]  Processed 880/5625 batches in 94.13s
+[agent_binary_inference]  Processed 900/5625 batches in 96.30s
+[agent_binary_inference]  Processed 920/5625 batches in 98.43s
+[agent_binary_inference]  Processed 940/5625 batches in 100.51s
+[agent_binary_inference]  Processed 960/5625 batches in 102.65s
+[agent_binary_inference]  Processed 980/5625 batches in 104.78s
+[agent_binary_inference]  Processed 1000/5625 batches in 106.99s
+[agent_binary_inference]  Processed 1020/5625 batches in 109.13s
+[agent_binary_inference]  Processed 1040/5625 batches in 111.27s
+[agent_binary_inference]  Processed 1060/5625 batches in 113.46s
+[agent_binary_inference]  Processed 1080/5625 batches in 115.56s
+[agent_binary_inference]  Processed 1100/5625 batches in 117.71s
+[agent_binary_inference]  Processed 1120/5625 batches in 119.85s
+[agent_binary_inference]  Processed 1140/5625 batches in 122.02s
+[agent_binary_inference]  Processed 1160/5625 batches in 124.19s
+[agent_binary_inference]  Processed 1180/5625 batches in 126.27s
+[agent_binary_inference]  Processed 1200/5625 batches in 128.43s
+[agent_binary_inference]  Processed 1220/5625 batches in 130.58s
+[agent_binary_inference]  Processed 1240/5625 batches in 132.67s
+[agent_binary_inference]  Processed 1260/5625 batches in 134.75s
+[agent_binary_inference]  Processed 1280/5625 batches in 136.83s
+[agent_binary_inference]  Processed 1300/5625 batches in 138.97s
+[agent_binary_inference]  Processed 1320/5625 batches in 141.09s
+[agent_binary_inference]  Processed 1340/5625 batches in 143.24s
+[agent_binary_inference]  Processed 1360/5625 batches in 145.36s
+[agent_binary_inference]  Processed 1380/5625 batches in 147.52s
+[agent_binary_inference]  Processed 1400/5625 batches in 149.66s
+[agent_binary_inference]  Processed 1420/5625 batches in 151.79s
+[agent_binary_inference]  Processed 1440/5625 batches in 153.95s
+[agent_binary_inference]  Processed 1460/5625 batches in 156.15s
+[agent_binary_inference]  Processed 1480/5625 batches in 158.30s
+[agent_binary_inference]  Processed 1500/5625 batches in 160.52s
+[agent_binary_inference]  Processed 1520/5625 batches in 162.64s
+[agent_binary_inference]  Processed 1540/5625 batches in 164.75s
+[agent_binary_inference]  Processed 1560/5625 batches in 166.87s
+[agent_binary_inference]  Processed 1580/5625 batches in 169.10s
+[agent_binary_inference]  Processed 1600/5625 batches in 171.25s
+[agent_binary_inference]  Processed 1620/5625 batches in 173.40s
+[agent_binary_inference]  Processed 1640/5625 batches in 175.57s
+[agent_binary_inference]  Processed 1660/5625 batches in 177.69s
+[agent_binary_inference]  Processed 1680/5625 batches in 179.90s
+[agent_binary_inference]  Processed 1700/5625 batches in 182.08s
+[agent_binary_inference]  Processed 1720/5625 batches in 184.24s
+[agent_binary_inference]  Processed 1740/5625 batches in 186.34s
+[agent_binary_inference]  Processed 1760/5625 batches in 188.46s
+[agent_binary_inference]  Processed 1780/5625 batches in 190.68s
+[agent_binary_inference]  Processed 1800/5625 batches in 192.75s
+[agent_binary_inference]  Processed 1820/5625 batches in 194.86s
+[agent_binary_inference]  Processed 1840/5625 batches in 196.99s
+[agent_binary_inference]  Processed 1860/5625 batches in 199.07s
+[agent_binary_inference]  Processed 1880/5625 batches in 201.20s
+[agent_binary_inference]  Processed 1900/5625 batches in 203.36s
+[agent_binary_inference]  Processed 1920/5625 batches in 205.48s
+[agent_binary_inference]  Processed 1940/5625 batches in 207.58s
+[agent_binary_inference]  Processed 1960/5625 batches in 209.70s
+[agent_binary_inference]  Processed 1980/5625 batches in 211.87s
+[agent_binary_inference]  Processed 2000/5625 batches in 214.07s
+[agent_binary_inference]  Processed 2020/5625 batches in 216.20s
+[agent_binary_inference]  Processed 2040/5625 batches in 218.32s
+[agent_binary_inference]  Processed 2060/5625 batches in 220.47s
+[agent_binary_inference]  Processed 2080/5625 batches in 222.58s
+[agent_binary_inference]  Processed 2100/5625 batches in 224.72s
+[agent_binary_inference]  Processed 2120/5625 batches in 226.91s
+[agent_binary_inference]  Processed 2140/5625 batches in 229.10s
+[agent_binary_inference]  Processed 2160/5625 batches in 231.26s
+[agent_binary_inference]  Processed 2180/5625 batches in 233.38s
+[agent_binary_inference]  Processed 2200/5625 batches in 235.46s
+[agent_binary_inference]  Processed 2220/5625 batches in 237.53s
+[agent_binary_inference]  Processed 2240/5625 batches in 239.68s
+[agent_binary_inference]  Processed 2260/5625 batches in 241.84s
+[agent_binary_inference]  Processed 2280/5625 batches in 244.08s
+[agent_binary_inference]  Processed 2300/5625 batches in 246.25s
+[agent_binary_inference]  Processed 2320/5625 batches in 248.39s
+[agent_binary_inference]  Processed 2340/5625 batches in 250.54s
+[agent_binary_inference]  Processed 2360/5625 batches in 252.67s
+[agent_binary_inference]  Processed 2380/5625 batches in 254.71s
+[agent_binary_inference]  Processed 2400/5625 batches in 256.82s
+[agent_binary_inference]  Processed 2420/5625 batches in 258.94s
+[agent_binary_inference]  Processed 2440/5625 batches in 261.06s
+[agent_binary_inference]  Processed 2460/5625 batches in 263.14s
+[agent_binary_inference]  Processed 2480/5625 batches in 265.29s
+[agent_binary_inference]  Processed 2500/5625 batches in 267.39s
+[agent_binary_inference]  Processed 2520/5625 batches in 269.48s
+[agent_binary_inference]  Processed 2540/5625 batches in 271.61s
+[agent_binary_inference]  Processed 2560/5625 batches in 273.76s
+[agent_binary_inference]  Processed 2580/5625 batches in 275.89s
+[agent_binary_inference]  Processed 2600/5625 batches in 278.08s
+[agent_binary_inference]  Processed 2620/5625 batches in 280.21s
+[agent_binary_inference]  Processed 2640/5625 batches in 282.36s
+[agent_binary_inference]  Processed 2660/5625 batches in 284.44s
+[agent_binary_inference]  Processed 2680/5625 batches in 286.55s
+[agent_binary_inference]  Processed 2700/5625 batches in 288.72s
+[agent_binary_inference]  Processed 2720/5625 batches in 290.92s
+[agent_binary_inference]  Processed 2740/5625 batches in 293.12s
+[agent_binary_inference]  Processed 2760/5625 batches in 295.31s
+[agent_binary_inference]  Processed 2780/5625 batches in 297.43s
+[agent_binary_inference]  Processed 2800/5625 batches in 299.60s
+[agent_binary_inference]  Processed 2820/5625 batches in 301.72s
+[agent_binary_inference]  Processed 2840/5625 batches in 303.82s
+[agent_binary_inference]  Processed 2860/5625 batches in 306.04s
+[agent_binary_inference]  Processed 2880/5625 batches in 308.17s
+[agent_binary_inference]  Processed 2900/5625 batches in 310.28s
+[agent_binary_inference]  Processed 2920/5625 batches in 312.47s
+[agent_binary_inference]  Processed 2940/5625 batches in 314.63s
+[agent_binary_inference]  Processed 2960/5625 batches in 316.80s
+[agent_binary_inference]  Processed 2980/5625 batches in 318.92s
+[agent_binary_inference]  Processed 3000/5625 batches in 321.04s
+[agent_binary_inference]  Processed 3020/5625 batches in 323.18s
+[agent_binary_inference]  Processed 3040/5625 batches in 325.32s
+[agent_binary_inference]  Processed 3060/5625 batches in 327.45s
+[agent_binary_inference]  Processed 3080/5625 batches in 329.61s
+[agent_binary_inference]  Processed 3100/5625 batches in 331.78s
+[agent_binary_inference]  Processed 3120/5625 batches in 333.94s
+[agent_binary_inference]  Processed 3140/5625 batches in 336.07s
+[agent_binary_inference]  Processed 3160/5625 batches in 338.17s
+[agent_binary_inference]  Processed 3180/5625 batches in 340.33s
+[agent_binary_inference]  Processed 3200/5625 batches in 342.51s
+[agent_binary_inference]  Processed 3220/5625 batches in 344.71s
+[agent_binary_inference]  Processed 3240/5625 batches in 346.78s
+[agent_binary_inference]  Processed 3260/5625 batches in 348.92s
+[agent_binary_inference]  Processed 3280/5625 batches in 350.99s
+[agent_binary_inference]  Processed 3300/5625 batches in 353.15s
+[agent_binary_inference]  Processed 3320/5625 batches in 355.25s
+[agent_binary_inference]  Processed 3340/5625 batches in 357.42s
+[agent_binary_inference]  Processed 3360/5625 batches in 359.60s
+[agent_binary_inference]  Processed 3380/5625 batches in 361.72s
+[agent_binary_inference]  Processed 3400/5625 batches in 363.86s
+[agent_binary_inference]  Processed 3420/5625 batches in 366.05s
+[agent_binary_inference]  Processed 3440/5625 batches in 368.18s
+[agent_binary_inference]  Processed 3460/5625 batches in 370.30s
+[agent_binary_inference]  Processed 3480/5625 batches in 372.48s
+[agent_binary_inference]  Processed 3500/5625 batches in 374.71s
+[agent_binary_inference]  Processed 3520/5625 batches in 376.84s
+[agent_binary_inference]  Processed 3540/5625 batches in 378.97s
+[agent_binary_inference]  Processed 3560/5625 batches in 381.14s
+[agent_binary_inference]  Processed 3580/5625 batches in 383.30s
+[agent_binary_inference]  Processed 3600/5625 batches in 385.49s
+[agent_binary_inference]  Processed 3620/5625 batches in 387.59s
+[agent_binary_inference]  Processed 3640/5625 batches in 389.69s
+[agent_binary_inference]  Processed 3660/5625 batches in 391.77s
+[agent_binary_inference]  Processed 3680/5625 batches in 393.89s
+[agent_binary_inference]  Processed 3700/5625 batches in 396.02s
+[agent_binary_inference]  Processed 3720/5625 batches in 398.09s
+[agent_binary_inference]  Processed 3740/5625 batches in 400.22s
+[agent_binary_inference]  Processed 3760/5625 batches in 402.44s
+[agent_binary_inference]  Processed 3780/5625 batches in 404.59s
+[agent_binary_inference]  Processed 3800/5625 batches in 406.67s
+[agent_binary_inference]  Processed 3820/5625 batches in 408.79s
+[agent_binary_inference]  Processed 3840/5625 batches in 410.86s
+[agent_binary_inference]  Processed 3860/5625 batches in 412.90s
+[agent_binary_inference]  Processed 3880/5625 batches in 415.09s
+[agent_binary_inference]  Processed 3900/5625 batches in 417.23s
+[agent_binary_inference]  Processed 3920/5625 batches in 419.43s
+[agent_binary_inference]  Processed 3940/5625 batches in 421.59s
+[agent_binary_inference]  Processed 3960/5625 batches in 423.72s
+[agent_binary_inference]  Processed 3980/5625 batches in 425.89s
+[agent_binary_inference]  Processed 4000/5625 batches in 428.02s
+[agent_binary_inference]  Processed 4020/5625 batches in 430.19s
+[agent_binary_inference]  Processed 4040/5625 batches in 432.29s
+[agent_binary_inference]  Processed 4060/5625 batches in 434.43s
+[agent_binary_inference]  Processed 4080/5625 batches in 436.59s
+[agent_binary_inference]  Processed 4100/5625 batches in 438.67s
+[agent_binary_inference]  Processed 4120/5625 batches in 440.84s
+[agent_binary_inference]  Processed 4140/5625 batches in 443.02s
+[agent_binary_inference]  Processed 4160/5625 batches in 445.17s
+[agent_binary_inference]  Processed 4180/5625 batches in 447.33s
+[agent_binary_inference]  Processed 4200/5625 batches in 449.50s
+[agent_binary_inference]  Processed 4220/5625 batches in 451.69s
+[agent_binary_inference]  Processed 4240/5625 batches in 453.77s
+[agent_binary_inference]  Processed 4260/5625 batches in 455.97s
+[agent_binary_inference]  Processed 4280/5625 batches in 458.10s
+[agent_binary_inference]  Processed 4300/5625 batches in 460.22s
+[agent_binary_inference]  Processed 4320/5625 batches in 462.31s
+[agent_binary_inference]  Processed 4340/5625 batches in 464.43s
+[agent_binary_inference]  Processed 4360/5625 batches in 466.57s
+[agent_binary_inference]  Processed 4380/5625 batches in 468.77s
+[agent_binary_inference]  Processed 4400/5625 batches in 470.95s
+[agent_binary_inference]  Processed 4420/5625 batches in 473.13s
+[agent_binary_inference]  Processed 4440/5625 batches in 475.29s
+[agent_binary_inference]  Processed 4460/5625 batches in 477.41s
+[agent_binary_inference]  Processed 4480/5625 batches in 479.48s
+[agent_binary_inference]  Processed 4500/5625 batches in 481.67s
+[agent_binary_inference]  Processed 4520/5625 batches in 483.80s
+[agent_binary_inference]  Processed 4540/5625 batches in 485.96s
+[agent_binary_inference]  Processed 4560/5625 batches in 488.06s
+[agent_binary_inference]  Processed 4580/5625 batches in 490.19s
+[agent_binary_inference]  Processed 4600/5625 batches in 492.28s
+[agent_binary_inference]  Processed 4620/5625 batches in 494.35s
+[agent_binary_inference]  Processed 4640/5625 batches in 496.52s
+[agent_binary_inference]  Processed 4660/5625 batches in 498.62s
+[agent_binary_inference]  Processed 4680/5625 batches in 500.77s
+[agent_binary_inference]  Processed 4700/5625 batches in 502.93s
+[agent_binary_inference]  Processed 4720/5625 batches in 505.00s
+[agent_binary_inference]  Processed 4740/5625 batches in 507.17s
+[agent_binary_inference]  Processed 4760/5625 batches in 509.24s
+[agent_binary_inference]  Processed 4780/5625 batches in 511.40s
+[agent_binary_inference]  Processed 4800/5625 batches in 513.59s
+[agent_binary_inference]  Processed 4820/5625 batches in 515.80s
+[agent_binary_inference]  Processed 4840/5625 batches in 518.00s
+[agent_binary_inference]  Processed 4860/5625 batches in 520.25s
+[agent_binary_inference]  Processed 4880/5625 batches in 522.40s
+[agent_binary_inference]  Processed 4900/5625 batches in 524.50s
+[agent_binary_inference]  Processed 4920/5625 batches in 526.62s
+[agent_binary_inference]  Processed 4940/5625 batches in 528.75s
+[agent_binary_inference]  Processed 4960/5625 batches in 530.89s
+[agent_binary_inference]  Processed 4980/5625 batches in 533.05s
+[agent_binary_inference]  Processed 5000/5625 batches in 535.19s
+[agent_binary_inference]  Processed 5020/5625 batches in 537.37s
+[agent_binary_inference]  Processed 5040/5625 batches in 539.50s
+[agent_binary_inference]  Processed 5060/5625 batches in 541.71s
+[agent_binary_inference]  Processed 5080/5625 batches in 543.82s
+[agent_binary_inference]  Processed 5100/5625 batches in 545.93s
+[agent_binary_inference]  Processed 5120/5625 batches in 548.08s
+[agent_binary_inference]  Processed 5140/5625 batches in 550.26s
+[agent_binary_inference]  Processed 5160/5625 batches in 552.41s
+[agent_binary_inference]  Processed 5180/5625 batches in 554.62s
+[agent_binary_inference]  Processed 5200/5625 batches in 556.70s
+[agent_binary_inference]  Processed 5220/5625 batches in 558.86s
+[agent_binary_inference]  Processed 5240/5625 batches in 560.99s
+[agent_binary_inference]  Processed 5260/5625 batches in 563.14s
+[agent_binary_inference]  Processed 5280/5625 batches in 565.25s
+[agent_binary_inference]  Processed 5300/5625 batches in 567.34s
+[agent_binary_inference]  Processed 5320/5625 batches in 569.53s
+[agent_binary_inference]  Processed 5340/5625 batches in 571.68s
+[agent_binary_inference]  Processed 5360/5625 batches in 573.74s
+[agent_binary_inference]  Processed 5380/5625 batches in 575.91s
+[agent_binary_inference]  Processed 5400/5625 batches in 578.07s
+[agent_binary_inference]  Processed 5420/5625 batches in 580.25s
+[agent_binary_inference]  Processed 5440/5625 batches in 582.39s
+[agent_binary_inference]  Processed 5460/5625 batches in 584.48s
+[agent_binary_inference]  Processed 5480/5625 batches in 586.66s
+[agent_binary_inference]  Processed 5500/5625 batches in 588.83s
+[agent_binary_inference]  Processed 5520/5625 batches in 590.94s
+[agent_binary_inference]  Processed 5540/5625 batches in 593.09s
+[agent_binary_inference]  Processed 5560/5625 batches in 595.19s
+[agent_binary_inference]  Processed 5580/5625 batches in 597.28s
+[agent_binary_inference]  Processed 5600/5625 batches in 599.49s
+[agent_binary_inference]  Processed 5620/5625 batches in 601.59s
+[agent_binary_inference]  Processed 5625/5625 batches in 602.12s
+[agent_binary_inference] run_binary_inference: done in 602.14s
+[agent_binary_inference] overall time passed: 602.14s
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=2 beam_index=2 split=final_step_dev done in 602.21s, precision=15.24 ± 1.08, recall=33.26 ± 2.33, f1=20.87 ± 1.31
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=2 beam_index=2 stable_f1=18.25 (k=2)
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=2 beam_index=2 perplexity=4.343750, loss=3.814268, combined_score=5.986143, fluency_metric=prompt_fluency_log_score
+[agent_binary_inference] run_binary_inference: 1412 prompts, batch_size=8, batches=177
+[agent_binary_inference]  Processed 20/177 batches in 2.16s
+[agent_binary_inference]  Processed 40/177 batches in 4.39s
+[agent_binary_inference]  Processed 60/177 batches in 6.57s
+[agent_binary_inference]  Processed 80/177 batches in 8.73s
+[agent_binary_inference]  Processed 100/177 batches in 10.95s
+[agent_binary_inference]  Processed 120/177 batches in 13.16s
+[agent_binary_inference]  Processed 140/177 batches in 15.40s
+[agent_binary_inference]  Processed 160/177 batches in 17.63s
+[agent_binary_inference]  Processed 177/177 batches in 19.44s
+[agent_binary_inference] run_binary_inference: done in 19.46s
+[agent_binary_inference] overall time passed: 19.46s
+[agent_gradient_eval_debug] prompt validation: generation_index=3 beam_index=3 done in 19.46s, precision=51.71 ± 3.87, recall=45.06 ± 2.14, f1=48.10 ± 2.57, overall_accuracy=0.5135, fixes_from_mistakes=58, regressions_from_correct=39
+[agent_gradient_eval_debug] prompt validation: generation_index=3 beam_index=3 stable_f1=42.96 (k=2)
+[agent_binary_inference] run_binary_inference: 45000 prompts, batch_size=8, batches=5625
+[agent_binary_inference]  Processed 20/5625 batches in 2.10s
+[agent_binary_inference]  Processed 40/5625 batches in 4.25s
+[agent_binary_inference]  Processed 60/5625 batches in 6.42s
+[agent_binary_inference]  Processed 80/5625 batches in 8.56s
+[agent_binary_inference]  Processed 100/5625 batches in 10.71s
+[agent_binary_inference]  Processed 120/5625 batches in 12.84s
+[agent_binary_inference]  Processed 140/5625 batches in 15.01s
+[agent_binary_inference]  Processed 160/5625 batches in 17.15s
+[agent_binary_inference]  Processed 180/5625 batches in 19.26s
+[agent_binary_inference]  Processed 200/5625 batches in 21.42s
+[agent_binary_inference]  Processed 220/5625 batches in 23.57s
+[agent_binary_inference]  Processed 240/5625 batches in 25.78s
+[agent_binary_inference]  Processed 260/5625 batches in 27.91s
+[agent_binary_inference]  Processed 280/5625 batches in 30.07s
+[agent_binary_inference]  Processed 300/5625 batches in 32.14s
+[agent_binary_inference]  Processed 320/5625 batches in 34.24s
+[agent_binary_inference]  Processed 340/5625 batches in 36.35s
+[agent_binary_inference]  Processed 360/5625 batches in 38.49s
+[agent_binary_inference]  Processed 380/5625 batches in 40.67s
+[agent_binary_inference]  Processed 400/5625 batches in 42.83s
+[agent_binary_inference]  Processed 420/5625 batches in 45.01s
+[agent_binary_inference]  Processed 440/5625 batches in 47.21s
+[agent_binary_inference]  Processed 460/5625 batches in 49.31s
+[agent_binary_inference]  Processed 480/5625 batches in 51.49s
+[agent_binary_inference]  Processed 500/5625 batches in 53.57s
+[agent_binary_inference]  Processed 520/5625 batches in 55.66s
+[agent_binary_inference]  Processed 540/5625 batches in 57.78s
+[agent_binary_inference]  Processed 560/5625 batches in 59.91s
+[agent_binary_inference]  Processed 580/5625 batches in 62.01s
+[agent_binary_inference]  Processed 600/5625 batches in 64.16s
+[agent_binary_inference]  Processed 620/5625 batches in 66.35s
+[agent_binary_inference]  Processed 640/5625 batches in 68.45s
+[agent_binary_inference]  Processed 660/5625 batches in 70.57s
+[agent_binary_inference]  Processed 680/5625 batches in 72.70s
+[agent_binary_inference]  Processed 700/5625 batches in 74.81s
+[agent_binary_inference]  Processed 720/5625 batches in 76.96s
+[agent_binary_inference]  Processed 740/5625 batches in 79.06s
+[agent_binary_inference]  Processed 760/5625 batches in 81.18s
+[agent_binary_inference]  Processed 780/5625 batches in 83.34s
+[agent_binary_inference]  Processed 800/5625 batches in 85.49s
+[agent_binary_inference]  Processed 820/5625 batches in 87.66s
+[agent_binary_inference]  Processed 840/5625 batches in 89.76s
+[agent_binary_inference]  Processed 860/5625 batches in 91.92s
+[agent_binary_inference]  Processed 880/5625 batches in 94.10s
+[agent_binary_inference]  Processed 900/5625 batches in 96.27s
+[agent_binary_inference]  Processed 920/5625 batches in 98.40s
+[agent_binary_inference]  Processed 940/5625 batches in 100.48s
+[agent_binary_inference]  Processed 960/5625 batches in 102.62s
+[agent_binary_inference]  Processed 980/5625 batches in 104.75s
+[agent_binary_inference]  Processed 1000/5625 batches in 106.96s
+[agent_binary_inference]  Processed 1020/5625 batches in 109.09s
+[agent_binary_inference]  Processed 1040/5625 batches in 111.23s
+[agent_binary_inference]  Processed 1060/5625 batches in 113.42s
+[agent_binary_inference]  Processed 1080/5625 batches in 115.53s
+[agent_binary_inference]  Processed 1100/5625 batches in 117.68s
+[agent_binary_inference]  Processed 1120/5625 batches in 119.82s
+[agent_binary_inference]  Processed 1140/5625 batches in 121.98s
+[agent_binary_inference]  Processed 1160/5625 batches in 124.15s
+[agent_binary_inference]  Processed 1180/5625 batches in 126.24s
+[agent_binary_inference]  Processed 1200/5625 batches in 128.39s
+[agent_binary_inference]  Processed 1220/5625 batches in 130.54s
+[agent_binary_inference]  Processed 1240/5625 batches in 132.64s
+[agent_binary_inference]  Processed 1260/5625 batches in 134.71s
+[agent_binary_inference]  Processed 1280/5625 batches in 136.80s
+[agent_binary_inference]  Processed 1300/5625 batches in 138.93s
+[agent_binary_inference]  Processed 1320/5625 batches in 141.05s
+[agent_binary_inference]  Processed 1340/5625 batches in 143.21s
+[agent_binary_inference]  Processed 1360/5625 batches in 145.33s
+[agent_binary_inference]  Processed 1380/5625 batches in 147.48s
+[agent_binary_inference]  Processed 1400/5625 batches in 149.62s
+[agent_binary_inference]  Processed 1420/5625 batches in 151.75s
+[agent_binary_inference]  Processed 1440/5625 batches in 153.91s
+[agent_binary_inference]  Processed 1460/5625 batches in 156.11s
+[agent_binary_inference]  Processed 1480/5625 batches in 158.26s
+[agent_binary_inference]  Processed 1500/5625 batches in 160.48s
+[agent_binary_inference]  Processed 1520/5625 batches in 162.59s
+[agent_binary_inference]  Processed 1540/5625 batches in 164.70s
+[agent_binary_inference]  Processed 1560/5625 batches in 166.82s
+[agent_binary_inference]  Processed 1580/5625 batches in 169.06s
+[agent_binary_inference]  Processed 1600/5625 batches in 171.21s
+[agent_binary_inference]  Processed 1620/5625 batches in 173.35s
+[agent_binary_inference]  Processed 1640/5625 batches in 175.53s
+[agent_binary_inference]  Processed 1660/5625 batches in 177.65s
+[agent_binary_inference]  Processed 1680/5625 batches in 179.86s
+[agent_binary_inference]  Processed 1700/5625 batches in 182.05s
+[agent_binary_inference]  Processed 1720/5625 batches in 184.20s
+[agent_binary_inference]  Processed 1740/5625 batches in 186.30s
+[agent_binary_inference]  Processed 1760/5625 batches in 188.42s
+[agent_binary_inference]  Processed 1780/5625 batches in 190.65s
+[agent_binary_inference]  Processed 1800/5625 batches in 192.71s
+[agent_binary_inference]  Processed 1820/5625 batches in 194.82s
+[agent_binary_inference]  Processed 1840/5625 batches in 196.95s
+[agent_binary_inference]  Processed 1860/5625 batches in 199.03s
+[agent_binary_inference]  Processed 1880/5625 batches in 201.17s
+[agent_binary_inference]  Processed 1900/5625 batches in 203.33s
+[agent_binary_inference]  Processed 1920/5625 batches in 205.45s
+[agent_binary_inference]  Processed 1940/5625 batches in 207.54s
+[agent_binary_inference]  Processed 1960/5625 batches in 209.66s
+[agent_binary_inference]  Processed 1980/5625 batches in 211.84s
+[agent_binary_inference]  Processed 2000/5625 batches in 214.04s
+[agent_binary_inference]  Processed 2020/5625 batches in 216.16s
+[agent_binary_inference]  Processed 2040/5625 batches in 218.29s
+[agent_binary_inference]  Processed 2060/5625 batches in 220.43s
+[agent_binary_inference]  Processed 2080/5625 batches in 222.55s
+[agent_binary_inference]  Processed 2100/5625 batches in 224.69s
+[agent_binary_inference]  Processed 2120/5625 batches in 226.88s
+[agent_binary_inference]  Processed 2140/5625 batches in 229.07s
+[agent_binary_inference]  Processed 2160/5625 batches in 231.23s
+[agent_binary_inference]  Processed 2180/5625 batches in 233.36s
+[agent_binary_inference]  Processed 2200/5625 batches in 235.44s
+[agent_binary_inference]  Processed 2220/5625 batches in 237.51s
+[agent_binary_inference]  Processed 2240/5625 batches in 239.65s
+[agent_binary_inference]  Processed 2260/5625 batches in 241.82s
+[agent_binary_inference]  Processed 2280/5625 batches in 244.06s
+[agent_binary_inference]  Processed 2300/5625 batches in 246.23s
+[agent_binary_inference]  Processed 2320/5625 batches in 248.37s
+[agent_binary_inference]  Processed 2340/5625 batches in 250.52s
+[agent_binary_inference]  Processed 2360/5625 batches in 252.65s
+[agent_binary_inference]  Processed 2380/5625 batches in 254.69s
+[agent_binary_inference]  Processed 2400/5625 batches in 256.80s
+[agent_binary_inference]  Processed 2420/5625 batches in 258.92s
+[agent_binary_inference]  Processed 2440/5625 batches in 261.05s
+[agent_binary_inference]  Processed 2460/5625 batches in 263.13s
+[agent_binary_inference]  Processed 2480/5625 batches in 265.28s
+[agent_binary_inference]  Processed 2500/5625 batches in 267.38s
+[agent_binary_inference]  Processed 2520/5625 batches in 269.48s
+[agent_binary_inference]  Processed 2540/5625 batches in 271.61s
+[agent_binary_inference]  Processed 2560/5625 batches in 273.76s
+[agent_binary_inference]  Processed 2580/5625 batches in 275.89s
+[agent_binary_inference]  Processed 2600/5625 batches in 278.08s
+[agent_binary_inference]  Processed 2620/5625 batches in 280.21s
+[agent_binary_inference]  Processed 2640/5625 batches in 282.37s
+[agent_binary_inference]  Processed 2660/5625 batches in 284.45s
+[agent_binary_inference]  Processed 2680/5625 batches in 286.56s
+[agent_binary_inference]  Processed 2700/5625 batches in 288.74s
+[agent_binary_inference]  Processed 2720/5625 batches in 290.94s
+[agent_binary_inference]  Processed 2740/5625 batches in 293.14s
+[agent_binary_inference]  Processed 2760/5625 batches in 295.33s
+[agent_binary_inference]  Processed 2780/5625 batches in 297.45s
+[agent_binary_inference]  Processed 2800/5625 batches in 299.62s
+[agent_binary_inference]  Processed 2820/5625 batches in 301.74s
+[agent_binary_inference]  Processed 2840/5625 batches in 303.84s
+[agent_binary_inference]  Processed 2860/5625 batches in 306.06s
+[agent_binary_inference]  Processed 2880/5625 batches in 308.19s
+[agent_binary_inference]  Processed 2900/5625 batches in 310.30s
+[agent_binary_inference]  Processed 2920/5625 batches in 312.49s
+[agent_binary_inference]  Processed 2940/5625 batches in 314.65s
+[agent_binary_inference]  Processed 2960/5625 batches in 316.82s
+[agent_binary_inference]  Processed 2980/5625 batches in 318.94s
+[agent_binary_inference]  Processed 3000/5625 batches in 321.06s
+[agent_binary_inference]  Processed 3020/5625 batches in 323.20s
+[agent_binary_inference]  Processed 3040/5625 batches in 325.34s
+[agent_binary_inference]  Processed 3060/5625 batches in 327.46s
+[agent_binary_inference]  Processed 3080/5625 batches in 329.62s
+[agent_binary_inference]  Processed 3100/5625 batches in 331.80s
+[agent_binary_inference]  Processed 3120/5625 batches in 333.96s
+[agent_binary_inference]  Processed 3140/5625 batches in 336.09s
+[agent_binary_inference]  Processed 3160/5625 batches in 338.18s
+[agent_binary_inference]  Processed 3180/5625 batches in 340.34s
+[agent_binary_inference]  Processed 3200/5625 batches in 342.53s
+[agent_binary_inference]  Processed 3220/5625 batches in 344.73s
+[agent_binary_inference]  Processed 3240/5625 batches in 346.80s
+[agent_binary_inference]  Processed 3260/5625 batches in 348.94s
+[agent_binary_inference]  Processed 3280/5625 batches in 351.01s
+[agent_binary_inference]  Processed 3300/5625 batches in 353.18s
+[agent_binary_inference]  Processed 3320/5625 batches in 355.27s
+[agent_binary_inference]  Processed 3340/5625 batches in 357.44s
+[agent_binary_inference]  Processed 3360/5625 batches in 359.61s
+[agent_binary_inference]  Processed 3380/5625 batches in 361.74s
+[agent_binary_inference]  Processed 3400/5625 batches in 363.88s
+[agent_binary_inference]  Processed 3420/5625 batches in 366.07s
+[agent_binary_inference]  Processed 3440/5625 batches in 368.19s
+[agent_binary_inference]  Processed 3460/5625 batches in 370.31s
+[agent_binary_inference]  Processed 3480/5625 batches in 372.49s
+[agent_binary_inference]  Processed 3500/5625 batches in 374.72s
+[agent_binary_inference]  Processed 3520/5625 batches in 376.85s
+[agent_binary_inference]  Processed 3540/5625 batches in 378.98s
+[agent_binary_inference]  Processed 3560/5625 batches in 381.16s
+[agent_binary_inference]  Processed 3580/5625 batches in 383.32s
+[agent_binary_inference]  Processed 3600/5625 batches in 385.51s
+[agent_binary_inference]  Processed 3620/5625 batches in 387.60s
+[agent_binary_inference]  Processed 3640/5625 batches in 389.71s
+[agent_binary_inference]  Processed 3660/5625 batches in 391.78s
+[agent_binary_inference]  Processed 3680/5625 batches in 393.91s
+[agent_binary_inference]  Processed 3700/5625 batches in 396.04s
+[agent_binary_inference]  Processed 3720/5625 batches in 398.10s
+[agent_binary_inference]  Processed 3740/5625 batches in 400.23s
+[agent_binary_inference]  Processed 3760/5625 batches in 402.45s
+[agent_binary_inference]  Processed 3780/5625 batches in 404.61s
+[agent_binary_inference]  Processed 3800/5625 batches in 406.68s
+[agent_binary_inference]  Processed 3820/5625 batches in 408.80s
+[agent_binary_inference]  Processed 3840/5625 batches in 410.87s
+[agent_binary_inference]  Processed 3860/5625 batches in 412.90s
+[agent_binary_inference]  Processed 3880/5625 batches in 415.09s
+[agent_binary_inference]  Processed 3900/5625 batches in 417.24s
+[agent_binary_inference]  Processed 3920/5625 batches in 419.43s
+[agent_binary_inference]  Processed 3940/5625 batches in 421.59s
+[agent_binary_inference]  Processed 3960/5625 batches in 423.72s
+[agent_binary_inference]  Processed 3980/5625 batches in 425.89s
+[agent_binary_inference]  Processed 4000/5625 batches in 428.02s
+[agent_binary_inference]  Processed 4020/5625 batches in 430.19s
+[agent_binary_inference]  Processed 4040/5625 batches in 432.29s
+[agent_binary_inference]  Processed 4060/5625 batches in 434.43s
+[agent_binary_inference]  Processed 4080/5625 batches in 436.60s
+[agent_binary_inference]  Processed 4100/5625 batches in 438.68s
+[agent_binary_inference]  Processed 4120/5625 batches in 440.84s
+[agent_binary_inference]  Processed 4140/5625 batches in 443.02s
+[agent_binary_inference]  Processed 4160/5625 batches in 445.18s
+[agent_binary_inference]  Processed 4180/5625 batches in 447.34s
+[agent_binary_inference]  Processed 4200/5625 batches in 449.50s
+[agent_binary_inference]  Processed 4220/5625 batches in 451.69s
+[agent_binary_inference]  Processed 4240/5625 batches in 453.77s
+[agent_binary_inference]  Processed 4260/5625 batches in 455.97s
+[agent_binary_inference]  Processed 4280/5625 batches in 458.10s
+[agent_binary_inference]  Processed 4300/5625 batches in 460.23s
+[agent_binary_inference]  Processed 4320/5625 batches in 462.31s
+[agent_binary_inference]  Processed 4340/5625 batches in 464.43s
+[agent_binary_inference]  Processed 4360/5625 batches in 466.57s
+[agent_binary_inference]  Processed 4380/5625 batches in 468.76s
+[agent_binary_inference]  Processed 4400/5625 batches in 470.94s
+[agent_binary_inference]  Processed 4420/5625 batches in 473.13s
+[agent_binary_inference]  Processed 4440/5625 batches in 475.28s
+[agent_binary_inference]  Processed 4460/5625 batches in 477.40s
+[agent_binary_inference]  Processed 4480/5625 batches in 479.47s
+[agent_binary_inference]  Processed 4500/5625 batches in 481.66s
+[agent_binary_inference]  Processed 4520/5625 batches in 483.79s
+[agent_binary_inference]  Processed 4540/5625 batches in 485.95s
+[agent_binary_inference]  Processed 4560/5625 batches in 488.05s
+[agent_binary_inference]  Processed 4580/5625 batches in 490.18s
+[agent_binary_inference]  Processed 4600/5625 batches in 492.27s
+[agent_binary_inference]  Processed 4620/5625 batches in 494.34s
+[agent_binary_inference]  Processed 4640/5625 batches in 496.51s
+[agent_binary_inference]  Processed 4660/5625 batches in 498.61s
+[agent_binary_inference]  Processed 4680/5625 batches in 500.76s
+[agent_binary_inference]  Processed 4700/5625 batches in 502.92s
+[agent_binary_inference]  Processed 4720/5625 batches in 504.99s
+[agent_binary_inference]  Processed 4740/5625 batches in 507.16s
+[agent_binary_inference]  Processed 4760/5625 batches in 509.23s
+[agent_binary_inference]  Processed 4780/5625 batches in 511.39s
+[agent_binary_inference]  Processed 4800/5625 batches in 513.58s
+[agent_binary_inference]  Processed 4820/5625 batches in 515.78s
+[agent_binary_inference]  Processed 4840/5625 batches in 517.99s
+[agent_binary_inference]  Processed 4860/5625 batches in 520.24s
+[agent_binary_inference]  Processed 4880/5625 batches in 522.39s
+[agent_binary_inference]  Processed 4900/5625 batches in 524.49s
+[agent_binary_inference]  Processed 4920/5625 batches in 526.61s
+[agent_binary_inference]  Processed 4940/5625 batches in 528.74s
+[agent_binary_inference]  Processed 4960/5625 batches in 530.88s
+[agent_binary_inference]  Processed 4980/5625 batches in 533.05s
+[agent_binary_inference]  Processed 5000/5625 batches in 535.18s
+[agent_binary_inference]  Processed 5020/5625 batches in 537.36s
+[agent_binary_inference]  Processed 5040/5625 batches in 539.49s
+[agent_binary_inference]  Processed 5060/5625 batches in 541.70s
+[agent_binary_inference]  Processed 5080/5625 batches in 543.81s
+[agent_binary_inference]  Processed 5100/5625 batches in 545.91s
+[agent_binary_inference]  Processed 5120/5625 batches in 548.06s
+[agent_binary_inference]  Processed 5140/5625 batches in 550.24s
+[agent_binary_inference]  Processed 5160/5625 batches in 552.39s
+[agent_binary_inference]  Processed 5180/5625 batches in 554.60s
+[agent_binary_inference]  Processed 5200/5625 batches in 556.68s
+[agent_binary_inference]  Processed 5220/5625 batches in 558.83s
+[agent_binary_inference]  Processed 5240/5625 batches in 560.97s
+[agent_binary_inference]  Processed 5260/5625 batches in 563.12s
+[agent_binary_inference]  Processed 5280/5625 batches in 565.22s
+[agent_binary_inference]  Processed 5300/5625 batches in 567.32s
+[agent_binary_inference]  Processed 5320/5625 batches in 569.50s
+[agent_binary_inference]  Processed 5340/5625 batches in 571.66s
+[agent_binary_inference]  Processed 5360/5625 batches in 573.72s
+[agent_binary_inference]  Processed 5380/5625 batches in 575.89s
+[agent_binary_inference]  Processed 5400/5625 batches in 578.04s
+[agent_binary_inference]  Processed 5420/5625 batches in 580.22s
+[agent_binary_inference]  Processed 5440/5625 batches in 582.36s
+[agent_binary_inference]  Processed 5460/5625 batches in 584.46s
+[agent_binary_inference]  Processed 5480/5625 batches in 586.64s
+[agent_binary_inference]  Processed 5500/5625 batches in 588.81s
+[agent_binary_inference]  Processed 5520/5625 batches in 590.91s
+[agent_binary_inference]  Processed 5540/5625 batches in 593.07s
+[agent_binary_inference]  Processed 5560/5625 batches in 595.16s
+[agent_binary_inference]  Processed 5580/5625 batches in 597.26s
+[agent_binary_inference]  Processed 5600/5625 batches in 599.46s
+[agent_binary_inference]  Processed 5620/5625 batches in 601.57s
+[agent_binary_inference]  Processed 5625/5625 batches in 602.09s
+[agent_binary_inference] run_binary_inference: done in 602.11s
+[agent_binary_inference] overall time passed: 602.11s
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=3 beam_index=3 split=final_step_dev done in 602.18s, precision=15.42 ± 0.99, recall=30.94 ± 3.50, f1=20.54 ± 1.48
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=3 beam_index=3 stable_f1=17.59 (k=2)
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=3 beam_index=3 perplexity=4.343750, loss=3.879281, combined_score=6.051156, fluency_metric=prompt_fluency_log_score
+[agent_binary_inference] run_binary_inference: 1412 prompts, batch_size=8, batches=177
+[agent_binary_inference]  Processed 20/177 batches in 2.15s
+[agent_binary_inference]  Processed 40/177 batches in 4.37s
+[agent_binary_inference]  Processed 60/177 batches in 6.55s
+[agent_binary_inference]  Processed 80/177 batches in 8.70s
+[agent_binary_inference]  Processed 100/177 batches in 10.91s
+[agent_binary_inference]  Processed 120/177 batches in 13.12s
+[agent_binary_inference]  Processed 140/177 batches in 15.34s
+[agent_binary_inference]  Processed 160/177 batches in 17.57s
+[agent_binary_inference]  Processed 177/177 batches in 19.38s
+[agent_binary_inference] run_binary_inference: done in 19.40s
+[agent_binary_inference] overall time passed: 19.40s
+[agent_gradient_eval_debug] prompt validation: generation_index=4 beam_index=4 done in 19.40s, precision=50.52 ± 3.67, recall=49.02 ± 1.46, f1=49.72 ± 2.39, overall_accuracy=0.5035, fixes_from_mistakes=16, regressions_from_correct=11
+[agent_gradient_eval_debug] prompt validation: generation_index=4 beam_index=4 stable_f1=44.94 (k=2)
+[agent_binary_inference] run_binary_inference: 45000 prompts, batch_size=8, batches=5625
+[agent_binary_inference]  Processed 20/5625 batches in 2.10s
+[agent_binary_inference]  Processed 40/5625 batches in 4.23s
+[agent_binary_inference]  Processed 60/5625 batches in 6.40s
+[agent_binary_inference]  Processed 80/5625 batches in 8.53s
+[agent_binary_inference]  Processed 100/5625 batches in 10.66s
+[agent_binary_inference]  Processed 120/5625 batches in 12.80s
+[agent_binary_inference]  Processed 140/5625 batches in 14.96s
+[agent_binary_inference]  Processed 160/5625 batches in 17.08s
+[agent_binary_inference]  Processed 180/5625 batches in 19.19s
+[agent_binary_inference]  Processed 200/5625 batches in 21.35s
+[agent_binary_inference]  Processed 220/5625 batches in 23.49s
+[agent_binary_inference]  Processed 240/5625 batches in 25.70s
+[agent_binary_inference]  Processed 260/5625 batches in 27.82s
+[agent_binary_inference]  Processed 280/5625 batches in 29.97s
+[agent_binary_inference]  Processed 300/5625 batches in 32.02s
+[agent_binary_inference]  Processed 320/5625 batches in 34.10s
+[agent_binary_inference]  Processed 340/5625 batches in 36.20s
+[agent_binary_inference]  Processed 360/5625 batches in 38.33s
+[agent_binary_inference]  Processed 380/5625 batches in 40.50s
+[agent_binary_inference]  Processed 400/5625 batches in 42.66s
+[agent_binary_inference]  Processed 420/5625 batches in 44.83s
+[agent_binary_inference]  Processed 440/5625 batches in 47.02s
+[agent_binary_inference]  Processed 460/5625 batches in 49.11s
+[agent_binary_inference]  Processed 480/5625 batches in 51.29s
+[agent_binary_inference]  Processed 500/5625 batches in 53.35s
+[agent_binary_inference]  Processed 520/5625 batches in 55.44s
+[agent_binary_inference]  Processed 540/5625 batches in 57.55s
+[agent_binary_inference]  Processed 560/5625 batches in 59.68s
+[agent_binary_inference]  Processed 580/5625 batches in 61.77s
+[agent_binary_inference]  Processed 600/5625 batches in 63.92s
+[agent_binary_inference]  Processed 620/5625 batches in 66.10s
+[agent_binary_inference]  Processed 640/5625 batches in 68.20s
+[agent_binary_inference]  Processed 660/5625 batches in 70.31s
+[agent_binary_inference]  Processed 680/5625 batches in 72.43s
+[agent_binary_inference]  Processed 700/5625 batches in 74.54s
+[agent_binary_inference]  Processed 720/5625 batches in 76.67s
+[agent_binary_inference]  Processed 740/5625 batches in 78.77s
+[agent_binary_inference]  Processed 760/5625 batches in 80.88s
+[agent_binary_inference]  Processed 780/5625 batches in 83.03s
+[agent_binary_inference]  Processed 800/5625 batches in 85.16s
+[agent_binary_inference]  Processed 820/5625 batches in 87.30s
+[agent_binary_inference]  Processed 840/5625 batches in 89.41s
+[agent_binary_inference]  Processed 860/5625 batches in 91.56s
+[agent_binary_inference]  Processed 880/5625 batches in 93.74s
+[agent_binary_inference]  Processed 900/5625 batches in 95.91s
+[agent_binary_inference]  Processed 920/5625 batches in 98.01s
+[agent_binary_inference]  Processed 940/5625 batches in 100.09s
+[agent_binary_inference]  Processed 960/5625 batches in 102.22s
+[agent_binary_inference]  Processed 980/5625 batches in 104.34s
+[agent_binary_inference]  Processed 1000/5625 batches in 106.55s
+[agent_binary_inference]  Processed 1020/5625 batches in 108.69s
+[agent_binary_inference]  Processed 1040/5625 batches in 110.82s
+[agent_binary_inference]  Processed 1060/5625 batches in 113.01s
+[agent_binary_inference]  Processed 1080/5625 batches in 115.10s
+[agent_binary_inference]  Processed 1100/5625 batches in 117.24s
+[agent_binary_inference]  Processed 1120/5625 batches in 119.35s
+[agent_binary_inference]  Processed 1140/5625 batches in 121.51s
+[agent_binary_inference]  Processed 1160/5625 batches in 123.68s
+[agent_binary_inference]  Processed 1180/5625 batches in 125.75s
+[agent_binary_inference]  Processed 1200/5625 batches in 127.89s
+[agent_binary_inference]  Processed 1220/5625 batches in 130.03s
+[agent_binary_inference]  Processed 1240/5625 batches in 132.11s
+[agent_binary_inference]  Processed 1260/5625 batches in 134.19s
+[agent_binary_inference]  Processed 1280/5625 batches in 136.25s
+[agent_binary_inference]  Processed 1300/5625 batches in 138.38s
+[agent_binary_inference]  Processed 1320/5625 batches in 140.48s
+[agent_binary_inference]  Processed 1340/5625 batches in 142.63s
+[agent_binary_inference]  Processed 1360/5625 batches in 144.73s
+[agent_binary_inference]  Processed 1380/5625 batches in 146.88s
+[agent_binary_inference]  Processed 1400/5625 batches in 149.00s
+[agent_binary_inference]  Processed 1420/5625 batches in 151.11s
+[agent_binary_inference]  Processed 1440/5625 batches in 153.27s
+[agent_binary_inference]  Processed 1460/5625 batches in 155.47s
+[agent_binary_inference]  Processed 1480/5625 batches in 157.61s
+[agent_binary_inference]  Processed 1500/5625 batches in 159.82s
+[agent_binary_inference]  Processed 1520/5625 batches in 161.92s
+[agent_binary_inference]  Processed 1540/5625 batches in 164.03s
+[agent_binary_inference]  Processed 1560/5625 batches in 166.14s
+[agent_binary_inference]  Processed 1580/5625 batches in 168.37s
+[agent_binary_inference]  Processed 1600/5625 batches in 170.52s
+[agent_binary_inference]  Processed 1620/5625 batches in 172.65s
+[agent_binary_inference]  Processed 1640/5625 batches in 174.81s
+[agent_binary_inference]  Processed 1660/5625 batches in 176.93s
+[agent_binary_inference]  Processed 1680/5625 batches in 179.12s
+[agent_binary_inference]  Processed 1700/5625 batches in 181.30s
+[agent_binary_inference]  Processed 1720/5625 batches in 183.44s
+[agent_binary_inference]  Processed 1740/5625 batches in 185.53s
+[agent_binary_inference]  Processed 1760/5625 batches in 187.64s
+[agent_binary_inference]  Processed 1780/5625 batches in 189.86s
+[agent_binary_inference]  Processed 1800/5625 batches in 191.90s
+[agent_binary_inference]  Processed 1820/5625 batches in 193.99s
+[agent_binary_inference]  Processed 1840/5625 batches in 196.10s
+[agent_binary_inference]  Processed 1860/5625 batches in 198.18s
+[agent_binary_inference]  Processed 1880/5625 batches in 200.29s
+[agent_binary_inference]  Processed 1900/5625 batches in 202.43s
+[agent_binary_inference]  Processed 1920/5625 batches in 204.53s
+[agent_binary_inference]  Processed 1940/5625 batches in 206.62s
+[agent_binary_inference]  Processed 1960/5625 batches in 208.74s
+[agent_binary_inference]  Processed 1980/5625 batches in 210.89s
+[agent_binary_inference]  Processed 2000/5625 batches in 213.09s
+[agent_binary_inference]  Processed 2020/5625 batches in 215.21s
+[agent_binary_inference]  Processed 2040/5625 batches in 217.34s
+[agent_binary_inference]  Processed 2060/5625 batches in 219.47s
+[agent_binary_inference]  Processed 2080/5625 batches in 221.59s
+[agent_binary_inference]  Processed 2100/5625 batches in 223.72s
+[agent_binary_inference]  Processed 2120/5625 batches in 225.89s
+[agent_binary_inference]  Processed 2140/5625 batches in 228.08s
+[agent_binary_inference]  Processed 2160/5625 batches in 230.23s
+[agent_binary_inference]  Processed 2180/5625 batches in 232.34s
+[agent_binary_inference]  Processed 2200/5625 batches in 234.41s
+[agent_binary_inference]  Processed 2220/5625 batches in 236.47s
+[agent_binary_inference]  Processed 2240/5625 batches in 238.61s
+[agent_binary_inference]  Processed 2260/5625 batches in 240.78s
+[agent_binary_inference]  Processed 2280/5625 batches in 243.01s
+[agent_binary_inference]  Processed 2300/5625 batches in 245.15s
+[agent_binary_inference]  Processed 2320/5625 batches in 247.28s
+[agent_binary_inference]  Processed 2340/5625 batches in 249.43s
+[agent_binary_inference]  Processed 2360/5625 batches in 251.56s
+[agent_binary_inference]  Processed 2380/5625 batches in 253.58s
+[agent_binary_inference]  Processed 2400/5625 batches in 255.68s
+[agent_binary_inference]  Processed 2420/5625 batches in 257.80s
+[agent_binary_inference]  Processed 2440/5625 batches in 259.91s
+[agent_binary_inference]  Processed 2460/5625 batches in 261.99s
+[agent_binary_inference]  Processed 2480/5625 batches in 264.13s
+[agent_binary_inference]  Processed 2500/5625 batches in 266.21s
+[agent_binary_inference]  Processed 2520/5625 batches in 268.28s
+[agent_binary_inference]  Processed 2540/5625 batches in 270.41s
+[agent_binary_inference]  Processed 2560/5625 batches in 272.56s
+[agent_binary_inference]  Processed 2580/5625 batches in 274.65s
+[agent_binary_inference]  Processed 2600/5625 batches in 276.84s
+[agent_binary_inference]  Processed 2620/5625 batches in 278.96s
+[agent_binary_inference]  Processed 2640/5625 batches in 281.11s
+[agent_binary_inference]  Processed 2660/5625 batches in 283.17s
+[agent_binary_inference]  Processed 2680/5625 batches in 285.28s
+[agent_binary_inference]  Processed 2700/5625 batches in 287.45s
+[agent_binary_inference]  Processed 2720/5625 batches in 289.64s
+[agent_binary_inference]  Processed 2740/5625 batches in 291.83s
+[agent_binary_inference]  Processed 2760/5625 batches in 294.00s
+[agent_binary_inference]  Processed 2780/5625 batches in 296.11s
+[agent_binary_inference]  Processed 2800/5625 batches in 298.28s
+[agent_binary_inference]  Processed 2820/5625 batches in 300.39s
+[agent_binary_inference]  Processed 2840/5625 batches in 302.49s
+[agent_binary_inference]  Processed 2860/5625 batches in 304.70s
+[agent_binary_inference]  Processed 2880/5625 batches in 306.82s
+[agent_binary_inference]  Processed 2900/5625 batches in 308.92s
+[agent_binary_inference]  Processed 2920/5625 batches in 311.10s
+[agent_binary_inference]  Processed 2940/5625 batches in 313.23s
+[agent_binary_inference]  Processed 2960/5625 batches in 315.40s
+[agent_binary_inference]  Processed 2980/5625 batches in 317.52s
+[agent_binary_inference]  Processed 3000/5625 batches in 319.63s
+[agent_binary_inference]  Processed 3020/5625 batches in 321.76s
+[agent_binary_inference]  Processed 3040/5625 batches in 323.90s
+[agent_binary_inference]  Processed 3060/5625 batches in 326.01s
+[agent_binary_inference]  Processed 3080/5625 batches in 328.16s
+[agent_binary_inference]  Processed 3100/5625 batches in 330.33s
+[agent_binary_inference]  Processed 3120/5625 batches in 332.48s
+[agent_binary_inference]  Processed 3140/5625 batches in 334.60s
+[agent_binary_inference]  Processed 3160/5625 batches in 336.68s
+[agent_binary_inference]  Processed 3180/5625 batches in 338.84s
+[agent_binary_inference]  Processed 3200/5625 batches in 341.01s
+[agent_binary_inference]  Processed 3220/5625 batches in 343.19s
+[agent_binary_inference]  Processed 3240/5625 batches in 345.26s
+[agent_binary_inference]  Processed 3260/5625 batches in 347.40s
+[agent_binary_inference]  Processed 3280/5625 batches in 349.46s
+[agent_binary_inference]  Processed 3300/5625 batches in 351.63s
+[agent_binary_inference]  Processed 3320/5625 batches in 353.71s
+[agent_binary_inference]  Processed 3340/5625 batches in 355.88s
+[agent_binary_inference]  Processed 3360/5625 batches in 358.05s
+[agent_binary_inference]  Processed 3380/5625 batches in 360.16s
+[agent_binary_inference]  Processed 3400/5625 batches in 362.29s
+[agent_binary_inference]  Processed 3420/5625 batches in 364.45s
+[agent_binary_inference]  Processed 3440/5625 batches in 366.57s
+[agent_binary_inference]  Processed 3460/5625 batches in 368.68s
+[agent_binary_inference]  Processed 3480/5625 batches in 370.85s
+[agent_binary_inference]  Processed 3500/5625 batches in 373.06s
+[agent_binary_inference]  Processed 3520/5625 batches in 375.19s
+[agent_binary_inference]  Processed 3540/5625 batches in 377.32s
+[agent_binary_inference]  Processed 3560/5625 batches in 379.49s
+[agent_binary_inference]  Processed 3580/5625 batches in 381.64s
+[agent_binary_inference]  Processed 3600/5625 batches in 383.81s
+[agent_binary_inference]  Processed 3620/5625 batches in 385.90s
+[agent_binary_inference]  Processed 3640/5625 batches in 388.01s
+[agent_binary_inference]  Processed 3660/5625 batches in 390.08s
+[agent_binary_inference]  Processed 3680/5625 batches in 392.19s
+[agent_binary_inference]  Processed 3700/5625 batches in 394.32s
+[agent_binary_inference]  Processed 3720/5625 batches in 396.37s
+[agent_binary_inference]  Processed 3740/5625 batches in 398.49s
+[agent_binary_inference]  Processed 3760/5625 batches in 400.70s
+[agent_binary_inference]  Processed 3780/5625 batches in 402.85s
+[agent_binary_inference]  Processed 3800/5625 batches in 404.93s
+[agent_binary_inference]  Processed 3820/5625 batches in 407.03s
+[agent_binary_inference]  Processed 3840/5625 batches in 409.09s
+[agent_binary_inference]  Processed 3860/5625 batches in 411.12s
+[agent_binary_inference]  Processed 3880/5625 batches in 413.30s
+[agent_binary_inference]  Processed 3900/5625 batches in 415.43s
+[agent_binary_inference]  Processed 3920/5625 batches in 417.61s
+[agent_binary_inference]  Processed 3940/5625 batches in 419.76s
+[agent_binary_inference]  Processed 3960/5625 batches in 421.88s
+[agent_binary_inference]  Processed 3980/5625 batches in 424.04s
+[agent_binary_inference]  Processed 4000/5625 batches in 426.17s
+[agent_binary_inference]  Processed 4020/5625 batches in 428.33s
+[agent_binary_inference]  Processed 4040/5625 batches in 430.43s
+[agent_binary_inference]  Processed 4060/5625 batches in 432.56s
+[agent_binary_inference]  Processed 4080/5625 batches in 434.71s
+[agent_binary_inference]  Processed 4100/5625 batches in 436.78s
+[agent_binary_inference]  Processed 4120/5625 batches in 438.92s
+[agent_binary_inference]  Processed 4140/5625 batches in 441.09s
+[agent_binary_inference]  Processed 4160/5625 batches in 443.24s
+[agent_binary_inference]  Processed 4180/5625 batches in 445.40s
+[agent_binary_inference]  Processed 4200/5625 batches in 447.55s
+[agent_binary_inference]  Processed 4220/5625 batches in 449.73s
+[agent_binary_inference]  Processed 4240/5625 batches in 451.80s
+[agent_binary_inference]  Processed 4260/5625 batches in 453.98s
+[agent_binary_inference]  Processed 4280/5625 batches in 456.11s
+[agent_binary_inference]  Processed 4300/5625 batches in 458.22s
+[agent_binary_inference]  Processed 4320/5625 batches in 460.30s
+[agent_binary_inference]  Processed 4340/5625 batches in 462.42s
+[agent_binary_inference]  Processed 4360/5625 batches in 464.54s
+[agent_binary_inference]  Processed 4380/5625 batches in 466.73s
+[agent_binary_inference]  Processed 4400/5625 batches in 468.90s
+[agent_binary_inference]  Processed 4420/5625 batches in 471.08s
+[agent_binary_inference]  Processed 4440/5625 batches in 473.22s
+[agent_binary_inference]  Processed 4460/5625 batches in 475.34s
+[agent_binary_inference]  Processed 4480/5625 batches in 477.39s
+[agent_binary_inference]  Processed 4500/5625 batches in 479.57s
+[agent_binary_inference]  Processed 4520/5625 batches in 481.69s
+[agent_binary_inference]  Processed 4540/5625 batches in 483.84s
+[agent_binary_inference]  Processed 4560/5625 batches in 485.93s
+[agent_binary_inference]  Processed 4580/5625 batches in 488.05s
+[agent_binary_inference]  Processed 4600/5625 batches in 490.13s
+[agent_binary_inference]  Processed 4620/5625 batches in 492.20s
+[agent_binary_inference]  Processed 4640/5625 batches in 494.37s
+[agent_binary_inference]  Processed 4660/5625 batches in 496.46s
+[agent_binary_inference]  Processed 4680/5625 batches in 498.60s
+[agent_binary_inference]  Processed 4700/5625 batches in 500.75s
+[agent_binary_inference]  Processed 4720/5625 batches in 502.82s
+[agent_binary_inference]  Processed 4740/5625 batches in 504.98s
+[agent_binary_inference]  Processed 4760/5625 batches in 507.04s
+[agent_binary_inference]  Processed 4780/5625 batches in 509.19s
+[agent_binary_inference]  Processed 4800/5625 batches in 511.37s
+[agent_binary_inference]  Processed 4820/5625 batches in 513.56s
+[agent_binary_inference]  Processed 4840/5625 batches in 515.76s
+[agent_binary_inference]  Processed 4860/5625 batches in 518.00s
+[agent_binary_inference]  Processed 4880/5625 batches in 520.15s
+[agent_binary_inference]  Processed 4900/5625 batches in 522.24s
+[agent_binary_inference]  Processed 4920/5625 batches in 524.36s
+[agent_binary_inference]  Processed 4940/5625 batches in 526.48s
+[agent_binary_inference]  Processed 4960/5625 batches in 528.61s
+[agent_binary_inference]  Processed 4980/5625 batches in 530.78s
+[agent_binary_inference]  Processed 5000/5625 batches in 532.91s
+[agent_binary_inference]  Processed 5020/5625 batches in 535.08s
+[agent_binary_inference]  Processed 5040/5625 batches in 537.20s
+[agent_binary_inference]  Processed 5060/5625 batches in 539.40s
+[agent_binary_inference]  Processed 5080/5625 batches in 541.51s
+[agent_binary_inference]  Processed 5100/5625 batches in 543.61s
+[agent_binary_inference]  Processed 5120/5625 batches in 545.75s
+[agent_binary_inference]  Processed 5140/5625 batches in 547.91s
+[agent_binary_inference]  Processed 5160/5625 batches in 550.05s
+[agent_binary_inference]  Processed 5180/5625 batches in 552.23s
+[agent_binary_inference]  Processed 5200/5625 batches in 554.30s
+[agent_binary_inference]  Processed 5220/5625 batches in 556.45s
+[agent_binary_inference]  Processed 5240/5625 batches in 558.58s
+[agent_binary_inference]  Processed 5260/5625 batches in 560.72s
+[agent_binary_inference]  Processed 5280/5625 batches in 562.81s
+[agent_binary_inference]  Processed 5300/5625 batches in 564.89s
+[agent_binary_inference]  Processed 5320/5625 batches in 567.07s
+[agent_binary_inference]  Processed 5340/5625 batches in 569.20s
+[agent_binary_inference]  Processed 5360/5625 batches in 571.24s
+[agent_binary_inference]  Processed 5380/5625 batches in 573.41s
+[agent_binary_inference]  Processed 5400/5625 batches in 575.55s
+[agent_binary_inference]  Processed 5420/5625 batches in 577.72s
+[agent_binary_inference]  Processed 5440/5625 batches in 579.85s
+[agent_binary_inference]  Processed 5460/5625 batches in 581.94s
+[agent_binary_inference]  Processed 5480/5625 batches in 584.11s
+[agent_binary_inference]  Processed 5500/5625 batches in 586.27s
+[agent_binary_inference]  Processed 5520/5625 batches in 588.37s
+[agent_binary_inference]  Processed 5540/5625 batches in 590.51s
+[agent_binary_inference]  Processed 5560/5625 batches in 592.59s
+[agent_binary_inference]  Processed 5580/5625 batches in 594.68s
+[agent_binary_inference]  Processed 5600/5625 batches in 596.86s
+[agent_binary_inference]  Processed 5620/5625 batches in 598.96s
+[agent_binary_inference]  Processed 5625/5625 batches in 599.48s
+[agent_binary_inference] run_binary_inference: done in 599.50s
+[agent_binary_inference] overall time passed: 599.50s
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=4 beam_index=4 split=final_step_dev done in 599.57s, precision=14.81 ± 1.34, recall=33.74 ± 2.86, f1=20.56 ± 1.73
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=4 beam_index=4 stable_f1=17.11 (k=2)
+[agent_gradient_eval_debug] prompt full evaluation: generation_index=4 beam_index=4 perplexity=4.343750, loss=3.910432, combined_score=6.082307, fluency_metric=prompt_fluency_log_score
+[agent_gradient_eval_debug] selected prompt for next iteration: iteration=1 strategy=best_dev_stable_f1 generation_index=2 beam_index=2 dev_f1=20.87 balanced_train_f1=49.50 changed=True
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the informational presented within the query sentence.
+saved run directory to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9
+saved args to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9/args.json
+saved full payload to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9/all_data.json
+saved summary to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9/summary.json
+saved sampled data and predictions to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9/sampled_data_and_predictions.json
+saved combination prompts to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9/combination_generated_prompts.json
+saved eval outputs to ../gradients_experiments/20260520_131005_superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node26_v9/eval_outputs
