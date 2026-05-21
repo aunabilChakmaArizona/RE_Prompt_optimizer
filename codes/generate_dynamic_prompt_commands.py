@@ -18,13 +18,15 @@ DATASET_BY_CORE = {
 def parse_prompt_blocks(path):
     blocks = []
     code = None
+    status = ""
     lines = []
 
     for raw_line in Path(path).read_text().splitlines():
         if raw_line.startswith("###### CODE:"):
             if code is not None:
-                blocks.append((code, "\n".join(lines).strip()))
+                blocks.append((code, status.strip(), "\n".join(lines).strip()))
             code = raw_line.split(":", 1)[1].strip()
+            status = ""
             lines = []
             continue
 
@@ -33,10 +35,13 @@ def parse_prompt_blocks(path):
 
         if raw_line.startswith("###### SOURCE:"):
             continue
+        if raw_line.startswith("###### STATUS:"):
+            status = raw_line.split(":", 1)[1].strip()
+            continue
         lines.append(raw_line)
 
     if code is not None:
-        blocks.append((code, "\n".join(lines).strip()))
+        blocks.append((code, status.strip(), "\n".join(lines).strip()))
 
     return blocks
 
@@ -125,8 +130,18 @@ def main():
     args = parser.parse_args()
 
     blocks = parse_prompt_blocks(args.prompts_file)
-    non_empty_blocks = [(code, prompt) for code, prompt in blocks if prompt]
-    empty_count = len(blocks) - len(non_empty_blocks)
+    status_blocked_count = sum(1 for _, status, _ in blocks if status.lower() in {"running", "done"})
+    other_status_count = sum(
+        1
+        for _, status, _ in blocks
+        if status.strip() and status.lower() not in {"running", "done"}
+    )
+    non_empty_blocks = [
+        (code, prompt)
+        for code, status, prompt in blocks
+        if not status.strip() and prompt
+    ]
+    empty_count = sum(1 for _, status, prompt in blocks if not status.strip() and not prompt)
 
     seen_pairs = set()
     command_payloads = []
@@ -180,8 +195,10 @@ def main():
                     "# Each CODE block is passed as the instruction split; answer/input splits come from agents.agent_prompts.",
                     *run_mode_comments,
                     f"# Prompt blocks: {len(blocks)}",
-                    f"# Non-empty prompt blocks: {len(non_empty_blocks)}",
-                    f"# Empty prompt blocks skipped: {empty_count}",
+                    f"# Empty-status non-empty prompt blocks: {len(non_empty_blocks)}",
+                    f"# Empty-status empty prompt blocks skipped: {empty_count}",
+                    f"# Status running/done blocks skipped: {status_blocked_count}",
+                    f"# Other non-empty status blocks skipped: {other_status_count}",
                     f"# Exact duplicate non-empty blocks skipped: {skipped_duplicate_count}",
                     "",
                     *commands,
@@ -202,7 +219,11 @@ def main():
     # Kept as a single user-facing summary even when multiple scripts are written.
     for path, count in written:
         print(f"Wrote {count} commands to {path}")
-    print(f"Skipped {empty_count} empty blocks and {skipped_duplicate_count} exact duplicate non-empty blocks")
+    print(
+        f"Skipped {empty_count} empty blocks, {status_blocked_count} running/done blocks, "
+        f"{other_status_count} other non-empty-status blocks, "
+        f"and {skipped_duplicate_count} exact duplicate non-empty blocks"
+    )
 
 
 if __name__ == "__main__":
