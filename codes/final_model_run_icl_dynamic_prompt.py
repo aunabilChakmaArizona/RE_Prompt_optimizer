@@ -67,7 +67,9 @@ transformers.logging.set_verbosity_error()
 
 ####### Logging
 
-access_token = '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'
+access_token = os.environ.get("HF_TOKEN")
+if not access_token:
+    raise RuntimeError("HF_TOKEN environment variable is required for Hugging Face login.")
 login(token=access_token)
 
 # model_id = "Qwen/Qwen3-4B"
