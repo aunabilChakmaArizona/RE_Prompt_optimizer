@@ -469,8 +469,8 @@ Current prompt:
 Feedback examples from the current prompt:
 #FEEDBACK_EXAMPLES#
 
-Let's think step by step.
-First, identify the scope of tokens within the prompt where edits should take place.
+First, think about the issues with the prompt.
+Identify the scope of tokens within the prompt where edits should take place.
 Prompt edits include adding, deleting or modifying tokens.
 Mark the scope of the prompt that needs editing by putting <edit>, </edit> tags.
 You can have multiple <edit> tags and each <edit> tag should not entail more than #MAX_WORDS_PER_EDIT_TAG# words.

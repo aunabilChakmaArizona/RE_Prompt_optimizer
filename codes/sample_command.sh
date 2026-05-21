@@ -7190,7 +7190,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9" \
   > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9.out 2>&1 &
 
-# aunabil lpo 1 done
+# aunabil lpo 1 done => final running --- amlan m1 round3 lpo 1
 python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -7201,11 +7201,11 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 2 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -7213,7 +7213,7 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --output-root-dir "../lpo_experiments" \
   --output-substring "superstart_lpo_roleswitch_node2_step1_n1000_qwen4_optqwen14"
 
-# aunabil lpo 2 done ** again
+# aunabil lpo 2 done ** again => final running --- amlan m1 round3 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -7224,21 +7224,20 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 10 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
-  --seed 100 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../lpo_experiments" \
   --output-substring "superstart_lpo_roleswitch_node10_step1_n1000_qwen4_optqwen14" \
   > nohup_outs/superstart_lpo_roleswitch_node10_step1_n1000_qwen4_optqwen14.out 2>&1 &
 
-# tanvir lpo 1 done
+# tanvir lpo 1 done => final running --- amlan m1 round3 lpo 3
 python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -7249,11 +7248,11 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 3 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -7262,7 +7261,7 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node3_step1_n1000_gemma4_optgemma12"
 
 
-# tanvir lpo 2 done
+# tanvir lpo 2 done => final running --- amlan m2 round3 lpo 1
 python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -7273,11 +7272,11 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 18 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -7684,7 +7683,7 @@ python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node34_v9"
 
-# done
+# done => final running --- amlan m2 round3 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:1" \
@@ -7695,11 +7694,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 26 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -7708,31 +7707,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node26_step1_n1000_gemma4_optgemma12_20260513_093554" \
   > nohup_outs/superstart_lpo_roleswitch_node26_step1_n1000_gemma4_optgemma12_20260513_093554.out 2>&1 & 
 
-# done 2
-nohup python -u LPO/experiments/relation_extraction_lpo.py \
-  --model "google/gemma-3-4b-it" \
-  --device-map "cuda:1" \
-  --optimizer-model "google/gemma-3-12b-it" \
-  --optimizer-device-map "cuda:1" \
-  --prompt-source population \
-  --population-path "../trainings/20260513_093554_google-gemma-3-4b-it/population.json" \
-  --prompt-node-id 26 \
-  --dataset-type "fs_tacred" \
-  --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
-  --n-steps 1 \
-  --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
-  --num-candidates 5 \
-  --top-z 5 \
-  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
-  --full-eval-split final_step_dev \
-  --output-root-dir "../lpo_experiments" \
-  --output-substring "superstart_lpo_roleswitch_node26_step1_n1000_gemma4_optgemma12_20260513_093554_2" \
-  > nohup_outs/superstart_lpo_roleswitch_node26_step1_n1000_gemma4_optgemma12_20260513_093554_2.out 2>&1 & 
-
-# done
+# done => final running --- amlan m2 round3 lpo 3
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:1" \
@@ -7743,11 +7718,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 34 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -7756,7 +7731,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node34_step1_n1000_gemma4_optgemma12_20260513_093554" \
   > nohup_outs/superstart_lpo_roleswitch_node34_step1_n1000_gemma4_optgemma12_20260513_093554.out 2>&1 & 
 
-# done
+# done => final running --- amlan m3 round3 lpo 1
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -7767,11 +7742,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 14 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -7780,7 +7755,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node14_step1_n1000_qwen4_optqwen14_20260513_093517" \
   > nohup_outs/superstart_lpo_roleswitch_node14_step1_n1000_qwen4_optqwen14_20260513_093517.out 2>&1 & 
 
-# done
+# done => final running --- amlan m3 round3 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -7791,11 +7766,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 42 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -8147,7 +8122,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "superstart_etgpo_greater_node1_1steps_lmd0.2_gemma4_unified_opt_fs_tacred_20260514_025450" \
   > nohup_outs/superstart_etgpo_greater_node1_1steps_lmd0.2_gemma4_unified_opt_fs_tacred_20260514_025450.out 2>&1 &
 
-# next aunabil m1 etgpo lpo 1 done
+# next aunabil m1 etgpo lpo 1 done => final running --- amlan m3 round3 lpo 3
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -8158,11 +8133,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 3 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
@@ -8171,29 +8146,29 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node3_step1_n1000_qwen4_optqwen14_unified_opt_fs_tacred_20260513_230331" \
   > nohup_outs/superstart_lpo_roleswitch_node3_step1_n1000_qwen4_optqwen14_unified_opt_fs_tacred_20260513_230331.out 2>&1 & 
 
-# next aunabil m2 etgpo lpo 1 done
+# next aunabil m2 etgpo lpo 1 done => final running --- local only
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
-  --device-map "cuda:0" \
+  --device-map "cuda:2" \
   --optimizer-model "google/gemma-3-12b-it" \
-  --optimizer-device-map "cuda:0" \
+  --optimizer-device-map "cuda:2" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
   --prompt-node-id 1 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../lpo_experiments" \
-  --output-substring "superstart_etgpo_lpo_roleswitch_node1_step1_n1000_gemma4_optgemma12_unified_opt_fs_tacred_20260514_025450" \
-  > nohup_outs/superstart_etgpo_lpo_roleswitch_node1_step1_n1000_gemma4_optgemma12_unified_opt_fs_tacred_20260514_025450.out 2>&1 & 
+  --output-substring "superstart_etgpo_lpo_roleswitch_node1_step1_n1000_gemma4_optgemma12_unified_opt_fs_tacred_20260514_025450_ultra" \
+  > nohup_outs/superstart_etgpo_lpo_roleswitch_node1_step1_n1000_gemma4_optgemma12_unified_opt_fs_tacred_20260514_025450_ultra.out 2>&1 & 
 
 # done
 nohup python -u agents/agent_gradient_eval_debug.py \
@@ -8346,11 +8321,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 3 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --seed 7 \
@@ -8371,11 +8346,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 13 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8395,11 +8370,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 25 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8419,11 +8394,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 0 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8444,11 +8419,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 1 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8468,11 +8443,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 7 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8492,11 +8467,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 7 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8516,11 +8491,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 14 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
@@ -8540,11 +8515,11 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --prompt-node-id 4 \
   --dataset-type "fs_fewrel" \
   --train-feedback-sample-size 1000 \
-  --feedback-example-size 5 \
-  --mistake-example-size 5 \
+  --feedback-example-size 3 \
+  --mistake-example-size 3 \
   --n-steps 1 \
   --max-edit-tags 5 \
-  --max-words-per-edit-tag 2 \
+  --max-words-per-edit-tag 3 \
   --num-candidates 5 \
   --top-z 5 \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \

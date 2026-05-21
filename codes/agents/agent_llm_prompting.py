@@ -30,7 +30,7 @@ def run_prompts(
     model,
     tokenizer,
     system_message: str | None = None,
-    max_new_tokens: int = 5000,
+    max_new_tokens: int = 10000,
     batch_size: int = 8,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
