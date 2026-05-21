@@ -480,34 +480,7 @@ def _parse_tagged_prompt(
         warnings.append("no_edit_tags_found")
     if plain_prompt.strip() != original_prompt.strip():
         warnings.append("tagged_prompt_plain_text_differs_from_input")
-        canonical_parts: List[str] = []
-        anchored_spans: List[Dict[str, Any]] = []
-        search_start = 0
-        for span in spans:
-            span_text = str(span["text"])
-            found_at = original_prompt.find(span_text, search_start)
-            if found_at < 0:
-                canonical_parts = []
-                anchored_spans = []
-                warnings.append("could_not_anchor_all_edit_tags_to_original_prompt")
-                break
-            canonical_parts.append(original_prompt[search_start:found_at])
-            canonical_parts.append(f"<edit>{span_text}</edit>")
-            start_char = found_at
-            end_char = found_at + len(span_text)
-            anchored_spans.append(
-                {
-                    **span,
-                    "start_char": start_char,
-                    "end_char": end_char,
-                }
-            )
-            search_start = end_char
-        if canonical_parts and len(anchored_spans) == len(spans):
-            canonical_parts.append(original_prompt[search_start:])
-            sanitized_tagged_prompt = "".join(canonical_parts)
-            spans = anchored_spans
-            warnings.append("anchored_edit_tags_to_original_prompt")
+        warnings.append("using_tagged_prompt_as_returned")
     return sanitized_tagged_prompt, spans, warnings
 
 
@@ -617,9 +590,11 @@ def _select_candidate(
             f"rank={rank}",
             f"candidate_index={candidate['candidate_index']}",
             f"split={full_eval_split}",
+            f"is_source_candidate={int(candidate['candidate_index']) == 0}",
         )
-        print("[relation_extraction_lpo] full eval candidate prompt:")
+        print("[relation_extraction_lpo] full eval candidate prompt BEGIN")
         print(candidate["prompt"])
+        print("[relation_extraction_lpo] full eval candidate prompt END")
         report = _evaluate_on_pairs(
             instruction_prompt=candidate["prompt"],
             binary_pairs=full_eval_pairs,

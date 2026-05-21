@@ -1,0 +1,513 @@
+###### CODE: tacred_qwen_initial_prompt
+###### SOURCE:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
+
+###### CODE: tacred_qwen_rpo_node_x
+###### SOURCE: trainings/20260508_122409_Qwen-Qwen3-4B/population.json node2
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the **subject must be an organization** (not a person or role). 
+   - The **object must align with the relation's definition** (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:subsidiaries" requires a hierarchical connection between an organization and its subsidiary (e.g., "Company A owns Company B"), not a personal or abstract relationship. 
+3. **Recognize object types**: 
+   - The object can be a **specific entity** (e.g., "US-based Ryder Public Transportation Services") or a **category** (e.g., "Christian", "Islamist") if the relation explicitly allows it. 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's description explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+
+###### CODE: tacred_qwen_rpo_node_x_lpo
+###### SOURCE: codes/nohup_outs/aunabillpo1.txt
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the **subject must be an organization** (not a person or role). 
+   - The **object must align with the relation's definition** (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:subsidiaries" requires a hierarchical connection between an organization and its subsidiary (e.g., "Company A owns Company B"), not a personal or abstract relationship. 
+3. **Recognize object types**: 
+   - The object can be a **specific entity** (e.g., "US-based Ryder Public Transportation Services") or a **category** (e.g., "Christian", "Islamist") if the relation explicitly allows it. 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's description explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+Explicitly ensure that the query sentence contains a direct and unambiguous statement about the relation between the subject and object as exemplified in the support sentence. If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_x_greater
+###### SOURCE: nohup_outs/greater_seq_node2_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out
+I are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the **subject must be an organization** (not a person or role). 
+   - The **object must align with the relation's definition** (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:subsidiaries" requires a hierarchical connection between an organization and its subsidiary (e.g., "Company A owns Company B"), not a personal or abstract relationship. 
+3. **Recognize object types**: 
+   - The object can be a **specific entity** (e.g., "US-based Ryder Public Transportation Services") or a **category** (e.g., "Christian", "Islamist") if the relation explicitly allows it. 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's description explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_x_greater-tg
+###### SOURCE: nohup_outs/greater_topgrad_node2_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the **subject must be an organization** (not a person or role). 
+   - The **object must align with the relation's definition** (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:subsidiaries" requires a hierarchical connection between an organization and its subsidiary (e.g., "Company A owns Company B"), not a personal or abstract relationship. 
+3. **Recognize object types**: 
+   - The object can be a **specific entity** (e.g., "US-based Ryder Public Transportation Services") or a **category** (e.g., "Christian", "Islamist") if the relation explicitly allows it. 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's description explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+If the relation holds, answer "your"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_x_gradpo-gen
+###### SOURCE: nohup_outs/superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node2_qwen4_v7.out
+You are given a relation name, a definition of the relation in bracketed text, a support example sentence exemplifying the relation, and a query inquiry sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the **subject must be an organization** (not a person or role). 
+   - The **object must align with the relation's definition** (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:subsidiaries" requires a hierarchical connection between an organization and its subsidiary (e.g., "Company A owns Company B"), not a personal or abstract relationship. 
+3. **Recognize object types**: 
+   - The object can be a **specific entity** (e.g., "US-based Ryder Public Transportation Services") or a **category** (e.g., "Christian", "Islamist") if the relation explicitly allows it. 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's definition explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_x_gradpo-prob
+###### SOURCE: codes/nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node2_qwen4_v9.out
+You are given a relation name, a description of the relation in [brackets], a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the subject must be an organization (not a person or role). 
+   - The object must align with the relation's definition (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:subsidiaries" requires a hierarchical connection between an organization and its subsidiary (e.g., "Company A owns Company B"), not a personal or abstract relationship. 
+3. **Recognize object types**: 
+   - The object can be a specific entity (e.g., "US-based Ryder Public Transportation Services") or a category (e.g., "Christian", "Islamist") if the relation explicitly allows it. 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's description explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_y
+###### SOURCE: trainings/20260508_122409_Qwen-Qwen3-4B/population.json node10
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation's definition (e.g., "org:stateorprovince_of_headquarters" requires the object to be a state/province, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:stateorprovince_of_headquarters" requires the subject to be an organization (e.g., "NASA") and the object to be a state/province (e.g., "Florida"), not a location (e.g., "Kennedy Space Center"). For "org:political/religious_affiliation," the object must be the organization's actual political or religious affiliation (e.g., "Islamist"), not a role, descriptor, or faction. 
+3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorprovince_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization's headquarters. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "state/province" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+
+###### CODE: tacred_qwen_rpo_node_y_lpo
+###### SOURCE: nohup_outs/superstart_lpo_roleswitch_node10_step1_n1000_qwen4_optqwen14.out (running)
+
+###### CODE: tacred_qwen_rpo_node_y_greater
+###### SOURCE: nohup_outs/greater_seq_node10_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out 
+Class are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation's definition (e.g., "org:stateorprovince_of_headquarters" requires the object to be a state/province, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:stateorprovince_of_headquarters" requires the subject to be an organization (e.g., "NASA") and the object to be a state/province (e.g., "Florida"), not a location (e.g., "Kennedy Space Center"). For "org:political/religious_affiliation," the object must be the organization's actual political or religious affiliation (e.g., "Islamist"), not a role, descriptor, or faction. 
+3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorprovince_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization's headquarters. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "state/province" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_y_greater-tg
+###### SOURCE: nohup_outs/greater_topgrad_node10_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation's definition (e.g., "org:stateorprovince_of_headquarters" requires the object to be a state/province, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:stateorprovince_of_headquarters" requires the subject to be an organization (e.g., "NASA") and the object to be a state/province (e.g., "Florida"), not a location (e.g., "Kennedy Space Center"). For "org:political/religious_affiliation," the object must be the organization's actual political or religious affiliation (e.g., "Islamist"), not a role, descriptor, or faction. 
+3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorprovince_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization's headquarters. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "state/province" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
+
+If the relation holds, answer "1"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_y_gradpo-gen
+###### SOURCE: nohup_outs/tanvir2.txt
+You are given a relation property, a description of the relation in curly braces, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation's definition (e.g., "org:stateorarea_of_headquarters" requires the object to be an area, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:stateorarea_of_headquarters" requires the subject to be an organization (e.g., "NASA") and the object to be an area (e.g., "Florida"), not a location (e.g., "Kennedy Space Center"). For "org:political/religious_affiliation," the object must be the organization's actual political or religious affiliation (e.g., "Islamist"), not a role, descriptor, or faction. 
+3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorarea_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization's headquarters. 
+4. **Focus on explicit connections**: Only confirm if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "area" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_rpo_node_y_gradpo-prob 
+###### SOURCE: nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node10_qwen4_v9.out
+You are given a relation , a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation's definition (e.g., "org:stateorprovince_of_headquarters" requires the object to be a state/province, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. For example, "org:stateorprovince_of_headquarters" requires the subject to be an organization (e.g., "NASA") and the object to be a state/province (e.g., "Florida"), not a location (e.g., "Kennedy Space Center"). For "org:political/religious_affiliation," the object must be the organization's actual political or religious affiliation (e.g., "Islamist"), not a role, descriptor, or faction. 
+3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorprovince_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization's headquarters. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "state/province" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
+###### CODE: tacred_qwen_evoprompt_node_x
+###### SOURCE: trainings/20260513_093517_Qwen-Qwen3-4B/population.json node 14
+You are given a relation name, its description, a support sentence that exemplifies the relation, and a query sentence. Analyze the relation description and the query sentence. The Subject and Object are labeled in the query sentence. Determine if the relation is expressed between the marked entities. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the evidence is explicit or strongly implied. Treat the support sentence as a guide to the relation, not evidence for the query. Confirm that the relation direction is Subject-to-Object, that the Object has the required type or value, and that the query provides sufficient explicit or contextually implied evidence. Ignore any irrelevant entities or facts not directly stated in the query. If the relation holds in the query sentence, answer "yes"; otherwise answer "no".
+###### CODE: tacred_qwen_evoprompt_node_x_lpo
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_x_greater
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_y
+###### SOURCE: trainings/20260513_093517_Qwen-Qwen3-4B/population.json node 42
+You are given a relation name, its description, an example sentence, and a query. Analyze the relation and query for consistency and check whether the relation is properly instantiated between the labeled Subject and Object. Analyze the relation definition, semantic roles and types of entities, and the direction of the relation. Determine whether the evidence is directly mentioned or clearly implied. Use the support sentence only as a template for the relation. Do not consider external or unrelated information. Ensure the relation direction is from Subject to Object, that the entities match the required semantic roles, and that the evidence is clearly or strongly expressed. Answer 'yes' only if the relation is clearly or strongly expressed between the Subject and Object in the query; otherwise, answer 'no'.
+###### CODE: tacred_qwen_evoprompt_node_y_lpo
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_y_greater
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_qwen_evoprompt_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_qwen_etgpo_node_x
+###### SOURCE:
+
+###### CODE: tacred_qwen_etgpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: tacred_qwen_etgpo_node_x_greater
+###### SOURCE:
+
+###### CODE: tacred_qwen_etgpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_qwen_etgpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_qwen_etgpo_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_gemma_initial_prompt
+###### SOURCE:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
+
+###### CODE: tacred_gemma_rpo_node_x
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_x_greater
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_y
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_y_lpo
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_y_greater
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_gemma_rpo_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_x
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_x_lpo
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_x_greater
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_y
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_y_lpo
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_y_greater
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_gemma_evoprompt_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: tacred_gemma_etgpo_node_x
+###### SOURCE:
+
+###### CODE: tacred_gemma_etgpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: tacred_gemma_etgpo_node_x_greater
+###### SOURCE:
+
+###### CODE: tacred_gemma_etgpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: tacred_gemma_etgpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: tacred_gemma_etgpo_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_qwen_initial_prompt
+###### SOURCE:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
+
+###### CODE: fewrel_qwen_rpo_node_x
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_x_greater
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_y
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_y_lpo
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_y_greater
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_qwen_rpo_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_x
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_x_lpo
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_x_greater
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_y
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_y_lpo
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_y_greater
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_qwen_evoprompt_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_qwen_etgpo_node_x
+###### SOURCE:
+
+###### CODE: fewrel_qwen_etgpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: fewrel_qwen_etgpo_node_x_greater
+###### SOURCE:
+
+###### CODE: fewrel_qwen_etgpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_qwen_etgpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_qwen_etgpo_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_qwen_initial_prompt
+###### SOURCE:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
+
+###### CODE: fewrel_gemma_rpo_node_x
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_x_greater
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_y
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_y_lpo
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_y_greater
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_gemma_rpo_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_x
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_x_lpo
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_x_greater
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_x_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_y
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_y_lpo
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_y_greater
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_y_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_y_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_gemma_evoprompt_node_y_gradpo-prob
+###### SOURCE:
+
+###### CODE: fewrel_gemma_etgpo_node_x
+###### SOURCE:
+
+###### CODE: fewrel_gemma_etgpo_node_x_lpo
+###### SOURCE:
+
+###### CODE: fewrel_gemma_etgpo_node_x_greater
+###### SOURCE:
+
+###### CODE: fewrel_gemma_etgpo_node_x_greater-tg
+###### SOURCE:
+
+###### CODE: fewrel_gemma_etgpo_node_x_gradpo-gen
+###### SOURCE:
+
+###### CODE: fewrel_gemma_etgpo_node_x_gradpo-prob
+###### SOURCE:
+
+
+
+
