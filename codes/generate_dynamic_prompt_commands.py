@@ -69,7 +69,7 @@ def shell_join(parts):
     return " ".join(shlex.quote(str(part)) for part in parts)
 
 
-def make_command(args, code, prompt, config, ordinal):
+def make_command(args, code, prompt, config, ordinal, redirect_logs=True):
     log_name = f"{ordinal:03d}_{code}.log".replace("/", "-")
     command = [
         "python",
@@ -107,7 +107,8 @@ def make_command(args, code, prompt, config, ordinal):
     if args.background:
         command = ["nohup", *command]
     suffix = " &" if args.background else ""
-    return f"{shell_join(command)} > {shlex.quote(str(Path(args.log_dir) / log_name))} 2>&1{suffix}"
+    redirect = f" > {shlex.quote(str(Path(args.log_dir) / log_name))} 2>&1" if redirect_logs else ""
+    return f"{shell_join(command)}{redirect}{suffix}"
 
 
 def main():
@@ -163,7 +164,14 @@ def main():
         original_background = args.background
         args.background = background
         try:
-            return make_command(args, payload[0], payload[1], payload[2], ordinal)
+            return make_command(
+                args,
+                payload[0],
+                payload[1],
+                payload[2],
+                ordinal,
+                redirect_logs=background,
+            )
         finally:
             args.background = original_background
 
@@ -176,6 +184,7 @@ def main():
             if background
             else [
                 "# Plain python commands. Run this script to execute commands sequentially.",
+                "# No shell log redirection is added in this script.",
                 "# All commands use cuda:0.",
             ]
         )
