@@ -7190,7 +7190,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9" \
   > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9.out 2>&1 &
 
-# aunabil lpo 1 done => final running --- amlan m1 round3 lpo 1
+# aunabil lpo 1 done => final done --- amlan m1 round3 lpo 1
 python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -7213,7 +7213,7 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --output-root-dir "../lpo_experiments" \
   --output-substring "superstart_lpo_roleswitch_node2_step1_n1000_qwen4_optqwen14"
 
-# aunabil lpo 2 done ** again => final running --- amlan m1 round3 lpo 2
+# aunabil lpo 2 done ** again => final done --- amlan m1 round3 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -7237,7 +7237,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node10_step1_n1000_qwen4_optqwen14" \
   > nohup_outs/superstart_lpo_roleswitch_node10_step1_n1000_qwen4_optqwen14.out 2>&1 &
 
-# tanvir lpo 1 done => final running --- amlan m1 round3 lpo 3
+# tanvir lpo 1 done => final done --- amlan m1 round3 lpo 3
 python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -7261,7 +7261,7 @@ python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node3_step1_n1000_gemma4_optgemma12"
 
 
-# tanvir lpo 2 done => final running --- amlan m2 round3 lpo 1
+# tanvir lpo 2 done => final done --- amlan m2 round3 lpo 1
 python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -7683,7 +7683,7 @@ python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260513_093554_google-gemma-3-4b-it_node34_v9"
 
-# done => final running --- amlan m2 round3 lpo 2
+# done => final done --- amlan m2 round3 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:1" \
@@ -7707,7 +7707,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node26_step1_n1000_gemma4_optgemma12_20260513_093554" \
   > nohup_outs/superstart_lpo_roleswitch_node26_step1_n1000_gemma4_optgemma12_20260513_093554.out 2>&1 & 
 
-# done => final running --- amlan m2 round3 lpo 3
+# done => final done --- amlan m2 round3 lpo 3
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:1" \
@@ -7731,7 +7731,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node34_step1_n1000_gemma4_optgemma12_20260513_093554" \
   > nohup_outs/superstart_lpo_roleswitch_node34_step1_n1000_gemma4_optgemma12_20260513_093554.out 2>&1 & 
 
-# done => final running --- amlan m3 round3 lpo 1
+# done => final done --- amlan m3 round3 lpo 1
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -7755,7 +7755,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_lpo_roleswitch_node14_step1_n1000_qwen4_optqwen14_20260513_093517" \
   > nohup_outs/superstart_lpo_roleswitch_node14_step1_n1000_qwen4_optqwen14_20260513_093517.out 2>&1 & 
 
-# done => final running --- amlan m3 round3 lpo 2
+# done => final done --- amlan m3 round3 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -8008,13 +8008,13 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "superstart_greater_topgrad_node34_1steps_lmd0.2_gemma4_20260513_093554" \
   > nohup_outs/superstart_greater_topgrad_node34_1steps_lmd0.2_gemma4_20260513_093554.out 2>&1 &
 
-#done
+#done ==> etgpo tacred rerun: # running amlan m2 round5 etgpo1
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json" \
-  --prompt-node-id 3 \
+  --prompt-node-id 2 \
   --position-selection-mode top_gradient \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 20000 \
@@ -8034,16 +8034,16 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../greater_experiments" \
-  --output-substring "superstart_etgpo_greater_topgrad_node3_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331" \
-  > nohup_outs/superstart_etgpo_greater_topgrad_node3_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331.out 2>&1 &
+  --output-substring "superstart_etgpo_greater_topgrad_node2_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331" \
+  > nohup_outs/superstart_etgpo_greater_topgrad_node2_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331.out 2>&1 &
 
-#done
+#done ==> etgpo tacred rerun: # running amlan m2 round5 etgpo2
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json" \
-  --prompt-node-id 3 \
+  --prompt-node-id 2 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 20000 \
   --gradient-batch-size 4 \
@@ -8062,16 +8062,16 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../greater_experiments" \
-  --output-substring "superstart_etgpo_greater_node3_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331" \
-  > nohup_outs/superstart_etgpo_greater_node3_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331.out 2>&1 &
+  --output-substring "superstart_etgpo_greater_node2_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331" \
+  > nohup_outs/superstart_etgpo_greater_node2_1steps_lmd0.2_qwen4_unified_opt_fs_tacred_20260513_230331.out 2>&1 &
 
-# done
+# done ==> etgpo tacred rerun: # running amlan m2 round5 etgpo3
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:3" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
-  --prompt-node-id 1 \
+  --prompt-node-id 0 \
   --position-selection-mode top_gradient \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 30000 \
@@ -8094,13 +8094,13 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "superstart_etgpo_greater_topgrad_node1_1steps_lmd0.2_gemma4_unified_opt_fs_tacred_20260514_025450" \
   > nohup_outs/superstart_etgpo_greater_topgrad_node1_1steps_lmd0.2_gemma4_unified_opt_fs_tacred_20260514_025450.out 2>&1 &
 
-# done
+# done ==> etgpo tacred rerun: # running amlan m3 round5 etgpo1
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:3" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
-  --prompt-node-id 1 \
+  --prompt-node-id 0 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 30000 \
   --gradient-batch-size 4 \
@@ -8122,7 +8122,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "superstart_etgpo_greater_node1_1steps_lmd0.2_gemma4_unified_opt_fs_tacred_20260514_025450" \
   > nohup_outs/superstart_etgpo_greater_node1_1steps_lmd0.2_gemma4_unified_opt_fs_tacred_20260514_025450.out 2>&1 &
 
-# next aunabil m1 etgpo lpo 1 done => final running --- amlan m3 round3 lpo 3
+# next aunabil m1 etgpo lpo 1 done => final done --- amlan m3 round3 lpo 3 ==> etgpo tacred rerun: # running amlan m3 round5 etgpo2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -8130,7 +8130,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --optimizer-device-map "cuda:0" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json" \
-  --prompt-node-id 3 \
+  --prompt-node-id 2 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
   --feedback-example-size 3 \
@@ -8143,18 +8143,18 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../lpo_experiments" \
-  --output-substring "superstart_lpo_roleswitch_node3_step1_n1000_qwen4_optqwen14_unified_opt_fs_tacred_20260513_230331" \
-  > nohup_outs/superstart_lpo_roleswitch_node3_step1_n1000_qwen4_optqwen14_unified_opt_fs_tacred_20260513_230331.out 2>&1 & 
+  --output-substring "superstart_lpo_roleswitch_node2_step1_n1000_qwen4_optqwen14_unified_opt_fs_tacred_20260513_230331" \
+  > nohup_outs/superstart_lpo_roleswitch_node2_step1_n1000_qwen4_optqwen14_unified_opt_fs_tacred_20260513_230331.out 2>&1 & 
 
-# next aunabil m2 etgpo lpo 1 done => final running --- local only
+# next aunabil m2 etgpo lpo 1 done => final done --- local only  ==> etgpo tacred rerun: # running amlan m3 round5 etgpo3
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
-  --device-map "cuda:2" \
+  --device-map "cuda:0" \
   --optimizer-model "google/gemma-3-12b-it" \
-  --optimizer-device-map "cuda:2" \
+  --optimizer-device-map "cuda:0" \
   --prompt-source population \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
-  --prompt-node-id 1 \
+  --prompt-node-id 0 \
   --dataset-type "fs_tacred" \
   --train-feedback-sample-size 1000 \
   --feedback-example-size 3 \
@@ -8170,14 +8170,14 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "superstart_etgpo_lpo_roleswitch_node1_step1_n1000_gemma4_optgemma12_unified_opt_fs_tacred_20260514_025450_ultra" \
   > nohup_outs/superstart_etgpo_lpo_roleswitch_node1_step1_n1000_gemma4_optgemma12_unified_opt_fs_tacred_20260514_025450_ultra.out 2>&1 & 
 
-# done
+# done ==> etgpo tacred rerun: # done local
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
   --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
   --device-map "cuda:1" \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json" \
-  --prompt-node-id 3 \
+  --prompt-node-id 2 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 20000 \
   --gradient-batch-size 2 \
@@ -8198,16 +8198,16 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --full-eval-split final_step_dev \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --output-root-dir "../gradients_experiments" \
-  --output-substring "superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node3_qwen4_v9" \
-  > nohup_outs/superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node3_qwen4_v9.out 2>&1 & 
+  --output-substring "superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra" \
+  > nohup_outs/superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra.out 2>&1 & 
 
-# done
+# done ==> etgpo tacred rerun: # running local
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
-  --device-map "cuda:1" \
+  --device-map "cuda:2" \
   --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json" \
-  --prompt-node-id 3 \
+  --prompt-node-id 2 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 20000 \
   --gradient-batch-size 2 \
@@ -8228,18 +8228,18 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --full-eval-split final_step_dev \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --output-root-dir "../gradients_experiments" \
-  --output-substring "superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node3_qwen4_v9" \
-  > nohup_outs/superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node3_qwen4_v9.out 2>&1 & 
+  --output-substring "superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra" \
+  > nohup_outs/superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra.out 2>&1 & 
 
 
-# next aunabil m1 gem 1 done
-python -u agents/agent_gradient_eval_debug.py \
+# next aunabil m1 gem 1 done ==> etgpo tacred rerun: running local
+nohup python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
   --lm-probability-submode "FULL_PROMPT_AS_CONTEXT" \
-  --device-map "cuda:0" \
-  --prompt-source-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
-  --prompt-node-id 1 \
+  --device-map "cuda:1" \
+  --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
+  --prompt-node-id 0 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 30000 \
   --gradient-batch-size 2 \
@@ -8260,15 +8260,16 @@ python -u agents/agent_gradient_eval_debug.py \
   --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../gradients_experiments" \
-  --output-substring "superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v9"
+  --output-substring "superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v9_ultra" \
+  > nohup_outs/superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v9_ultra.out 2>&1 & 
 
-# next aunabil m2 gem 1 done
+# next aunabil m2 gem 1 done ==> etgpo tacred rerun: # running amlan m1 round4 etgpo1
 python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
   --device-map "cuda:0" \
-  --prompt-source-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
-  --prompt-node-id 1 \
+  --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
+  --prompt-node-id 0 \
   --dataset-type "fs_tacred" \
   --train-gradient-sample-size 30000 \
   --gradient-batch-size 2 \
@@ -8310,7 +8311,7 @@ Qwen: unified_optimization_results/unified_opt_fs_fewrel_20260517_023848/generat
 Gemma: unified_optimization_results/unified_opt_fs_fewrel_20260517_023518/generated_prompt_candidates.json 	node 4: 23.08	17.65
 
 ### LPO Qwen
-# running local
+# done local => final done --- local only
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -8332,15 +8333,15 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
   --full-eval-split final_step_dev \
   --output-root-dir "../lpo_experiments" \
-  --output-substring "fewrel_superstart_rpo_lpo_node3_20260517_021906_Qwen" \
-  > nohup_outs/fewrel_superstart_rpo_lpo_node3_20260517_021906_Qwen.out 2>&1 & 
+  --output-substring "fewrel_superstart_rpo_lpo_node3_20260517_021906_Qwen_ultra" \
+  > nohup_outs/fewrel_superstart_rpo_lpo_node3_20260517_021906_Qwen_ultra.out 2>&1 & 
 
-# running local
+# done local => final running --- local only
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
-  --device-map "cuda:1" \
+  --device-map "cuda:0" \
   --optimizer-model "Qwen/Qwen3-14B" \
-  --optimizer-device-map "cuda:1" \
+  --optimizer-device-map "cuda:0" \
   --prompt-source population \
   --population-path "../trainings/20260517_021906_Qwen-Qwen3-4B/population.json" \
   --prompt-node-id 13 \
@@ -8359,7 +8360,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "fewrel_superstart_rpo_lpo_node13_20260517_021906_Qwen" \
   > nohup_outs/fewrel_superstart_rpo_lpo_node13_20260517_021906_Qwen.out 2>&1 & 
 
-# running local
+# done local  => final done --- local only
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:0" \
@@ -8383,7 +8384,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "fewrel_superstart_evoprompt_lpo_node25_20260517_193615_Qwen" \
   > nohup_outs/fewrel_superstart_evoprompt_lpo_node25_20260517_193615_Qwen.out 2>&1 & 
 
-# running local
+# done local => final skpping --- local only ==> etgpo again run fewrel # running amlan m1 round4 lpo1
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:1" \
@@ -8408,7 +8409,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   > nohup_outs/fewrel_superstart_etgpo_lpo_node0_unified_opt_fs_fewrel_20260517_023848_Qwen.out 2>&1 & 
 
 ### LPO Gemma
-# done tanvir m1 round2 few1
+# done tanvir m1 round2 few1 => final done --- amlan m2 round4 lpo 1
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8432,7 +8433,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "fewrel_superstart_rpo_lpo_node1_gemma_20260517_022119" \
   > nohup_outs/fewrel_superstart_rpo_lpo_node1_gemma_20260517_022119.out 2>&1 & 
 
-# done tanvir m1 round2 few2
+# done tanvir m1 round2 few2 => final done --- amlan m2 round4 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8456,7 +8457,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "fewrel_superstart_rpo_lpo_node7_gemma_20260517_022119" \
   > nohup_outs/fewrel_superstart_rpo_lpo_node7_gemma_20260517_022119.out 2>&1 & 
 
-# done tanvir m1 round2 few3
+# done tanvir m1 round2 few3 => final done --- amlan m3 round4 lpo 1
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8480,7 +8481,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "fewrel_superstart_evoprompt_lpo_node7_gemma_20260517_193624" \
   > nohup_outs/fewrel_superstart_evoprompt_lpo_node7_gemma_20260517_193624.out 2>&1 & 
 
-# done tanvir m1 round2 few4
+# done tanvir m1 round2 few4 => final done --- amlan m3 round4 lpo 2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8504,7 +8505,7 @@ nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --output-substring "fewrel_superstart_evoprompt_lpo_node14_gemma_20260517_193624" \
   > nohup_outs/fewrel_superstart_evoprompt_lpo_node14_gemma_20260517_193624.out 2>&1 &
 
-# done local
+# done local => final skpping --- local only ==> etgpo again run fewrel # running amlan m1 round4 lpo2
 nohup python -u LPO/experiments/relation_extraction_lpo.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8557,7 +8558,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "fewrel_superstart_rpo_greater_node3_20260517_021906_Qwen" \
   > nohup_outs/fewrel_superstart_rpo_greater_node3_20260517_021906_Qwen.out 2>&1 & 
 
-# running local
+# done local
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -8844,7 +8845,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "fewrel_superstart_rpo_greater_topgrad_node1_gemma_20260517_022119" \
   > nohup_outs/fewrel_superstart_rpo_greater_topgrad_node1_gemma_20260517_022119.out 2>&1 & 
 
-# running amlan m2 round2 few3
+# done amlan m2 round2 few3
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8873,7 +8874,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "fewrel_superstart_rpo_greater_topgrad_node7_gemma_20260517_022119" \
   > nohup_outs/fewrel_superstart_rpo_greater_topgrad_node7_gemma_20260517_022119.out 2>&1 & 
 
-# running amlan m2 round2 few4
+# done amlan m2 round2 few4
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8901,7 +8902,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "fewrel_superstart_evoprompt_greater_node7_gemma_20260517_193624" \
   > nohup_outs/fewrel_superstart_evoprompt_greater_node7_gemma_20260517_193624.out 2>&1 & 
 
-# running amlan m1 round2 few3
+# done amlan m1 round2 few3
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8929,7 +8930,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "fewrel_superstart_evoprompt_greater_node14_gemma_20260517_193624" \
   > nohup_outs/fewrel_superstart_evoprompt_greater_node14_gemma_20260517_193624.out 2>&1 & 
 
-# running amlan m1 round2 few4
+# done amlan m1 round2 few4
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:0" \
@@ -8988,7 +8989,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   > nohup_outs/fewrel_superstart_evoprompt_greater_topgrad_node14_gemma_20260517_193624.out 2>&1 & 
 
 
-# running local
+# done local
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:3" \

@@ -824,9 +824,18 @@ def main() -> None:
                 raw_rewrite_outputs,
                 fallback_prompt=step_input_prompt,
             )
+            max_candidate_chars = 2 * len(step_input_prompt)
+            pre_filter_count = len(candidate_prompts)
+            candidate_prompts = [
+                prompt
+                for index, prompt in enumerate(candidate_prompts)
+                if index == 0 or len(prompt) <= max_candidate_chars
+            ]
             print(
                 "[relation_extraction_lpo] candidates generated:",
                 f"count={len(candidate_prompts)}",
+                f"dropped_too_long={pre_filter_count - len(candidate_prompts)}",
+                f"max_chars={max_candidate_chars}",
             )
             optimizer_model = None
             optimizer_tokenizer = None
