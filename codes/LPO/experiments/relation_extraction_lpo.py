@@ -433,6 +433,12 @@ def _parse_tagged_prompt(
     fenced = re.search(r"```(?:text)?\s*(.*?)\s*```", tagged_prompt, flags=re.DOTALL | re.IGNORECASE)
     if fenced:
         tagged_prompt = fenced.group(1).strip()
+    prompt_wrapped = re.search(r"\[P\](.*?)\[/P\]", tagged_prompt, flags=re.DOTALL | re.IGNORECASE)
+    if prompt_wrapped:
+        tagged_prompt = prompt_wrapped.group(1).strip()
+    prompt_wrapped = re.search(r"<p>(.*?)</p>", tagged_prompt, flags=re.DOTALL | re.IGNORECASE)
+    if prompt_wrapped:
+        tagged_prompt = prompt_wrapped.group(1).strip()
 
     warnings: List[str] = []
     spans: List[Dict[str, Any]] = []
@@ -484,8 +490,15 @@ def _parse_tagged_prompt(
     return sanitized_tagged_prompt, spans, warnings
 
 
-def _strip_edit_tags(text: str) -> str:
-    return re.sub(r"</?edit>", "", text, flags=re.IGNORECASE).strip()
+def _clean_candidate_prompt(text: str) -> str:
+    cleaned = text.strip()
+    fenced = re.search(r"```(?:text)?\s*(.*?)\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    if fenced:
+        cleaned = fenced.group(1).strip()
+    cleaned = re.sub(r"\[/?p\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"</?p>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"</?edit>", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _candidate_prompts_from_raw_outputs(
@@ -495,6 +508,11 @@ def _candidate_prompts_from_raw_outputs(
     candidates: List[str] = []
     for raw_output in raw_outputs:
         found_tagged_prompt = False
+        for match in re.finditer(r"\[P\](.*?)\[/P\]", raw_output, flags=re.DOTALL | re.IGNORECASE):
+            text = match.group(1).strip()
+            if text:
+                candidates.append(text)
+                found_tagged_prompt = True
         for match in re.finditer(r"<p>(.*?)</p>", raw_output, flags=re.DOTALL | re.IGNORECASE):
             text = match.group(1).strip()
             if text:
@@ -509,9 +527,12 @@ def _candidate_prompts_from_raw_outputs(
         raw_candidates = parsed.get("candidate_prompts") if isinstance(parsed, dict) else None
         if isinstance(raw_candidates, list):
             candidates.extend(str(item).strip() for item in raw_candidates if str(item).strip())
+            continue
+        if raw_output.strip():
+            candidates.append(raw_output.strip())
     deduped: List[str] = []
     for candidate in [fallback_prompt] + candidates:
-        cleaned = _strip_edit_tags(candidate)
+        cleaned = _clean_candidate_prompt(candidate)
         if cleaned and cleaned not in deduped:
             deduped.append(cleaned)
     return deduped

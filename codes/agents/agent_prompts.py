@@ -476,7 +476,8 @@ Mark the scope of the prompt that needs editing by putting <edit>, </edit> tags.
 You can have multiple <edit> tags and each <edit> tag should not entail more than #MAX_WORDS_PER_EDIT_TAG# words.
 Use at most #MAX_EDIT_TAGS# <edit> tags.
 Do not cover the whole sentence with multiple <edit> tags.
-Reply with the prompt with <edit>, </edit> tags.
+
+Reply with the full prompt enclosed within <p> and </p> tags, with the edit locations marked using <edit> and </edit> tags.
 Do not include any other text.
 '''
 
@@ -493,7 +494,7 @@ Feedback examples from the current prompt:
 Generate one revised full prompt by editing only the text inside the <edit>, </edit> tags.
 You may add, delete, or modify tokens inside those local scopes.
 Keep the rest of the prompt unchanged except for minimal grammar cleanup at the edit boundaries.
-Do not include <edit> or </edit> tags in the revised prompts.
+Keep the <edit> and </edit> tags around the edited local scopes in the revised prompt.
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
