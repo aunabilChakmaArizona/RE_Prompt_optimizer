@@ -26,9 +26,22 @@ To determine if the relation holds between the Subject and Object entities in th
 If the relation holds, answer "yes"; otherwise, answer "no".
 
 ###### CODE: tacred_qwen_rpo_node_x_lpo
-###### SOURCE: 
+###### SOURCE: codes/nohup_outs/amlan_m1_round3_lpo1.txt 
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
 
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: 
+   - For relations starting with "org:", the **subject must be an organization** (not a person or role). 
+   - For per: relations, the subject must be a person.
+   - The **object must align with the relation's definition** (e.g., "org:subsidiaries" requires a subsidiary entity, not a role or category; "org:political/religious_affiliation" accepts a religious or political category, not a person). 
+2. **Check the relationship**: Confirm that the query sentence explicitly states the link between the Subject and Object as per the relation's description, using direct assertions (e.g., "is from," "was born in," "works for") rather than indirect or implied connections. 
+3. **Recognize object types**: 
+   - The object can be a **specific entity** (e.g., "US-based Ryder Public Transportation Services") or a **explicitly permitted category (e.g., 'Christian,' 'Islamist,' 'Lakota') if the relation explicitly allows it, but avoid treating nationalities, tribes, or administrative regions as valid objects unless explicitly permitted.** 
+   - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation's description explicitly permits it. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_qwen_rpo_node_x_greater
 ###### SOURCE: nohup_outs/greater_seq_node2_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out
 ###### STATUS: running
@@ -107,9 +120,17 @@ To determine if the relation holds between the Subject and Object entities in th
 If the relation holds, answer "yes"; otherwise, answer "no".
 
 ###### CODE: tacred_qwen_rpo_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round3_lpo2.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
 
+To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
+1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation's definition (e.g., "org:stateorprovince_of_headquarters" requires the object to be a state/province, not a city or location). must be a state/province and not a city. If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
+2. **Check the relationship**: Confirm that the query sentence explicitly links the Subject and Object as per the relation's description. Ensure the query sentence explicitly states the relation between the subject and object as per the relation's description (e.g., "state/province" for headquarters, "family member" for other_family). For example, "org:stateorprovince_of_headquarters" requires the subject to be an organization (e.g., "NASA") and the object to be a state/province (e.g., "Florida"), not a location (e.g., "Kennedy Space Center"). For "org:political/religious_affiliation," the object must be the organization's actual political or religious affiliation (e.g., "Islamist"), not a role, descriptor, or faction. 
+3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Possessive pronouns (e.g., "his", "her") do not satisfy relations requiring a person (e.g., "other_family"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorprovince_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization's headquarters. 
+4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "state/province" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
+
+If the relation holds, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_qwen_rpo_node_y_greater
 ###### SOURCE: nohup_outs/greater_seq_node10_1steps_n10000_lmd0.2_k25_u10_z5_qwen4.out 
 ###### STATUS: running
@@ -163,7 +184,7 @@ If the relation holds, answer "yes"; otherwise, answer "no".
 ###### STATUS: running
 You are given a relation name, its description, a support sentence that exemplifies the relation, and a query sentence. Analyze the relation description and the query sentence. The Subject and Object are labeled in the query sentence. Determine if the relation is expressed between the marked entities. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the evidence is explicit or strongly implied. Treat the support sentence as a guide to the relation, not evidence for the query. Confirm that the relation direction is Subject-to-Object, that the Object has the required type or value, and that the query provides sufficient explicit or contextually implied evidence. Ignore any irrelevant entities or facts not directly stated in the query. If the relation holds in the query sentence, answer "yes"; otherwise answer "no".
 ###### CODE: tacred_qwen_evoprompt_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round3_lpo1.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_qwen_evoprompt_node_x_greater
@@ -176,23 +197,23 @@ I are given a relation name, its description, a support sentence that exemplifie
 You are given a relation name, its description, a support sentence that exemplifies the relation, and a query sentence. Analyze the relation description and the query sentence. The Subject and Object are labeled in the query sentence. Determine if the relation is expressed between the marked entities. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the evidence is explicit or strongly implied. Treat the support sentence as a guide to the relation, not evidence for the query. Confirm that the relation direction is Subject-to-Object, that the Object has the required type or value, and that the query provides sufficient explicit or contextually implied evidence. Ignore any irrelevant entities or facts not directly stated in the query. If the relation holds in the query sentence, answer "your"; otherwise answer "no".
 ###### CODE: tacred_qwen_evoprompt_node_x_gradpo-gen
 ###### SOURCE: nohup_outs/superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node14_qwen4_v9.out
-###### STATUS:
+###### STATUS: running
 You are told given a relation name, its description, a support text that demonstrates the relation, and a query sentence. Analyze the relation description and the query sentence. The Subject and Object are labeled in the query sentence. Evaluate if the relation is expressed between the marked entities. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the evidence is explicit or strongly implied. Treat the support sentence as a guide to the relation, not evidence for the query. Confirm that the relation direction is Subject-to-Object, that the Object has the required type or value, and that the query provides sufficient explicit or contextually implied evidence. Ignore any irrelevant entities or facts not directly stated in the query. If the relation holds in the query sentence, answer "yes"; otherwise answer "no".
 ###### CODE: tacred_qwen_evoprompt_node_x_gradpo-prob
 ###### SOURCE: codes/nohup_outs/aunabilevo1.txt
-###### STATUS:
+###### STATUS: running
 The provided relation name, its description, a support example that exemplifies the relation, and a query sentence. Analyze the relation description and the query sentence. The Subject and Object are labeled in the query sentence. Check if the relation is expressed between the marked entities. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the evidence is explicit or strongly implied. Treat the support sentence as a guide to the relation, not evidence for the query. Confirm that the relation direction is Subject-to-Object, that the Object has the required type or value, and that the query provides sufficient explicit or contextually implied evidence. Ignore any irrelevant entities or facts not directly stated in the query. If the relation holds in the query sentence, answer "yes"; otherwise answer "no".
 ###### CODE: tacred_qwen_evoprompt_node_y
 ###### SOURCE: trainings/20260513_093517_Qwen-Qwen3-4B/population.json node 42
-###### STATUS:
+###### STATUS: running
 You are given a relation name, its description, an example sentence, and a query. Analyze the relation and query for consistency and check whether the relation is properly instantiated between the labeled Subject and Object. Analyze the relation definition, semantic roles and types of entities, and the direction of the relation. Determine whether the evidence is directly mentioned or clearly implied. Use the support sentence only as a template for the relation. Do not consider external or unrelated information. Ensure the relation direction is from Subject to Object, that the entities match the required semantic roles, and that the evidence is clearly or strongly expressed. Answer 'yes' only if the relation is clearly or strongly expressed between the Subject and Object in the query; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_evoprompt_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round3_lpo2.txt
 ###### STATUS:
-
+You are given a relation name, its description, an example sentence, and a query. Analyze the relation and query for consistency and check whether the relation is clearly instantiated between the labeled Subject and Object. Analyze the relation definition, semantic roles and types of entities, and the direction of the relation. Determine whether the evidence is strongly mentioned or clearly implied. Use the support sentence only as a template for the relation. Do not consider external or unrelated information. Ensure the relation direction is strictly from Subject to Object, that the entities correctly match the required semantic roles, and that the evidence is strongly mentioned or strongly expressed. Answer 'yes' only if the relation is explicitly mentioned or strongly expressed between the Subject and Object in the query; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_evoprompt_node_y_greater
 ###### SOURCE: nohup_outs/superstart_greater_seq_node42_1steps_lmd0.2_qwen4_20260513_093517.out
-###### STATUS:
+###### STATUS: running
 Given are given a relation name, its description, an example sentence, and a query. Analyze the relation and query for consistency and check whether the relation is properly instantiated between the labeled Subject and Object. Analyze the relation definition, semantic roles and types of entities, and the direction of the relation. Determine whether the evidence is directly mentioned or clearly implied. Use the support sentence only as a template for the relation. Do not consider external or unrelated information. Ensure the relation direction is from Subject to Object, that the entities match the required semantic roles, and that the evidence is clearly or strongly expressed. Answer 'yes' only if the relation is clearly or strongly expressed between the Subject and Object in the query; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_evoprompt_node_y_greater-tg
 ###### SOURCE: nohup_outs/superstart_greater_topgrad_node42_1steps_lmd0.2_qwen4_20260513_093517.out (unchanged)
@@ -200,39 +221,86 @@ Given are given a relation name, its description, an example sentence, and a que
 
 ###### CODE: tacred_qwen_evoprompt_node_y_gradpo-gen
 ###### SOURCE: nohup_outs/superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node42_qwen4_v9.out
-###### STATUS:
+###### STATUS: running 
 You are given a relation name, its description, an example sentence, and a query. Analyze the relation and query for consistency and check whether the relation is properly instantiated between the labeled Subject and Object. Analyze the relation definition, semantic roles and types of entities, and the direction of the relation. Determine whether the evidence is directly mentioned or clearly implied. Use the provided sentence only as a template for the relation. Do not consider external or unrelated information. Ensure the relation direction is from Subject to Object, that the entities match the required semantic roles, and that the evidence is clearly or strongly expressed. Respond 'yes' only if the relation is clearly or strongly expressed between the Subject and Object in the query; otherwise, respond 'no'.
 ###### CODE: tacred_qwen_evoprompt_node_y_gradpo-prob
 ###### SOURCE: codes/nohup_outs/aunabilevo2.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_qwen_etgpo_node_x
-###### SOURCE:
-###### STATUS:
+###### SOURCE: unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json node 2
+###### STATUS: running 
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:
+
+1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country).
+2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.
+3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations.
+4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated.
+5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province.
+
+Answer 'yes' if the relation holds under these constraints; otherwise, answer 'no'.
 
 ###### CODE: tacred_qwen_etgpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round5_etgpo2.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:
 
+1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country, URLs). 
+2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.
+3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations. Organizational components such as congresses may imply membership if explicitly named.
+4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated. Include organizational roles (e.g., 'member', 'committee') that directly indicate membership.
+5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province. Subnational entities such as states or provinces are not sovereign. 
+
+Answer 'yes' if the relation holds under these constraints; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_etgpo_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round5_etgpo2.txt
 ###### STATUS:
+Given are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:
 
+1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country).
+2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.
+3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations.
+4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated.
+5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province.
+
+Answer 'yes' if the relation holds under these constraints; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_etgpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round5_etgpo1.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:
 
+1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country).
+2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.
+3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations.
+4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated.
+5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province.
+
+Answer 'none' if the relation holds under these constraints; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_etgpo_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra.out
 ###### STATUS:
+You are supplied a relation name, a description of the relation in curly brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:
 
+1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country).
+2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.
+3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations.
+4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated.
+5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province.
+
+Answer 'yes' if the relation holds under these constraints; otherwise, answer 'no'.
 ###### CODE: tacred_qwen_etgpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra.out
 ###### STATUS:
+Answer the question by determining if the relation holds under these constraints. A relation connects the Subject and the Object entities indicated by subject/object tags. You must determine if the relation holds between the tagged entities in the query sentence, following these rules:
 
+1. **Entity Resolution**: Treat abbreviations (e.g., 'Minn.') as their full forms (e.g., 'Minnesota'), and ensure the object matches the required entity type (e.g., state/province vs. city vs. country).
+2. **Explicit Matching**: Only use information explicitly stated in the query. Do not infer events (e.g., death) or relationships (e.g., familial ties) unless directly mentioned.
+3. **Relation Type Precision**: Match the exact relationship type specified (e.g., 'familial' vs. 'friendship'). Do not conflate non-familial roles with familial relations.
+4. **Role Implication Awareness**: Recognize that certain roles (e.g., 'managing principal') inherently imply specific relationships (e.g., 'shareholder') even if not explicitly stated.
+5. **Geographic Hierarchy**: Distinguish between sovereign countries (e.g., 'Cuba') and subnational entities (e.g., 'California'). A country cannot satisfy a relation requiring a state/province.
 ###### CODE: tacred_gemma_initial_prompt
 ###### SOURCE:
-###### STATUS:
+###### STATUS: running
 You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
@@ -241,128 +309,293 @@ You need to decide whether the relation holds between the Subject and the Object
 If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: tacred_gemma_rpo_node_x
-###### SOURCE:
-###### STATUS:
+###### SOURCE: trainings/20260508_120655_google-gemma-3-4b-it/population.json node 3
+###### STATUS: running 
+You are given a relation name, a description of the relation in brackets, and a query sentence.
+
+Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. The Subject and the Object entities are indicated with the subject and object tags, respectively. Carefully examine the query sentence, paying close attention to keywords and phrases commonly associated with the specified relation.
+
+Consider the following:
+
+*   **Explicit Statements:** Look for direct statements that express the relation (e.g., "is a subsidiary of," "was born in").
+*   **Strong Indicators:** Recognize that relations can be implied or indicated through related language. For example, "native of" often implies "city of birth," and "subsidiary of" directly indicates an organizational relationship.
+*   **Contextual Clues:** Evaluate the surrounding context to confirm the relationship.
+
+Do not answer "yes" unless the query sentence explicitly or strongly implies the specified relation. Base your decision *solely* on the content of the query sentence. Ignore any support examples provided.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: tacred_gemma_rpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round3_lpo3.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, and a query sentence. Completely disregard any support sentences. Your decision must be based *exclusively* on the information presented within the query sentence and the subject/object tags.
 
+Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. The Subject and the Object entities are indicated with the subject and object tags, respectively. Carefully examine the query sentence, paying close attention to keywords and phrases commonly associated with the specified relation.
+
+Consider the following:
+
+*   **Explicit Statements:** Look for direct statements that express the relation (e.g., "is a subsidiary of," "was born in").
+*   **Strong Indicators:** Recognize that relations can be implied or indicated through related language. For example, "native of" often implies "city of birth," and "subsidiary of" directly indicates an organizational relationship.
+*   **Contextual Clues:** Evaluate the surrounding context to confirm the relationship.
+
+Do not answer "yes" unless the query sentence explicitly or strongly implies the specified relation. Base your decision *solely* on the content of the query sentence. Do not consider any support examples provided.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_rpo_node_x_greater
-###### SOURCE:
-###### STATUS:
+###### SOURCE: codes/nohup_outs/greater_seq_node3_1steps_n30000_lmd0.2_k25_u10_z5_gemma4.out
+###### STATUS: running
+Class are given a relation name, a description of the relation in brackets, and a query sentence.
 
+Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. The Subject and the Object entities are indicated with the subject and object tags, respectively. Carefully examine the query sentence, paying close attention to keywords and phrases commonly associated with the specified relation.
+
+Consider the following:
+
+*   **Explicit Statements:** Look for direct statements that express the relation (e.g., "is a subsidiary of," "was born in").
+*   **Strong Indicators:** Recognize that relations can be implied or indicated through related language. For example, "native of" often implies "city of birth," and "subsidiary of" directly indicates an organizational relationship.
+*   **Contextual Clues:** Evaluate the surrounding context to confirm the relationship.
+
+Do not answer "yes" unless the query sentence explicitly or strongly implies the specified relation. Base your decision *solely* on the content of the query sentence. Ignore any support examples provided.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_rpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: nohup_outs/greater_topgrad_node3_1steps_n30000_lmd0.2_k25_u10_z5_gemma4.out (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_rpo_node_x_gradpo-gen
-###### SOURCE:
-###### STATUS:
+###### SOURCE: aunabilg1.txt node 2
+###### STATUS: running
+You are given a relation name, a description of the relation in brackets, and a query sentence.
 
+Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. The Subject and the Object entities are indicated with the subject and object tags, respectively. Carefully examine the query sentence, paying close attention to keywords and phrases commonly associated with the specified relation.
+
+Consider the following:
+
+*   **Explicit Statements:** Look for direct statements that express the relation (e.g., "is a subsidiary for," "was born in").
+*   **Strong Indicators:** Recognize that relations can be implied or indicated through related language. For example, "native of" often implies "city of birth," and "subsidiary for" directly indicates an organizational relationship.
+*   **Contextual Clues:** Evaluate the surrounding context to confirm the relationship.
+
+Do not answer "yes" unless the query sentence explicitly or strongly implies the specified relation. Base your decision solely on the content of the query sentence. Ignore any support examples provided.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_rpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v9.out (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_rpo_node_y
-###### SOURCE:
-###### STATUS:
+###### SOURCE: trainings/20260508_120655_google-gemma-3-4b-it/population.json node 18
+###### STATUS: running 
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. Carefully examine the query sentence and consider the relationship between the subject and object entities. Do not answer "yes" simply because the subject and object are related in a general sense; verify that the query sentence explicitly or implicitly expresses the specified relation. Base your decision *solely* on the content of the query sentence. Ignore the support sentence.
+
+When evaluating whether a relation holds, focus on the *core meaning* of the relation. Consider that the query sentence may express the relation using different phrasing or terminology than the relation description. Look for synonyms and related concepts that indicate the presence of the relation. Pay attention to context clues and implied relationships; the relation does not always need to be stated explicitly. Look beyond surface-level phrasing.
+
+Avoid being distracted by surrounding details or circumstantial information within the query sentence that do not directly establish the relation. Prioritize understanding the core relationship between the subject and object, even if it is not stated using the exact words from the relation description. Consider the overall meaning of the sentence, even if the relationship is expressed indirectly.
+
+<b>To help you reason, consider these questions before answering:</b>
+* Does the sentence state or strongly imply a connection between the subject and the object that aligns with the relation description?
+* Are there keywords or phrases that are closely associated with the relation, even if they are not exact synonyms?
+* Could a reasonable person, knowing the relation description, conclude that the subject and object are connected in this way based *only* on the query sentence?
+* **Specifically, identify the words or phrases in the query sentence that relate to the subject and object and explain how they suggest the relation. If the relation is not explicitly stated, what is the implied connection?**
+
+<b>Pay close attention to the entities themselves. Are you focusing on the correct entities as the subject and object? Confirm you've correctly identified which entity corresponds to which role.</b>
+
+<b>Be mindful of potential ambiguities. Does the sentence present multiple possible interpretations? If so, choose the interpretation that best supports the relation.</b>
+
+<b>Do not let pronouns or other linguistic complexities obscure the core meaning of the sentence. Focus on the concrete information presented.**
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: tacred_gemma_rpo_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round3_lpo1.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_rpo_node_y_greater
-###### SOURCE:
+###### SOURCE: nohup_outs/greater_seq_node18_1steps_n30000_lmd0.2_k25_u10_z5_gemma4.out
 ###### STATUS:
+Relation are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. Carefully examine the query sentence and consider the relationship between the subject and object entities. Do not answer "yes" simply because the subject and object are related in a general sense; verify that the query sentence explicitly or implicitly expresses the specified relation. Base your decision *solely* on the content of the query sentence. Ignore the support sentence.
+
+When evaluating whether a relation holds, focus on the *core meaning* of the relation. Consider that the query sentence may express the relation using different phrasing or terminology than the relation description. Look for synonyms and related concepts that indicate the presence of the relation. Pay attention to context clues and implied relationships; the relation does not always need to be stated explicitly. Look beyond surface-level phrasing.
+
+Avoid being distracted by surrounding details or circumstantial information within the query sentence that do not directly establish the relation. Prioritize understanding the core relationship between the subject and object, even if it is not stated using the exact words from the relation description. Consider the overall meaning of the sentence, even if the relationship is expressed indirectly.
+
+<b>To help you reason, consider these questions before answering:</b>
+* Does the sentence state or strongly imply a connection between the subject and the object that aligns with the relation description?
+* Are there keywords or phrases that are closely associated with the relation, even if they are not exact synonyms?
+* Could a reasonable person, knowing the relation description, conclude that the subject and object are connected in this way based *only* on the query sentence?
+* **Specifically, identify the words or phrases in the query sentence that relate to the subject and object and explain how they suggest the relation. If the relation is not explicitly stated, what is the implied connection?**
+
+<b>Pay close attention to the entities themselves. Are you focusing on the correct entities as the subject and object? Confirm you've correctly identified which entity corresponds to which role.</b>
+
+<b>Be mindful of potential ambiguities. Does the sentence present multiple possible interpretations? If so, choose the interpretation that best supports the relation.</b>
+
+<b>Do not let pronouns or other linguistic complexities obscure the core meaning of the sentence. Focus on the concrete information presented.**
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_rpo_node_y_greater-tg
-###### SOURCE:
-###### STATUS:
+###### SOURCE: codes/nohup_outs/greater_topgrad_node18_1steps_n30000_lmd0.2_k25_u10_z5_gemma4_.out
+###### STATUS: running
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. Carefully examine the query sentence and consider the relationship between the subject and object entities. Do not answer "yes" simply because the subject and object are related in a general sense; verify that the query sentence explicitly or implicitly expresses the specified relation. Base your decision *solely* on the content of the query sentence. Ignore the support sentence.
+
+When evaluating whether a relation holds, focus on the *core meaning* of the relation. Consider that the query sentence may express the relation using different phrasing or terminology than the relation description. Look for synonyms and related concepts that indicate the presence of the relation. Pay attention to context clues and implied relationships; the relation does not always need to be stated explicitly. Look beyond surface-level phrasing.
+
+Avoid being distracted by surrounding details or circumstantial information within the query sentence that do not directly establish the relation. Prioritize understanding the core relationship between the subject and object, even if it is not stated using the exact words from the relation description. Consider the overall meaning of the sentence, even if the relationship is expressed indirectly.
+
+<b>To help you reason, consider these questions before answering:</b>
+* Does the sentence state or strongly imply a connection between the subject and the object that aligns with the relation description?
+* Are there keywords or phrases that are closely associated with the relation, even if they are not exact synonyms?
+* Could a reasonable person, knowing the relation description, conclude that the subject and object are connected in this way based *only* on the query sentence?
+* **Specifically, identify the words or phrases in the query sentence that relate to the subject and object and explain how they suggest the relation. If the relation is not explicitly stated, what is the implied connection?**
+
+<b>Pay close attention to the entities themselves. Are you focusing on the correct entities as the subject and object? Confirm you've correctly identified which entity corresponds to which role.</b>
+
+<b>Be mindful of potential ambiguities. Does the sentence present multiple possible interpretations? If so, choose the interpretation that best supports the relation.</b>
+
+<b>Do not let pronouns or other linguistic complexities obscure the core meaning of the sentence. Focus on the concrete information presented.**
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"! otherwise, answer "no".
 ###### CODE: tacred_gemma_rpo_node_y_gradpo-gen
-###### SOURCE:
-###### STATUS:
+###### SOURCE: tanvirg1.txt node 2
+###### STATUS: running
+You are given a relation name, a description of the relation in brackets, a example exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. Carefully examine the query sentence and consider the relationship between the subject and object entities. Do not answer "yes" simply because the subject and object are related in a general sense; verify that the query sentence explicitly or implicitly expresses the specified relation. Base your decision *solely* on the content of the query sentence. Ignore the example.
+
+When evaluating whether a relation holds, focus on the *core meaning* of the relation. Consider that the query sentence may express the relation using different phrasing or terminology than the relation description. Look for synonyms and related concepts that indicate the presence of the relation. Pay attention to context clues and implied relationships; the relation does not always need to be stated explicitly. Look beyond surface-level phrasing.
+
+Avoid being distracted by surrounding details or circumstantial information within the query sentence that do not directly establish the relation. Prioritize understanding the core relationship between the subject and object, even if it is not stated using the exact words from the relation description. Consider the overall meaning of the sentence, even if the relationship is expressed indirectly.
+
+To help you reason, consider these questions before answering:
+* Does the sentence state or strongly imply a connection between the subject and the object that aligns with the relation description?
+* Are there keywords or phrases that are closely associated with the relation, even if they are not exact synonyms?
+* Could a reasonable person, knowing the relation description, conclude that the subject and object are connected in this way based *only* on the query sentence?
+* **Specifically, identify the words or phrases in the query sentence that relate to the subject and object and explain how they suggest the relation. If the relation is not explicitly stated, what is the implied connection?**
+
+Pay close attention to the entities themselves. Are you focusing on the correct entities as the subject and object? Confirm you've correctly identified which entity corresponds to which role.
+
+Be mindful of potential ambiguities. Does the sentence present multiple possible interpretations? If so, choose the interpretation that best supports the relation.
+
+Do not let pronouns or other linguistic complexities obscure the core meaning of the sentence. Focus on the concrete information presented.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_rpo_node_y_gradpo-prob
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v9.out  (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_evoprompt_node_x
-###### SOURCE:
+###### SOURCE: trainings/20260513_093554_google-gemma-3-4b-it/population.json node 26
 ###### STATUS:
-
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
 ###### CODE: tacred_gemma_evoprompt_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round3_lpo2.txt
 ###### STATUS:
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Carefully examine the relation description. then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate based solely on the information present within the query sentence; external information, including the provided support sentence, is irrelevant. Treat the support sentence as an example for context only; completely disregard it when making your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the query sentence.
 
 ###### CODE: tacred_gemma_evoprompt_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/aunabil_m1_evo_greater2.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_evoprompt_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_greater_topgrad_node26_1steps_lmd0.2_gemma4_20260513_093554.out
 ###### STATUS:
-
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation's core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation's definition, the entities' semantic roles from the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the information presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the information presented within the query sentence.
 ###### CODE: tacred_gemma_evoprompt_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node26_v8.out (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_evoprompt_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/tanvirevog1.txt
 ###### STATUS:
+You will be provided with a relation name, a detailed description of the relation, a support sentence to illustrate the relation’s core characteristics, and a query sentence. Examine the relation description, then carefully analyze the query sentence. The Subject and Object are clearly identified. First, identify the tagged Subject and Object. Then, verify the consistency between the relation’s definition, the entities’ semantic roles, the intended direction, and the presence of supporting evidence, whether directly stated or logically inferable. Pay attention to potential ambiguities in the query sentence. Evaluate solely on the informational presented within the query sentence; external information is irrelevant. Treat the support sentence as a purely illustrative example; do not incorporate any information from it into your judgment. Respond with a clear 'yes' or 'no' to indicate whether the relation is confirmed, considering only the informational presented within the query sentence.
 
 ###### CODE: tacred_gemma_evoprompt_node_y
-###### SOURCE:
+###### SOURCE: trainings/20260513_093554_google-gemma-3-4b-it/population.json node 34
 ###### STATUS:
-
+You are given a relation name, its description in brackets [relation description], a support sentence exemplifying the relation, and a query sentence. First, understand the relation description. Then, consider the query sentence. The Subject and Object are already identified by tags. Read the relation description, then read the query sentence. Carefully review the relation definition. Carefully analyze the relation description, then thoroughly evaluate the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, and that the relation is demonstrable within the query sentence. Verify the consistency of entity types, roles, and directional flow. Rely exclusively on the query sentence for verification and assess its explicitness. The support sentence illustrates the relation type; evidence must originate solely from the query. Determine if the relation holds for the query sentence. Provide a direct 'yes' or 'no' answer, based solely on the information presented in the query sentence.
 ###### CODE: tacred_gemma_evoprompt_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round3_lpo3.txt
 ###### STATUS:
+You are given a relation name, its description in brackets [relation description], a support sentence exemplifying the relation, and a query sentence. Understand the relation description. Then, consider the query sentence. The Subject and Object are already identified by tags. Read the relation description, then read the query sentence. Focus on the relation definition. Carefully analyze the relation description, then thoroughly evaluate the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, and that the relation is demonstrable within the query sentence. Verify the consistency of entity types, roles, and directional flow. Prioritize the query sentence for verification, ensuring the relation is explicitly stated or directly implied within it. The support sentence illustrates the relation type; evidence must originate solely from the query. Determine if the relation holds for the query sentence. Provide a direct 'yes' or 'no' answer, based solely on the information presented in the query sentence. Omit external knowledge. Respond with 'yes' or 'no'.
 
 ###### CODE: tacred_gemma_evoprompt_node_y_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/aunabil_m2_evo_greater2.txt
 ###### STATUS:
-
+This are given a relation name, its description in brackets [relation description], a support sentence exemplifying the relation, and a query sentence. First, understand the relation description. Then, consider the query sentence. The Subject and Object are already identified by tags. Read the relation description, then read the query sentence. Carefully review the relation definition. Carefully analyze the relation description, then thoroughly evaluate the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, and that the relation is demonstrable within the query sentence. Verify the consistency of entity types, roles, and directional flow. Rely exclusively on the query sentence for verification and assess its explicitness. The support sentence illustrates the relation type; evidence must originate solely from the query. Determine if the relation holds for the query sentence. Provide a direct 'yes' or 'no' answer, based solely on the information presented in the query sentence.
 ###### CODE: tacred_gemma_evoprompt_node_y_greater-tg
-###### SOURCE:
-###### STATUS:
-
+###### SOURCE:  nohup_outs/superstart_greater_topgrad_node34_1steps_lmd0.2_gemma4_20260513_093554.out 
+###### STATUS: 
+You are given a relation name, its description in brackets [relation description], a support sentence exemplifying the relation, and a query sentence. First, understand the relation description. Then, consider the query sentence. The Subject and Object are already identified by tags. Read the relation description, then read the query sentence. Carefully review the relation definition. Carefully analyze the relation description, then thoroughly evaluate the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, and that the relation is demonstrable within the query sentence. Verify the consistency of entity types, roles, and directional flow. Rely exclusively on the query sentence for verification and assess its explicitness. The support sentence illustrates the relation type; evidence must originate solely from the query. Determine if the relation holds for the query sentence. Provide a direct 'yes" or 'no' answer, based solely on the information presented in the query sentence.
 ###### CODE: tacred_gemma_evoprompt_node_y_gradpo-gen
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node34_v8.out
 ###### STATUS:
+You are given a relation name, its description in brackets [relation description], a support sentence that exemplifies the relation, and a query sentence. First, understand the relation description. Then, consider the query sentence. The Subject and Object are already identified by tags. Read the relation description, then read the query sentence. Carefully review the relation definition. Carefully analyze the relation description, then thoroughly evaluate the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, and that the relation is demonstrable within the query sentence. Verify the consistency of entity types, roles, and directional flow. Rely exclusively on the query sentence for verification and assess its explicitnessness. The support sentence exemplifies the relation type; evidence must originate solely from the query. Determine if the relation holds for the query sentence. Provide a direct 'yes' or 'no' answer, based solely on the information presented in the query sentence.
 
 ###### CODE: tacred_gemma_evoprompt_node_y_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/tanvirevog2.txt
 ###### STATUS:
+You are given a relation name, its description in brackets [relation description], a support sentence exemplifying the relation, and a query sentence. First, understand the relation description. Then, consider the query sentence. The Subject and Object are already identified by tags. Read the relation description, then read the query sentence. Carefully review the relation definition. Carefully analyze the relation description, then thoroughly evaluate the query sentence. First identify the tagged Subject and Object, then compare their roles to the relation name and definition. Confirm that the relation direction is Subject-to-Object, and that the relation is demonstrable within the query sentence. Verify the consistency of entity types, roles, and directional flow. Rely exclusively on the query sentence for verification and assess its expliciteness. The support sentence illustrates the relation type; evidence must originate solely from the query. Determine if the relation holds for the query sentence. Provide a direct 'yes' or 'no' answer, based solely on the information presented in the query sentence.
 
 ###### CODE: tacred_gemma_etgpo_node_x
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/nohup_etgpo_re_taxonomy_fresh_noncluster_train_original_final_dev_5newprompts_g5_run1_gemma.out
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+Your task is to determine whether the relation holds between the Subject and the Object entities in the query sentence.  Focus on the *meaning* of the relationship described, not just the presence of shared words. Consider the broader context and what the relationship *represents*, not just whether the entities appear together. 
+
+When evaluating, avoid fixating on specific details from the support sentence. Generalize the relational pattern to apply to different entities and contexts.  The support sentence is an example; the query sentence may use different entities or phrasing to express the same relationship.
+
+Be mindful of nuances in meaning. The relation type describes a specific connection; do not infer the relationship unless it is clearly and directly present in the query sentence, even if related concepts are mentioned.  Focus on the *core* of the relation.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_etgpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round5_etgpo3.txt 
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+Your task is to determine if the query sentence *explicitly and directly* expresses the relationship described by the relation name and exemplified in the support sentence, between the Subject and the Object entities.  Prioritize a clear, demonstrable connection over subtle or implied relationships. Focus on the *essential* meaning of the relationship, rather than just shared words. Consider the broader context, but primarily assess whether the query sentence *states* the relationship.
+
+Do not fixating on specific details from the support sentence. Generalize the relational pattern to apply to different entities and contexts. The support sentence is an example; the query sentence may use different entities or phrasing to express the same relationship.
+
+Be mindful of nuances in meaning. The relation type describes a specific connection; do not infer the relationship unless it is clearly and directly present in the query sentence, even if related concepts are mentioned. Focus on the *core* of the relation.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_etgpo_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round5_etgpo1.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_etgpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round5_etgpo3.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: tacred_gemma_etgpo_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round4_etgpo1.txt
 ###### STATUS:
+You are given a relation category, a description of the relation in brackets, a demonstration of the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+Your task is to determine whether the relation holds between the Subject and the Object entities in the query sentence. Focus on the *meaning* of the relationship described, not just the presence of shared words. Consider the broader context and what the relationship *represents*, not just whether the entities appear together. 
+
+When evaluating, avoid fixating on specific details from the demonstration of sentence. Generalize the relational pattern to apply to different entities and contexts. The demonstration of sentence is an example; the query sentence may use different entities or phrasing to express the same relationship.
+
+Be mindful of nuances in meaning. The relation category describes a specific connection; do not infer the relationship unless it is clearly and directly present in the query sentence, even if related concepts are mentioned. Focus on the *core* of the relation.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: tacred_gemma_etgpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: nohup_outs/superstart_etgpo_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v9_ultra.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_initial_prompt
 ###### SOURCE:
-###### STATUS:
+###### STATUS: running
 You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
@@ -371,87 +604,214 @@ You need to decide whether the relation holds between the Subject and the Object
 If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: fewrel_qwen_rpo_node_x
-###### SOURCE:
+###### SOURCE: trainings/20260517_021906_Qwen-Qwen3-4B/population.json node 3
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support instance that exemplifies the relation, and a query sentence. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query sentence. 
 
+**Key Steps:**
+1. **Identify the subject and object entities** in the query sentence (they are marked with <subject> and <object> tags).
+2. **Analyze the relation** based on the provided description and the support instance. The relation must be a direct, specific connection between the subject and object entities as defined in the description.
+3. **Check the query sentence** for explicit evidence of the relation. If the subject and object entities in the query are not connected by the relation described (e.g., the object is not the correct entity type, or the connection is not explicitly stated), answer "no."
+
+**Example:**  
+For the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object in the query is a genre or a different entity type, the answer is "no."
+
+If the relation holds between the subject and object entities in the query sentence, answer "yes"; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_rpo_lpo_node3_20260517_021906_Qwen_ultra.out
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support instance that exemplifies the relation, and a query sentence. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query sentence. 
 
+**Key Steps:**
+1. **Identify the subject and object entities** in the query sentence (they are marked with <subject> and <object> tags).
+2. **Analyze the relation** based on the provided description and the support instance. The relation must be a direct, specific connection from the subject to the object in the same direction as the support instance as defined in the description and the direction of the relation (subject to object) must match exactly.
+3. **Check the query sentence** for explicit evidence of the relation. If the subject and object entities in the query are not connected by the relation described (e.g., entity types of both the subject and object must match those in the support instance or the connection is not explicitly stated), answer "no."
+
+**Example:**  
+For the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object in the query is a genre or a different entity type, the answer is "no."
+
+If the relation holds between the subject and object entities in the query sentence, answer "yes"; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_rpo_greater_node3_20260517_021906_Qwen.out
 ###### STATUS:
+To are given a relation name, a description of the relation in brackets, a support instance that exemplifies the relation, and a query sentence. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query sentence. 
 
+**Key Steps:**
+1. **Identify the subject and object entities** in the query sentence (they are marked with <subject> and <object> tags).
+2. **Analyze the relation** based on the provided description and the support instance. The relation must be a direct, specific connection between the subject and object entities as defined in the description.
+3. **Check the query sentence** for explicit evidence of the relation. If the subject and object entities in the query are not connected by the relation described (e.g., the object is not the correct entity type, or the connection is not explicitly stated), answer "no."
+
+**Example:**  
+For the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object in the query is a genre or a different entity type, the answer is "no."
+
+If the relation holds between the subject and object entities in the query sentence, answer "yes"; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_rpo_greater_topgrad_node3_20260517_021906_Qwen.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_rpo_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_rpo_gradpo_node3_20260517_021906_Qwen.out
 ###### STATUS:
+You are told a relation name, a description of the relation in quotes, a support instance that exemplifies the relation, and a query text. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query text. 
 
+**Key Steps:**
+1. **Identify the subject and object entities** in the query text (they are marked with <subject> and <object> tags).
+2. **Analyze the relation** based on the provided description and the support instance. The relation must be a direct, specific connection between the subject and object entities as defined in the description.
+3. **Check the query text** for explicit evidence of the relation. If the subject and object entities in the query are not connected by the relation described (e.g., the object is not the correct entity type, or the connection is not explicitly stated), answer "no."
+
+**Example:**  
+For the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object in the query is a genre or a different entity type, the answer is "no."
+
+If the relation holds between the subject and object entities in the query text, answer "yes"; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_gradpo_prob_node3_20260517_021906_Qwen.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_rpo_node_y
-###### SOURCE:
+###### SOURCE: trainings/20260517_021906_Qwen-Qwen3-4B/population.json node 13
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support instance illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence explicitly expresses the relation defined by the relation name and description.
 
+**Key Guidelines:**
+1. **Understand the relation's definition precisely**: 
+   - For "original network", the subject (e.g., a program or show) must be explicitly tied to the object (e.g., a TV network or platform) as its original distribution channel. This includes direct mentions of the network or platform in the sentence.
+   - For "residence", the subject (e.g., a person or entity) must be explicitly tied to the object (e.g., a location) as a place they live or are associated with.
+   - For "instance of", the subject must be explicitly described as a specific example of the object (e.g., a song being part of an album, a dam being a type of structure). This requires a direct part-whole or category relationship, not a location-based or functional one.
+
+2. **Focus on the subject and object tags**: Identify the subject and object entities in the query sentence as per the tags. Ensure you do not confuse the subject with a role or the object with a location unless explicitly defined by the relation. For example, "BBC Three" in the "original network" relation is a network entity, not a location.
+
+3. **Avoid conflating association with location or function**: 
+   - "Original network" requires a direct link between the subject (e.g., a show) and the object (e.g., a network) as its original platform.
+   - "Residence" requires a location-based connection (e.g., a person living in a city).
+   - "Instance of" requires a part-whole or category relationship (e.g., a song being part of an album, a dam being a type of structure), not a location or functional relationship.
+
+4. **Check for explicitness**: The relation must be explicitly stated or implied by the sentence's structure. For example, "Schatz was inaugurated as Hawaii's lieutenant governor" explicitly links the role (subject) to the jurisdiction (object), satisfying "applies to jurisdiction." Similarly, "The Smoking Room" (subject) is explicitly tied to "BBC Three" (object) as a sitcom aired on that network, satisfying "original network."
+
+**Example Clarification**: 
+- In the "original network" relation, the object must be a network or platform (e.g., "BBC Three", "Canal 13") that directly distributes the subject's work. 
+- In the "instance of" relation, the subject must be a specific example of the object (e.g., a song on an album, a dam in a country), not a location or category.
+
+Answer "yes" if the query sentence explicitly expresses the relation as defined; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_rpo_lpo_node13_20260517_021906_Qwen.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_rpo_node_y_greater
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_greater_node13_20260517_021906_Qwen.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_rpo_node_y_greater-tg
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_greater_topgrad_node13_20260517_021906_Qwen.out (marked)
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support instance illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence explicitly expresses the relation defined by the relation name and description.
 
+**Key Guidelines:**
+1. **Understand the relation's definition precisely**: 
+   - For "original network", the subject (e.g., a program or show) must be explicitly tied to the object (e.g., a TV network or platform) as its original distribution channel. This includes direct mentions of the network or platform in the sentence.
+   - For "residence", the subject (e.g., a person or entity) must be explicitly tied to the object (e.g., a location) as a place they live or are associated with.
+   - For "instance of", the subject must be explicitly described as a specific example of the object (e.g., a song being part of an album, a dam being a type of structure). This requires a direct part-whole or category relationship, not a location-based or functional one.
+
+2. **Focus on the subject and object tags**: Identify the subject and object entities in the query sentence as per the tags. Ensure you do not confuse the subject with a role or the object with a location unless explicitly defined by the relation. For example, "BBC Three" in the "original network" relation is a network entity, not a location.
+
+3. **Avoid conflating association with location or function**: 
+   - "Original network" requires a direct link between the subject (e.g., a show) and the object (e.g., a network) as its original platform.
+   - "Residence" requires a location-based connection (e.g., a person living in a city).
+   - "Instance of" requires a part-whole or category relationship (e.g., a song being part of an album, a dam being a type of structure), not a location or functional relationship.
+
+4. **Check for explicitness**: The relation must be explicitly stated or implied by the sentence's structure. For example, "Schatz was inaugurated as Hawaii's lieutenant governor" explicitly links the role (subject) to the jurisdiction (object), satisfying "applies to jurisdiction." Similarly, "The Smoking Room" (subject) is explicitly tied to "BBC Three" (object) as a sitcom aired on that network, satisfying "original network."
+
+**Example Clarification**: 
+- In the "original network" relation, the object must be a network or platform (e.g., "BBC Three", "Canal 13") that directly distributes the subject's work. 
+- In the "instance of" relation, the subject must be a specific example of the object (e.g., a song on an album, a dam in a country), not a location or category.
+
+ Do "yes" if the query sentence explicitly expresses the relation as defined; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_y_gradpo-gen
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_gradpo_node13_20260517_021906_Qwen.out
 ###### STATUS:
+You are given a relation label, a description of the relation in curly braces, a support occurrence illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence clearly indicates the relation defined by the relation label and description.
 
+**Key Guidelines:**
+1. **Understand the relation's definition precisely**: 
+   - For "original network", the subject (e.g., a program or show) must be explicitly tied to the object (e.g., a TV network or platform) as its original distribution channel. This includes direct mentions of the network or platform in the sentence.
+   - For "residence", the subject (e.g., a person or entity) must be explicitly tied to the object (e.g., a location) as a place they live or are associated with.
+   - For "instance of", the subject must be explicitly described as a specific example of the object (e.g., a song being part of an album, a dam being a type of structure). This requires a direct part-whole or category relationship, not a location-based or functional one.
+
+2. **Focus on the subject and object tags**: Identify the subject and object entities in the query sentence as per the tags. Ensure you do not confuse the subject with a role or the object with a location unless explicitly defined by the relation. For example, "BBC Three" in the "original network" relation is a network entity, not a location.
+
+3. **Avoid conflating association with location or function**: 
+   - "Original network" requires a direct link between the subject (e.g., a show) and the object (e.g., a network) as its original platform.
+   - "Residence" requires a location-based connection (e.g., a person living in a city).
+   - "Instance of" requires a part-whole or category relationship (e.g., a song being part of an album, a dam being a type of structure), not a location or functional relationship.
+
+4. **Check for explicitness**: The relation must be explicitly stated or implied by the sentence's structure. For example, "Schatz was inaugurated as Hawaii's lieutenant governor" explicitly links the role (subject) to the jurisdiction (object), satisfying "applies to jurisdiction." Similarly, "The Smoking Room" (subject) is explicitly tied to "BBC Three" (object) as a sitcom aired on that network, satisfying "original network."
+
+**Example Clarification**: 
+- In the "original network" relation, the object must be a network or platform (e.g., "BBC Three", "Canal 13") that directly distributes the subject's work. 
+- In the "instance of" relation, the subject must be a specific example of the object (e.g., a song on an album, a dam in a country), not a location or category.
+
+Answer "yes" if the query sentence clearly indicates the relation as defined; otherwise, answer "no."
 ###### CODE: fewrel_qwen_rpo_node_y_gradpo-prob
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_gradpo_prob_node13_20260517_021906_Qwen.out (marked)
 ###### STATUS:
+You are given a relation name, a description of the relation in [brackets], a support example instance illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence explicitly expresses the relation defined by the relation name and description.
 
+**Key Guidelines:**
+1. **Understand the relation's definition precisely**: 
+   - For "original network", the subject (e.g., a program or show) must be explicitly tied to the object (e.g., a TV network or platform) as its original distribution channel. This includes direct mentions of the network or platform in the sentence.
+   - For "residence", the subject (e.g., a person or entity) must be explicitly tied to the object (e.g., a location) as a place they live or are associated with.
+   - For "instance of", the subject must be explicitly described as a specific example of the object (e.g., a song being part of an album, a dam being a type of structure). This requires a direct part-whole or category relationship, not a location-based or functional one.
+
+2. **Focus on the subject and object tags**: Identify the subject and object entities in the query sentence as per the tags. Ensure you do not confuse the subject with a role or the object with a location unless explicitly defined by the relation. For example, "BBC Three" in the "original network" relation is a network entity, not a location.
+
+3. **Avoid conflating association with location or function**: 
+   - "Original network" requires a direct link between the subject (e.g., a show) and the object (e.g., a network) as its original platform.
+   - "Residence" requires a location-based connection (e.g., a person living in a city).
+   - "Instance of" requires a part-whole or category relationship (e.g., a song being part of an album, a dam being a type of structure), not a location or functional relationship.
+
+4. **Check for explicitness**: The relation must be explicitly stated or implied by the sentence's structure. For example, "Schatz was inaugurated as Hawaii's lieutenant governor" explicitly links the role (subject) to the jurisdiction (object), satisfying "applies to jurisdiction." Similarly, "The Smoking Room" (subject) is explicitly tied to "BBC Three" (object) as a sitcom aired on that network, satisfying "original network."
+
+**Example Clarification**: 
+- In the "original network" relation, the object must be a network or platform (e.g., "BBC Three", "Canal 13") that directly distributes the subject's work. 
+- In the "instance of" relation, the subject must be a specific example of the object (e.g., a song on an album, a dam in a country), not a location or category.
+
+Answer "yes" if the query sentence explicitly expresses the relation as defined; otherwise, answer "no."
 ###### CODE: fewrel_qwen_evoprompt_node_x
-###### SOURCE:
+###### SOURCE: trainings/20260517_193615_Qwen-Qwen3-4B/population.json node 25
 ###### STATUS:
-
+You are given a relation name, its description, a support sentence that illustrates the relation, and a query sentence. Decide whether the specified relation is valid between the marked Subject and Object entities in the query sentence. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the relation is explicitly or clearly implied in the query. Use the support sentence to clarify the relation’s structure, not to infer new information or transfer facts beyond its model. Respond 'yes' if the relation is explicitly or clearly implied in the query; otherwise respond 'no'.
 ###### CODE: fewrel_qwen_evoprompt_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_evoprompt_lpo_node25_20260517_193615_Qwen.out
 ###### STATUS:
+You are given a relation name, its description, a support sentence that illustrates the relation, and a query sentence. Decide whether the specified relation is valid between the marked Subject and Object entities in the query sentence. Check the relation definition, the semantic type of each entity and ensure they match the semantic types in the support sentence, the direction from Subject to Object as defined in the support sentence, and whether the relation is explicitly or clearly implied in the query through explicit mention or contextual clues. Use the support sentence to clarify the relation’s structure, not to infer new information or transfer facts beyond its model. Respond 'yes' if the relation is explicitly or clearly implied in the query or contextually implied; otherwise respond 'no'. Align the query's entities with the support sentence's entity roles.
 
 ###### CODE: fewrel_qwen_evoprompt_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round2_few1.txt
 ###### STATUS:
+Use are given a relation name, its description, a support sentence that illustrates the relation, and a query sentence. Decide whether the specified relation is valid between the marked Subject and Object entities in the query sentence. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the relation is explicitly or clearly implied in the query. Use the support sentence to clarify the relation’s structure, not to infer new information or transfer facts beyond its model. Respond 'yes' if the relation is explicitly or clearly implied in the query; otherwise respond 'no'.
 
 ###### CODE: fewrel_qwen_evoprompt_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round2_few2.txt
 ###### STATUS:
-
+You are given a relation name, its description, a support sentence that illustrates the relation, and a query sentence. Read whether the specified relation is valid between the marked Subject and Object entities in the query sentence. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the relation is explicitly or clearly implied in the query. Use the support sentence to clarify the relation’s structure, not to infer new information or transfer facts beyond its model. Respond 'yes' if the relation is explicitly or clearly implied in the query; otherwise respond 'no'.
 ###### CODE: fewrel_qwen_evoprompt_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_evoprompt_gradpo_node25_20260517_193615_Qwen.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_evoprompt_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/fewrel_superstart_evoprompt_gradpo_prob_node25_20260517_193615_Qwen.out
 ###### STATUS:
+You are given a relation name, its description, a support sentence that illustrates the relation, and a query sentence. Determine whether the relation is valid between the subject entities in the query sentence. Check the relation definition, the semantic type of each entity, the direction from Subject to Object, and whether the relation is explicitly or clearly implied in the query. Use the support sentence to clarify the relation’s structure, not to infer new information or transfer facts beyond its model. Respond 'yes' if the relation is explicitly or clearly implied in the query; otherwise respond 'no'.
 
 ###### CODE: fewrel_qwen_evoprompt_node_y
-###### SOURCE:
+###### SOURCE: trainings/20260517_193615_Qwen-Qwen3-4B/population.json (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_evoprompt_node_y_lpo
-###### SOURCE:
+###### SOURCE: skipped
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_evoprompt_node_y_greater
-###### SOURCE:
+###### SOURCE: skipped
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_evoprompt_node_y_greater-tg
@@ -459,40 +819,42 @@ If the relation holds between the Subject and the Object entities in the query s
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_evoprompt_node_y_gradpo-gen
-###### SOURCE:
+###### SOURCE: skipped
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_evoprompt_node_y_gradpo-prob
-###### SOURCE:
+###### SOURCE: skipped
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_etgpo_node_x
-###### SOURCE:
+###### SOURCE: unified_optimization_results/unified_opt_fs_fewrel_20260517_023848/generated_prompt_candidates.json node 0
 ###### STATUS:
-
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities, indicated with the subject and object tags. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence, following these guidelines: (1) Prioritize explicit mentions of the relation in the query sentence over indirect inferences. (2) Strictly adhere to the subject and object tags provided; do not infer or swap their roles. (3) Distinguish between relationship types (e.g., 'designed by' vs. 'owned by') based on their definitions, not superficial similarities. (4) Verify that the subject and object match the required entity types for the relation (e.g., a place vs. a character). (5) Avoid conflating part-whole hierarchies (e.g., 'has part') with product-owner relationships (e.g., 'produced by'). If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_qwen_etgpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round4_lpo1.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_etgpo_node_x_greater
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_etgpo_greater_node0_unified_opt_fs_fewrel_20260517_023848_Qwen.out
 ###### STATUS:
-
+Based are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities, indicated with the subject and object tags. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence, following these guidelines: (1) Prioritize explicit mentions of the relation in the query sentence over indirect inferences. (2) Strictly adhere to the subject and object tags provided; do not infer or swap their roles. (3) Distinguish between relationship types (e.g., 'designed by' vs. 'owned by') based on their definitions, not superficial similarities. (4) Verify that the subject and object match the required entity types for the relation (e.g., a place vs. a character). (5) Avoid conflating part-whole hierarchies (e.g., 'has part') with product-owner relationships (e.g., 'produced by'). If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_qwen_etgpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round2_few3.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_qwen_etgpo_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round2_few1.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in curly brackets, a support example of the relation, and a query sentence. A relation connects the Subject and the Object entities, indicated with the subject and object tags. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence, following these guidelines: (1) Prioritize explicit mentions of the relation in the query sentence over indirect inferences. (2) Strictly adhere to the subject and object tags provided; do not infer or swap their roles. (3) Distinguish between relationship types (e.g., 'designed by' vs. 'owned by') based on their definitions, not superficial similarities. (4) Verify that the subject and object match the required entity types for the relation (e.g., a place vs. a character). (5) Avoid conflating part-whole hierarchical hierarchies (e.g., 'has part') with product-owner relationships (e.g., 'produced by'). If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: fewrel_qwen_etgpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round2_few2.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support example exemplifying the relation, and a query sentence. A relation connects the Subject and the Object entities, indicated with the subject and object tags. You need to decide whether the relation holds between the Subject and the Object entities in the query sentence, following these guidelines: (1) Prioritize explicit mentions of the relation in the query sentence over indirect inferences. (2) Strictly adhere to the subject and object tags provided; do not infer or swap their roles. (3) Distinguish between relationship types (e.g., 'designed by' vs. 'owned by') based on their definitions, not superficial similarities. (4) Verify that the subject and object match the required entity types for the relation (e.g., a place vs. a character). (5) Avoid conflating part-whole hierarchies (e.g., 'has part') with product-owner relationships (e.g., 'produced by'). If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: fewrel_gemma_initial_prompt
 ###### SOURCE:
-###### STATUS:
+###### STATUS: running
 You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. 
@@ -501,125 +863,212 @@ You need to decide whether the relation holds between the Subject and the Object
 If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 
 ###### CODE: fewrel_gemma_rpo_node_x
-###### SOURCE:
+###### SOURCE: trainings/20260517_022119_google-gemma-3-4b-it/population.json node 1
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. These are entities – consider their types and roles within the sentence. The prompt provides a description of the relation – use this in conjunction with the support instance to guide your reasoning.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. The relation may be explicitly stated or implied through the context of the sentence. Carefully consider the surrounding words and phrases to determine if a connection exists.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_gemma_rpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round4_lpo1.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. Carefully analyze both sentences, focusing on how the subject and object relate within each. Consider the description of the relation provided – does the query sentence express a similar connection between the subject and object?
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. These are entities – consider their types and roles within the sentence. The prompt provides a description of the relation – use this in conjunction with the support instance to guide your reasoning.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. The relation may be explicitly stated or implied through the context of the sentence. Carefully consider the surrounding words and phrases to determine if a connection exists. Prioritize the explicit expression of the relation, but also consider how the context supports a similar relationship as demonstrated in the support sentence.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no". Your answer must be exactly one token: "yes" or "no".
+
+Example 1 [fn]: gold=yes, prediction=no
+Relation: work location ()
+Support Sentence: Early in his career , <object>Baton Rouge</object> - area State Representative <subject>Donald Ray Kennard</subject> was an Istrouma faculty member and coach .
+Query Sentence: The video ( directed Gil Green ) was shot in <object>Miami</object> , and features cameos by <subject>Rick Ross</subject> , J. R. Rotem , DJ Khaled and Gunplay .
+
+Example 2 [fp]: gold=no, prediction=yes
+Relation: headquarters location ()
+Support Sentence: John Stadtmiller , who runs <subject>Republic Broadcasting Network</subject> in <object>Round Rock , Texas</object> , which broadcast Sam Kennedy 's weekly show , said that Kennedy was behind the idea of sending out the letters .
+Query Sentence: Feldman has served as president of the Beth Emeth Bais Yehuda Synagogue and of the Ontario Region of the <subject>United Synagogue of America</subject> , the central organization of synagogues in <object>Conservative Judaism</object> .
+
+Example 3 [fn]: gold=yes, prediction=no
+Relation: position held ()
+Support Sentence: With an elevation of above sea level , it is the third highest mountain in Tasmania and named after <subject>William Giblin</subject> , a previous <object>Premier of Tasmania</object> . W.V.
+Query Sentence: Meanwhile , 1868 Democratic nominee and former <object>New York Governor</object> <subject>Horatio Seymour</subject> declined to run again .
 ###### CODE: fewrel_gemma_rpo_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round2_few4.txt
 ###### STATUS:
+To are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. These are entities – consider their types and roles within the sentence. The prompt provides a description of the relation – use this in conjunction with the support instance to guide your reasoning.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. The relation may be explicitly stated or implied through the context of the sentence. Carefully consider the surrounding words and phrases to determine if a connection exists.
+
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_gemma_rpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_greater_topgrad_node1_gemma_20260517_022119.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_rpo_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/tanvir_m2_few1.txt
 ###### STATUS:
+You are given a concept, a description of the relation in brackets, a example sentence exemplifying the relation, and a question.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. These are entities – consider their types and roles within the sentence. The prompt provides a description of the relation – use this in conjunction with the example sentence to guide your reasoning.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the question. The relation may be explicitly stated or implied through the context of the sentence. Carefully consider the surrounding words and phrases to determine if a connection exists.
+
+If the relation holds between the Subject and the Object entities in the question, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_gemma_rpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_few1.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_rpo_node_y
-###### SOURCE:
+###### SOURCE: trainings/20260517_022119_google-gemma-3-4b-it/population.json node 7
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+You need to determine if the query sentence expresses the given relation between the Subject and the Object entities, even if it's not stated directly.
+
+Consider the support instance as an example of the relation. However, it might not be directly applicable to every query. Focus on understanding the *type* of relationship described in the support instance, not on finding a word-for-word match.
+
+When evaluating the query sentence, focus on the core connection between the Subject and the Object. Ignore irrelevant details or specific locations unless they are essential to establishing the relation. Ask yourself: Does this sentence, at its heart, describe the same kind of relationship as the support instance?
+
+If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_gemma_rpo_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round4_lpo2.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_rpo_node_y_greater
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_rpo_greater_node7_gemma_20260517_022119.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_rpo_node_y_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round2_few3.txt 
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+You need to determine if the query sentence expresses the given relation between the Subject and the Object entities, even if it's not stated directly.
+
+Consider the support instance as an example of the relation. However, it might not be directly applicable to every query. Focus on understanding the *type* of relationship described in the support instance, not on finding a word-for-word match.
+
+When evaluating the query sentence, focus on the core connection between the Subject and the Object. Ignore irrelevant details or specific locations unless they are essential to establishing the relation. Ask yourself: Does this sentence, at its heart, describe the same kind of relationship as the support instance?
+
+If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"! otherwise, answer "no".
 ###### CODE: fewrel_gemma_rpo_node_y_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/tanvir_m2_few2.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a sentence serving as an example of the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+You need to determine if the query sentence expresses certain relation between the Subject and the Object entities, even if it's not stated directly.
+
+Consider the instance as an example of the relation. However, it might not be directly applicable to every query. Focus on understanding the *type* of relationship described in the support instance, not on finding a word-for-word match.
+
+When evaluating the query sentence, focus on the core connection between the Subject and the Object. Ignore irrelevant details or specific locations unless they are essential to establishing the relation. Ask yourself: Does this sentence, at its heart, describe the same kind of relationship as the support instance?
+
+If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_gemma_rpo_node_y_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_few2.txt 
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support instance exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+You need to determine if the query sentence expresses this given relation between the Subject and the Object entities, even if it's not stated directly.
+
+Consider the support instance as an example of the relation. However, it might not be directly applicable to every query. Focus on understanding the *type* of relationship described in the support instance, not on finding a word-for-word match.
+
+When evaluating the query sentence, focus on the core connection between the Subject and the Object. Ignore irrelevant details or specific locations unless they are essential to establishing the relation. Ask yourself: Does this sentence, at its heart, describe the same kind of relationship as the support instance?
+
+If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".
 ###### CODE: fewrel_gemma_evoprompt_node_x
-###### SOURCE:
+###### SOURCE: trainings/20260517_193624_google-gemma-3-4b-it/population.json node 7
 ###### STATUS:
-
+Read the relation description, then read the query sentence. The Subject and Object are already marked with tags. Evaluate the possibility of the given relation. Examine the Subject and Object entities, ensuring they align with the relation's definition and context. Assess if the query sentence explicitly or implicitly conveys the required semantic relationship between the Subject and Object, and if the relation's expected type is present. Focus solely on the query sentence's content, avoiding any influence from the example sentence. The support sentence serves as a demonstration of the relation. Answer only "yes" or "no".
 ###### CODE: fewrel_gemma_evoprompt_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round4_lpo1.txt
 ###### STATUS:
+Read the relation description, then read the query sentence. The Subject and Object are already marked with tags. Carefully assess the query sentence. Determine if the query sentence expresses the target relation between the subject and object entities. The support sentence is provided as an example, but prioritize the query sentence when making your determination. Examine the Subject and Object entities, ensuring they align with the relation's definition and context. Assess if the query sentence explicitly or implicitly conveys the required semantic relationship between the Subject and Object, and if the relation's expected type is present. Focus solely on the query sentence's content, ignoring the support sentence. The support sentence serves as a demonstration of the relation. Provide only "yes" or "no".
 
 ###### CODE: fewrel_gemma_evoprompt_node_x_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_round2_few4.txt
 ###### STATUS:
-
+Solve the relation description, then read the query sentence. The Subject and Object are already marked with tags. Evaluate the possibility of the given relation. Examine the Subject and Object entities, ensuring they align with the relation's definition and context. Assess if the query sentence explicitly or implicitly conveys the required semantic relationship between the Subject and Object, and if the relation's expected type is present. Focus solely on the query sentence's content, avoiding any influence from the example sentence. The support sentence serves as a demonstration of the relation. Answer only "yes" or "no".
 ###### CODE: fewrel_gemma_evoprompt_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round2_few4.txt
 ###### STATUS:
-
+Read the relation description, then read the query sentence. The Subject and Object are already marked with tags. Evaluate the possibility of the given relation. Examine the Subject and Object entities, ensuring they align with the relation's definition and context. Assess if the query sentence explicitly or implicitly conveys the required semantic relationship between the Subject and Object, and if the relation's expected type is present. Focus solely on the query sentence's content, avoiding any influence from the example sentence. The support sentence serves as a demonstration of the relation. Answer only "yes'' or "no".
 ###### CODE: fewrel_gemma_evoprompt_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_few1.txt
 ###### STATUS:
-
+Read the description, then read the query sentence. The Subject and Object are already marked with tags. Evaluate the possibility of the given relation. Examine the Subject and Object entities, ensuring they align with the relation's definition and context. Assess if the query sentence explicitly or implicitly conveys the required semantic relationship between the Subject and Object, and if the relation's expected type is present. Focus solely on the query sentence's content, avoiding any influence from the example sentence. The sentence serves as a demonstration of the relation. Answer only "yes" or "no".
 ###### CODE: fewrel_gemma_evoprompt_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_few1.txt
 ###### STATUS:
-
+Read the relation . then read the query sentence. The Subject and Object entities are already marked with tags. Evaluate the possibility of the given relation. Examine the Subject and Object entities, ensuring they align with the relation's definition and context. Assess if the query sentence explicitly or implicitly conveys the required semantic relationship between the Subject and Object, and if the relation's expected type is present. Focus solely on the query sentence's content, avoiding any influence from the example sentence. The support sentence serves as a demonstration of the relation. Answer only "yes" or "no".
 ###### CODE: fewrel_gemma_evoprompt_node_y
-###### SOURCE:
+###### SOURCE: trainings/20260517_193624_google-gemma-3-4b-it/population.json node 14
 ###### STATUS:
-
+Decide whether the given relation accurately depicts the specified relationship between the tagged Subject and Object entities in the query sentence. The support sentence exemplifies the relation; consider it for understanding the relation's nature, but focus solely on the query sentence for evaluating the presence of the relation. Verify the relation's definition, entity roles, and whether the relationship is explicitly stated or reasonably inferred from the query. Answer "yes" if the relation accurately reflects the relationship between the Subject and Object in the query; otherwise answer "no".
 ###### CODE: fewrel_gemma_evoprompt_node_y_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round4_lpo2.txt
 ###### STATUS:
+Decide whether the given relation accurately depicts the specified relationship between the tagged Subject and Object entities in the query sentence. This sentence exemplifies the relation; use it as a reference to understand the relation's nature, but strictly evaluate the query sentence alone for the presence of the relation. Verify the relation's definition, entity roles, and whether the relationship is explicitly stated or reasonably inferred from the query. Answer "yes" if the relation accurately reflects the relationship between the Subject and Object in the query; otherwise answer "no".
 
 ###### CODE: fewrel_gemma_evoprompt_node_y_greater
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round2_few3.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_evoprompt_node_y_greater-tg
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_evoprompt_greater_topgrad_node14_gemma_20260517_193624.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_evoprompt_node_y_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m2_few2.txt
 ###### STATUS:
-
+Decide whether the given relation accurately depicts the specified relationship between the entity and entities in the query sentence. The support sentence exemplifies the relation; consider it for understanding the relation’s nature, but focus solely on the query sentence for evaluating the presence of the relation. Verify the relation’s definition, entity roles, and whether the relationship is explicitly stated or reasonably inferred from the query. Answer "yes" if the relation accurately reflects the relationship between the entity and entities in the query; otherwise answer "no".
 ###### CODE: fewrel_gemma_evoprompt_node_y_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_few2.txt
 ###### STATUS:
-
+Decide whether the given relation accurately depicts the specified relationship between the tagged Subject and Object entities in the query sentence. The support sentence exemplifies the relation; consider it for understanding the relation’s nature, but focus solely on the query sentence for evaluating the presence of the relation. Verify the relation’s definition, entity roles, and whether the relationship is explicitly stated or reasonably inferred from the query. Answer "yes" if the relation accurately reflects the relationship between the Subject and Object in the query; otherwise answer "no".
 ###### CODE: fewrel_gemma_etgpo_node_x
-###### SOURCE:
+###### SOURCE: unified_optimization_results/unified_opt_fs_fewrel_20260517_023518/generated_prompt_candidates.json node 4
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. Focus on the *core meaning* of the relation, not superficial word matches with the support sentence. Consider the broader context of the query sentence and how the relationship might apply even if the specific entities or wording are different.  Recognize that relationships can exist even if the query uses different phrasing or figurative language (e.g., 'like,' 'similar to') to express the connection. Adapt your reasoning to the specific context of the query; a relationship that applies to cities might not directly apply to events in the same way. If the query demonstrates the same underlying relationship between the Subject and Object as defined by the relation, answer "yes"; otherwise, answer "no".
 
 ###### CODE: fewrel_gemma_etgpo_node_x_lpo
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round4_lpo2.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. First, carefully identify what qualities define the Subject and Object within the context of the relation. Then, determine the key properties that characterize the relationship described in the support sentence.  Assess if the query sentence demonstrates these same key properties between the Subject and Object, considering the broader context. A single difference in the relationship's properties is sufficient to conclude it does not hold.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. Focus on the *core meaning* of the relation, not superficial word matches with the support sentence. Consider the broader context of the query sentence and how the relationship might apply even if the specific entities or wording are different. Recognize that relationships can exist even if the query uses different phrasing or figurative language (e.g., 'like,' 'similar to') to express the connection. Ensure your reasoning is grounded in the key properties of the relationship, and remember that a single contrasting property warrants a "no" answer. If the query demonstrates the same underlying relationship between the Subject and Object as defined by the relation, answer "yes"; otherwise, answer "no". Answer with only "yes" or "no".
 
 ###### CODE: fewrel_gemma_etgpo_node_x_greater
-###### SOURCE:
+###### SOURCE: nohup_outs/fewrel_superstart_etgpo_greater_node4_gemma_unified_opt_fs_fewrel_20260517_023518.out (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_etgpo_node_x_greater-tg
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m3_round2_few5.txt
 ###### STATUS:
+You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. Focus on the *core meaning* of the relation, not superficial word matches with the support sentence. Consider the broader context of the query sentence and how the relationship might apply even if the specific entities or wording are different.  Recognize that relationships can exist even if the query uses different phrasing or figurative language (e.g., 'like,' 'similar to') to express the connection. Adapt your reasoning to the specific context of the query; a relationship that applies to cities might not directly apply to events in the same way. If the query demonstrates the same underlying relationship between the Subject and Object as defined by the relation, answer "yes ." otherwise, answer "no".
 ###### CODE: fewrel_gemma_etgpo_node_x_gradpo-gen
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round2_few1.txt (unchanged)
 ###### STATUS:
 
 ###### CODE: fewrel_gemma_etgpo_node_x_gradpo-prob
-###### SOURCE:
+###### SOURCE: codes/nohup_outs/amlan_m1_round2_few2.txt (unchanged)
 ###### STATUS:
-
-
-
-
