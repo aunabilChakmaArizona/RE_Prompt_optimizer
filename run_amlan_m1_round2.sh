@@ -1,19 +1,4 @@
-#!/usr/bin/env bash
-set -euo pipefail
-mkdir -p outputs/logs outputs/opt_prompt
-
-# Generated from all_the_prompts.txt
-# Each CODE block is passed as the instruction split; answer/input splits come from agents.agent_prompts.
-# Commands run with nohup in the background.
-# All commands still use cuda:0.
-# Prompt blocks: 140
-# Empty-status non-empty prompt blocks: 16
-# Empty-status empty prompt blocks skipped: 34
-# Status running/done blocks skipped: 90
-# Other non-empty status blocks skipped: 0
-# Exact duplicate non-empty blocks skipped: 0
-
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
 
 To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
 1. **Verify the subject and object types**: 
@@ -25,8 +10,8 @@ To determine if the relation holds between the Subject and Object entities in th
    - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation'"'"'s description explicitly permits it. 
 4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
 
-If the relation holds, answer "yes"; otherwise, answer "no".' > outputs/logs/001_tacred_gemma_rpo_node_x_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_x_gradpo-gen_cross --prompt 'You are given a relation name, a definition of the relation in bracketed text, a support example sentence exemplifying the relation, and a query inquiry sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+If the relation holds, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_x_gradpo-gen_cross --prompt 'You are given a relation name, a definition of the relation in bracketed text, a support example sentence exemplifying the relation, and a query inquiry sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
 
 To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
 1. **Verify the subject and object types**: 
@@ -38,8 +23,8 @@ To determine if the relation holds between the Subject and Object entities in th
    - Avoid treating abstract terms (e.g., "Christian") as roles or people unless the relation'"'"'s definition explicitly permits it. 
 4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. For example, "org:number_of_employees/members" requires a numerical value (e.g., "42,000") to indicate the count, not a vague term like "many." 
 
-If the relation holds, answer "yes"; otherwise, answer "no".' > outputs/logs/002_tacred_gemma_rpo_node_x_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+If the relation holds, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
 
 To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
 1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation'"'"'s definition (e.g., "org:stateorprovince_of_headquarters" requires the object to be a state/province, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
@@ -47,8 +32,8 @@ To determine if the relation holds between the Subject and Object entities in th
 3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorprovince_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization'"'"'s headquarters. 
 4. **Focus on explicit connections**: Only answer "yes" if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "state/province" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
 
-If the relation holds, answer "yes"; otherwise, answer "no".' > outputs/logs/003_tacred_gemma_rpo_node_y_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation property, a description of the relation in curly braces, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
+If the relation holds, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation property, a description of the relation in curly braces, a support sentence exemplifying the relation, and a query sentence. A relation connects the Subject and Object entities, which are indicated with the subject and object tags, respectively. 
 
 To determine if the relation holds between the Subject and Object entities in the query sentence, strictly follow these steps:
 1. **Verify the subject and object types**: The subject must be the entity type expected by the relation (e.g., "org" for organization, "per" for person). The object must match the relation'"'"'s definition (e.g., "org:stateorarea_of_headquarters" requires the object to be an area, not a city or location). If the subject is a location (e.g., "Kennedy Space Center"), it must be explicitly tied to an organization (e.g., NASA) as its headquarters. 
@@ -56,8 +41,8 @@ To determine if the relation holds between the Subject and Object entities in th
 3. **Avoid role vs. person confusion**: If the object is a role (e.g., "chief executive") or title (e.g., "Rep."), it does not satisfy relations requiring a person (e.g., "employee_of"). Similarly, ensure the subject is the correct entity type (e.g., "org" for organizations, "per" for people). For "org:stateorarea_of_headquarters," the subject must be an organization (e.g., "NASA"), not a location (e.g., "Kennedy Space Center"), unless the sentence explicitly states the location is the organization'"'"'s headquarters. 
 4. **Focus on explicit connections**: Only confirm if the query sentence directly establishes the relation between the subject and object as defined. This includes ensuring the object is the correct entity type (e.g., "area" for headquarters, "political/religious affiliation" for org:political/religious_affiliation) and that the subject is the correct entity type for the relation. 
 
-If the relation holds, answer "yes"; otherwise, answer "no".' > outputs/logs/004_tacred_gemma_rpo_node_y_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, and a query sentence.
+If the relation holds, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, and a query sentence.
 
 Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. The Subject and the Object entities are indicated with the subject and object tags, respectively. Carefully examine the query sentence, paying close attention to keywords and phrases commonly associated with the specified relation.
 
@@ -69,8 +54,8 @@ Consider the following:
 
 Do not answer "yes" unless the query sentence explicitly or strongly implies the specified relation. Base your decision *solely* on the content of the query sentence. Ignore any support examples provided.
 
-If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".' > outputs/logs/005_tacred_qwen_rpo_node_x_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_x_gradpo-gen_cross --prompt 'You are given a relation name, a description of the relation in brackets, and a query sentence.
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_x_gradpo-gen_cross --prompt 'You are given a relation name, a description of the relation in brackets, and a query sentence.
 
 Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. The Subject and the Object entities are indicated with the subject and object tags, respectively. Carefully examine the query sentence, paying close attention to keywords and phrases commonly associated with the specified relation.
 
@@ -82,8 +67,8 @@ Consider the following:
 
 Do not answer "yes" unless the query sentence explicitly or strongly implies the specified relation. Base your decision solely on the content of the query sentence. Ignore any support examples provided.
 
-If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".' > outputs/logs/006_tacred_qwen_rpo_node_x_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. Carefully examine the query sentence and consider the relationship between the subject and object entities. Do not answer "yes" simply because the subject and object are related in a general sense; verify that the query sentence explicitly or implicitly expresses the specified relation. Base your decision *solely* on the content of the query sentence. Ignore the support sentence.
 
@@ -103,8 +88,8 @@ Avoid being distracted by surrounding details or circumstantial information with
 
 <b>Do not let pronouns or other linguistic complexities obscure the core meaning of the sentence. Focus on the concrete information presented.**
 
-If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".' > outputs/logs/007_tacred_qwen_rpo_node_y_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation name, a description of the relation in brackets, a example exemplifying the relation, and a query sentence.
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_qwen_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation name, a description of the relation in brackets, a example exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. Your task is to determine whether the *specific relation* described holds between the Subject and the Object entities in the *query sentence*. Carefully examine the query sentence and consider the relationship between the subject and object entities. Do not answer "yes" simply because the subject and object are related in a general sense; verify that the query sentence explicitly or implicitly expresses the specified relation. Base your decision *solely* on the content of the query sentence. Ignore the example.
 
@@ -124,8 +109,8 @@ Be mindful of potential ambiguities. Does the sentence present multiple possible
 
 Do not let pronouns or other linguistic complexities obscure the core meaning of the sentence. Focus on the concrete information presented.
 
-If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".' > outputs/logs/008_tacred_qwen_rpo_node_y_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support instance that exemplifies the relation, and a query sentence. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query sentence. 
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support instance that exemplifies the relation, and a query sentence. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query sentence. 
 
 **Key Steps:**
 1. **Identify the subject and object entities** in the query sentence (they are marked with <subject> and <object> tags).
@@ -135,8 +120,8 @@ nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma
 **Example:**  
 For the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object in the query is a genre or a different entity type, the answer is "no."
 
-If the relation holds between the subject and object entities in the query sentence, answer "yes"; otherwise, answer "no."' > outputs/logs/009_fewrel_gemma_rpo_node_x_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_x_gradpo-gen_cross --prompt 'You are told a relation name, a description of the relation in quotes, a support instance that exemplifies the relation, and a query text. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query text. 
+If the relation holds between the subject and object entities in the query sentence, answer "yes"; otherwise, answer "no."'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_x_gradpo-gen_cross --prompt 'You are told a relation name, a description of the relation in quotes, a support instance that exemplifies the relation, and a query text. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance holds between the subject and object entities in the query text. 
 
 **Key Steps:**
 1. **Identify the subject and object entities** in the query text (they are marked with <subject> and <object> tags).
@@ -146,8 +131,8 @@ nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma
 **Example:**  
 For the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object in the query is a genre or a different entity type, the answer is "no."
 
-If the relation holds between the subject and object entities in the query text, answer "yes"; otherwise, answer "no."' > outputs/logs/010_fewrel_gemma_rpo_node_x_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support instance illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence explicitly expresses the relation defined by the relation name and description.
+If the relation holds between the subject and object entities in the query text, answer "yes"; otherwise, answer "no."'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support instance illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence explicitly expresses the relation defined by the relation name and description.
 
 **Key Guidelines:**
 1. **Understand the relation'"'"'s definition precisely**: 
@@ -168,8 +153,8 @@ nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma
 - In the "original network" relation, the object must be a network or platform (e.g., "BBC Three", "Canal 13") that directly distributes the subject'"'"'s work. 
 - In the "instance of" relation, the subject must be a specific example of the object (e.g., a song on an album, a dam in a country), not a location or category.
 
-Answer "yes" if the query sentence explicitly expresses the relation as defined; otherwise, answer "no."' > outputs/logs/011_fewrel_gemma_rpo_node_y_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation label, a description of the relation in curly braces, a support occurrence illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence clearly indicates the relation defined by the relation label and description.
+Answer "yes" if the query sentence explicitly expresses the relation as defined; otherwise, answer "no."'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation label, a description of the relation in curly braces, a support occurrence illustrating the relation, and a query sentence. The relation connects a **subject** entity (marked with <subject> tags) and an **object** entity (marked with <object> tags). Your task is to determine whether the query sentence clearly indicates the relation defined by the relation label and description.
 
 **Key Guidelines:**
 1. **Understand the relation'"'"'s definition precisely**: 
@@ -190,22 +175,22 @@ nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma
 - In the "original network" relation, the object must be a network or platform (e.g., "BBC Three", "Canal 13") that directly distributes the subject'"'"'s work. 
 - In the "instance of" relation, the subject must be a specific example of the object (e.g., a song on an album, a dam in a country), not a location or category.
 
-Answer "yes" if the query sentence clearly indicates the relation as defined; otherwise, answer "no."' > outputs/logs/012_fewrel_gemma_rpo_node_y_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+Answer "yes" if the query sentence clearly indicates the relation as defined; otherwise, answer "no."'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_x_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. These are entities – consider their types and roles within the sentence. The prompt provides a description of the relation – use this in conjunction with the support instance to guide your reasoning.
 
 You need to decide whether the relation holds between the Subject and the Object entities in the query sentence. The relation may be explicitly stated or implied through the context of the sentence. Carefully consider the surrounding words and phrases to determine if a connection exists.
 
-If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".' > outputs/logs/013_fewrel_qwen_rpo_node_x_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_x_gradpo-gen_cross --prompt 'You are given a concept, a description of the relation in brackets, a example sentence exemplifying the relation, and a question.
+If the relation holds between the Subject and the Object entities in the query sentence, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_x_gradpo-gen_cross --prompt 'You are given a concept, a description of the relation in brackets, a example sentence exemplifying the relation, and a question.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively. These are entities – consider their types and roles within the sentence. The prompt provides a description of the relation – use this in conjunction with the example sentence to guide your reasoning.
 
 You need to decide whether the relation holds between the Subject and the Object entities in the question. The relation may be explicitly stated or implied through the context of the sentence. Carefully consider the surrounding words and phrases to determine if a connection exists.
 
-If the relation holds between the Subject and the Object entities in the question, answer "yes"; otherwise, answer "no".' > outputs/logs/014_fewrel_qwen_rpo_node_x_gradpo-gen_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+If the relation holds between the Subject and the Object entities in the question, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_y_cross --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
 You need to determine if the query sentence expresses the given relation between the Subject and the Object entities, even if it'"'"'s not stated directly.
@@ -214,8 +199,8 @@ Consider the support instance as an example of the relation. However, it might n
 
 When evaluating the query sentence, focus on the core connection between the Subject and the Object. Ignore irrelevant details or specific locations unless they are essential to establishing the relation. Ask yourself: Does this sentence, at its heart, describe the same kind of relationship as the support instance?
 
-If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".' > outputs/logs/015_fewrel_qwen_rpo_node_y_cross.log 2>&1 &
-nohup python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation name, a description of the relation in brackets, a sentence serving as an example of the relation, and a query sentence.
+If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:0 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_y_gradpo-gen_cross --prompt 'You are given a relation name, a description of the relation in brackets, a sentence serving as an example of the relation, and a query sentence.
 
 A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
 You need to determine if the query sentence expresses certain relation between the Subject and the Object entities, even if it'"'"'s not stated directly.
@@ -224,4 +209,4 @@ Consider the instance as an example of the relation. However, it might not be di
 
 When evaluating the query sentence, focus on the core connection between the Subject and the Object. Ignore irrelevant details or specific locations unless they are essential to establishing the relation. Ask yourself: Does this sentence, at its heart, describe the same kind of relationship as the support instance?
 
-If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".' > outputs/logs/016_fewrel_qwen_rpo_node_y_gradpo-gen_cross.log 2>&1 &
+If the query sentence expresses the relation between the Subject and the Object entities, answer "yes"; otherwise, answer "no".'
