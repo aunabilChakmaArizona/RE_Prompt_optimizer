@@ -4020,7 +4020,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-root-dir "../greater_experiments" \
   --output-substring "fewrel_scratch_5steps_gemma4_n30000" > nohup_outs/fewrel_scratch_5steps_gemma4_greater_scratch_5steps_n30000_lmd0.2_k25_u10_z5_gemma4.out 2>&1 &
 
-#done #scratch
+#done #scratch_final fewrel_qwen_greater
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:1" \
@@ -4073,7 +4073,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-root-dir "../greater_experiments" \
   --output-substring "fewrel_scratch_10steps_qwen4_top_grad" > nohup_outs/fewrel_scratch_10steps_qwen4_greater_scratch_5steps_n10000_lmd0.2_k25_u10_z5_qwen4_top_grad.out 2>&1 &
 
-# done #scratch
+# done #scratch_final fewrel_gemma_greater
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:2" \
@@ -5414,7 +5414,7 @@ nohup python -u core_trainer_evoprompt_de.py \
   --evoprompt-resume-from-nohup "nohup_outs/nohup_evoprompt_de_gemma12opt_gemma4inf_itr10_train1000_final_step_dev_resume.out" \
   > nohup_outs/nohup_evoprompt_de_gemma12opt_gemma4inf_itr20_train1000_final_step_dev_resume.out 2>&1 &
 
-#done #scratch
+#done #scratch_final tacred_gemma_greater
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "google/gemma-3-4b-it" \
   --device-map "cuda:3" \
@@ -5441,7 +5441,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --resume-out-file "nohup_outs/greater_scratch_5steps_n10000_lmd0.2_k25_u10_z5_gemma4.out" \
   > nohup_outs/greater_resume_10steps_n10000_lmd0.2_k25_u10_z5_gemma4.out 2>&1 &
 
-#done #scratch
+#done #scratch_final tacred_qwen_greater
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -5468,7 +5468,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --resume-out-file "nohup_outs/greater_scratch_5steps_n10000_lmd0.2_k25_u10_z5_qwen4.out" \
   > nohup_outs/greater_resume_10steps_n10000_lmd0.2_k25_u10_z5_qwen4.out 2>&1 &
 
-#scratch running
+#scratch done
 nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --model "Qwen/Qwen3-4B" \
   --device-map "cuda:3" \
@@ -5522,7 +5522,7 @@ nohup python -u GreaTer/experiments/relation_extraction_greater.py \
   --output-substring "greater_topgrad_scratch_10steps_gemma4" \
   > nohup_outs/greater_topgrad_scratch_10steps_gemma4.out 2>&1 &
 
-#scratch running
+#scratch_final tacred_qwen_gradpo-gen done
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -5552,7 +5552,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "superstart_llm_cand_sugg_scratch_beam5_qwen4" \
   > nohup_outs/superstart_llm_cand_sugg_scratch_beam5_qwen4.out 2>&1 &
 
-#scratch running
+#scratch_final fewrel_qwen_gradpo-gen done
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -5582,7 +5582,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "fewrel_superstart_llm_cand_sugg_scratch_beam5_qwen4" \
   > nohup_outs/fewrel_superstart_llm_cand_sugg_scratch_beam5_qwen4.out 2>&1 &
 
-#scratch running
+#scratch_final tacred_gemma_gradpo-gen done
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -5612,7 +5612,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "superstart_llm_cand_sugg_scratch_beam5_gemma4" \
   > nohup_outs/superstart_llm_cand_sugg_scratch_beam5_gemma4.out 2>&1 &
 
-#scratch next
+#scratch_final fewrel_gemma_gradpo-gen done
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "google/gemma-3-4b-it" \
   --mode "LLM_CANDIDATE_SUGGESTION" \
@@ -5642,7 +5642,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "fewrel_superstart_llm_cand_sugg_scratch_beam5_gemma4" \
   > nohup_outs/fewrel_superstart_llm_cand_sugg_scratch_beam5_gemma4.out 2>&1 &
 
-#scratch later
+#scrat skipped
 nohup python -u agents/agent_gradient_eval_debug.py \
   --model "Qwen/Qwen3-4B" \
   --mode "LM_PROBABILITY_CANDIDATE_SUGGESTION" \
