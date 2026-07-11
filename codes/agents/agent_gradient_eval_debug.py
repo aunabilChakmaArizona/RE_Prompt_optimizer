@@ -74,6 +74,12 @@ BEAM_REPLACEMENT_MODE_CHOICES = [
     BEAM_REPLACEMENT_MODE_LLM_SYNTHESIS,
     BEAM_REPLACEMENT_MODE_DIRECT_REPLACEMENT,
 ]
+REGION_SELECTION_MODE_TOP = "top"
+REGION_SELECTION_MODE_RANDOM = "random"
+REGION_SELECTION_MODE_CHOICES = [
+    REGION_SELECTION_MODE_TOP,
+    REGION_SELECTION_MODE_RANDOM,
+]
 MODE_CHOICES = [
     MODE_DIRECT_CANDIDATE_GENERATION,
     MODE_LLM_CANDIDATE_SUGGESTION,
@@ -236,6 +242,18 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=1,
         help="Use the top X ranked gradient regions for localized prompt editing.",
+    )
+    parser.add_argument(
+        "--region-selection-mode",
+        choices=REGION_SELECTION_MODE_CHOICES,
+        default=REGION_SELECTION_MODE_TOP,
+        help=(
+            "How to select spans for localized prompt editing after gradient regions "
+            "are built and protected tokens are filtered. 'top' preserves the legacy "
+            "highest-gradient behavior. 'random' samples up to --num-edit-regions "
+            "editable spans using --seed and ignores --max-regions/--max-total-region-tokens "
+            "while building the upstream region pool."
+        ),
     )
     parser.add_argument(
         "--num-generated-prompts",
@@ -615,6 +633,29 @@ def _format_selection_metrics_for_log(selection_metrics: Dict[str, Any] | None) 
     return ", ".join(parts)
 
 
+def _resolve_gradient_region_limits_for_selection(
+    args: argparse.Namespace,
+) -> Tuple[int | None, int | None]:
+    if args.region_selection_mode == REGION_SELECTION_MODE_RANDOM:
+        return None, None
+    return args.max_regions, args.max_total_region_tokens
+
+
+def _resolve_region_selection_seed(args: argparse.Namespace) -> int:
+    return int(getattr(args, "_region_selection_seed", args.seed))
+
+
+def _build_region_selection_summary(region_details: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "mode": region_details.get("candidate_region_selection_mode"),
+        "method": region_details.get("candidate_region_selection_method"),
+        "seed": region_details.get("region_selection_seed"),
+        "candidate_region_count": region_details.get("candidate_region_count"),
+        "requested_num_edit_regions": region_details.get("requested_num_edit_regions"),
+        "selected_region_count": region_details.get("num_edit_regions"),
+    }
+
+
 def _format_log_context(log_context: Dict[str, Any] | None) -> str:
     if not log_context:
         return ""
@@ -984,12 +1025,16 @@ def _resolve_region_details(
     tokenizer,
     gradient_results: Dict[str, Any],
     num_edit_regions: int,
+    region_selection_mode: str,
+    selection_seed: int,
 ) -> Dict[str, Any]:
     top_regions = gradient_results.get("top_regions", [])
     if not top_regions:
         raise ValueError("No top_regions were returned by the gradient analysis.")
     if num_edit_regions <= 0:
         raise ValueError("--num-edit-regions must be positive.")
+    if region_selection_mode not in REGION_SELECTION_MODE_CHOICES:
+        raise ValueError(f"Unsupported region selection mode: {region_selection_mode}")
 
     encoded = tokenizer(
         instruction_prompt,
@@ -1069,7 +1114,18 @@ def _resolve_region_details(
     # fragments. Rank only after all fragments exist so each region competes by
     # its own strongest remaining gradient token.
     candidate_regions.sort(key=_candidate_region_sort_key, reverse=True)
-    selected_regions = candidate_regions[:num_edit_regions]
+    if region_selection_mode == REGION_SELECTION_MODE_RANDOM:
+        selection_count = min(num_edit_regions, len(candidate_regions))
+        selected_regions = random.Random(selection_seed).sample(
+            candidate_regions,
+            k=selection_count,
+        )
+        selected_regions.sort(key=lambda item: item["start_char"])
+        candidate_region_selection_method = "random_post_split_editable_regions"
+    else:
+        selected_regions = candidate_regions[:num_edit_regions]
+        candidate_region_selection_method = "post_split_max_token_gradient_norm"
+
     for region_rank, region in enumerate(selected_regions, start=1):
         region["region_rank"] = region_rank
 
@@ -1087,7 +1143,11 @@ def _resolve_region_details(
         "num_edit_regions": len(selected_regions),
         "selected_regions": selected_regions,
         "marked_prompt": marked_prompt,
-        "candidate_region_selection_method": "post_split_max_token_gradient_norm",
+        "candidate_region_selection_method": candidate_region_selection_method,
+        "candidate_region_selection_mode": region_selection_mode,
+        "candidate_region_count": len(candidate_regions),
+        "requested_num_edit_regions": num_edit_regions,
+        "region_selection_seed": selection_seed,
     }
 
 
@@ -2335,6 +2395,9 @@ def _build_iteration_summary(
             "num_instances": gradient_results.get("num_instances"),
             "token_gradients": len(gradient_results.get("token_gradients", [])),
             "top_regions_count": len(gradient_results.get("top_regions", [])),
+            "region_selection": copy.deepcopy(
+                prompt_editing_payload.get("region_selection", {})
+            ),
             "selected_regions": copy.deepcopy(prompt_editing_payload.get("selected_regions", [])),
         },
         "region_candidate_meta_prompt": prompt_editing_payload.get(
@@ -3267,6 +3330,8 @@ def _run_direct_candidate_generation(
         tokenizer=tokenizer,
         gradient_results=gradient_results,
         num_edit_regions=args.num_edit_regions,
+        region_selection_mode=args.region_selection_mode,
+        selection_seed=_resolve_region_selection_seed(args),
     )
     meta_prompt = _build_gradient_region_meta_prompt(
         instruction_prompt=instruction_prompt,
@@ -3363,6 +3428,9 @@ def _run_direct_candidate_generation(
         )
 
     prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
+    prompt_editing_payload["region_selection"] = _build_region_selection_summary(
+        region_details
+    )
     prompt_editing_payload["meta_prompt"] = meta_prompt
     prompt_editing_payload["generated_prompt_variants"] = validated_variants
     return prompt_editing_payload
@@ -3466,6 +3534,9 @@ def _build_and_evaluate_region_candidate_prompts(
         variant["retained_for_full_validation"] = True
 
     prompt_editing_payload["selected_regions"] = region_details["selected_regions"]
+    prompt_editing_payload["region_selection"] = _build_region_selection_summary(
+        region_details
+    )
     prompt_editing_payload["region_candidate_meta_prompt"] = (
         region_candidate_generation_payload.get("meta_prompt")
         if region_candidate_generation_payload
@@ -3535,6 +3606,8 @@ def _run_llm_candidate_suggestion(
         tokenizer=tokenizer,
         gradient_results=gradient_results,
         num_edit_regions=args.num_edit_regions,
+        region_selection_mode=args.region_selection_mode,
+        selection_seed=_resolve_region_selection_seed(args),
     )
     print(
         "[agent_gradient_eval_debug] generating all-region candidates in a single LLM run:",
@@ -3596,6 +3669,8 @@ def _run_lm_probability_candidate_suggestion(
         tokenizer=tokenizer,
         gradient_results=gradient_results,
         num_edit_regions=args.num_edit_regions,
+        region_selection_mode=args.region_selection_mode,
+        selection_seed=_resolve_region_selection_seed(args),
     )
     print(
         "[agent_gradient_eval_debug] generating LM probability region candidates:",
@@ -3648,6 +3723,7 @@ def _run_candidate_suggestion_iteration(
         f"iteration={iteration_index}",
         f"Q={args.Q}",
     )
+    args._region_selection_seed = args.seed + iteration_index - 1
     print("[agent_gradient_eval_debug] iteration input prompt:")
     print(instruction_prompt)
 
@@ -3744,6 +3820,9 @@ def _run_candidate_suggestion_iteration(
         "[agent_gradient_eval_debug] running gradient analysis",
         f"iteration={iteration_index}",
     )
+    effective_max_regions, effective_max_total_region_tokens = (
+        _resolve_gradient_region_limits_for_selection(args)
+    )
     gradient_results = analyze_relation_extraction_binary_pairs(
         instruction_prompt=instruction_prompt,
         binary_pairs=sampled_pairs,
@@ -3753,8 +3832,8 @@ def _run_candidate_suggestion_iteration(
         gradient_batch_size=args.gradient_batch_size,
         num_candidates=args.num_candidates,
         candidate_mode=args.candidate_mode,
-        max_regions=args.max_regions,
-        max_total_region_tokens=args.max_total_region_tokens,
+        max_regions=effective_max_regions,
+        max_total_region_tokens=effective_max_total_region_tokens,
         max_region_tokens=args.max_region_tokens,
         region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
         embedding_step_size=args.embedding_step_size,
@@ -3767,6 +3846,9 @@ def _run_candidate_suggestion_iteration(
         f"candidate_mode={args.candidate_mode}",
         f"token_gradients={len(gradient_results['token_gradients'])}",
         f"top_regions={len(gradient_results['top_regions'])}",
+        f"region_selection_mode={args.region_selection_mode}",
+        f"effective_max_regions={effective_max_regions}",
+        f"effective_max_total_region_tokens={effective_max_total_region_tokens}",
     )
 
     baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)
@@ -4146,6 +4228,9 @@ def main() -> None:
         )
 
         print("[agent_gradient_eval_debug] running gradient analysis")
+        effective_max_regions, effective_max_total_region_tokens = (
+            _resolve_gradient_region_limits_for_selection(args)
+        )
         gradient_results = analyze_relation_extraction_binary_pairs(
             instruction_prompt=instruction_prompt,
             binary_pairs=sampled_pairs,
@@ -4155,8 +4240,8 @@ def main() -> None:
             gradient_batch_size=args.gradient_batch_size,
             num_candidates=args.num_candidates,
             candidate_mode=args.candidate_mode,
-            max_regions=args.max_regions,
-            max_total_region_tokens=args.max_total_region_tokens,
+            max_regions=effective_max_regions,
+            max_total_region_tokens=effective_max_total_region_tokens,
             max_region_tokens=args.max_region_tokens,
             region_expansion_threshold_ratio=args.region_expansion_threshold_ratio,
             embedding_step_size=args.embedding_step_size,
@@ -4168,6 +4253,9 @@ def main() -> None:
             f"candidate_mode={args.candidate_mode}",
             f"token_gradients={len(gradient_results['token_gradients'])}",
             f"top_regions={len(gradient_results['top_regions'])}",
+            f"region_selection_mode={args.region_selection_mode}",
+            f"effective_max_regions={effective_max_regions}",
+            f"effective_max_total_region_tokens={effective_max_total_region_tokens}",
         )
 
         baseline_score_payload = _build_score_payload_from_pairs(sampled_pairs)

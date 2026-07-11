@@ -512,16 +512,22 @@ def _select_top_regions(
     gradient_scores: Sequence[float],
     tokens: Sequence[str],
     *,
-    max_regions: int,
-    max_total_tokens: int = 5,
+    max_regions: int | None,
+    max_total_tokens: int | None = 5,
     max_region_tokens: int | None = None,
     expansion_threshold_ratio: float = 0.6,
 ) -> List[TokenRegion]:
-    if max_regions <= 0 or max_total_tokens <= 0:
+    if max_regions is not None and max_regions <= 0:
+        return []
+    if max_total_tokens is not None and max_total_tokens <= 0:
         return []
     if max_region_tokens is not None and max_region_tokens <= 0:
         return []
 
+    effective_max_regions = max_regions if max_regions is not None else len(gradient_scores)
+    effective_max_total_tokens = (
+        max_total_tokens if max_total_tokens is not None else len(gradient_scores)
+    )
     remaining = set(range(len(gradient_scores)))
     ranked = sorted(
         range(len(gradient_scores)),
@@ -539,7 +545,7 @@ def _select_top_regions(
             continue
 
         threshold = peak_score * expansion_threshold_ratio
-        remaining_token_budget = max_total_tokens - selected_token_count
+        remaining_token_budget = effective_max_total_tokens - selected_token_count
         if remaining_token_budget <= 0:
             break
 
@@ -582,7 +588,10 @@ def _select_top_regions(
                 token_indices=token_indices,
             )
         )
-        if len(regions) == max_regions or selected_token_count >= max_total_tokens:
+        if (
+            len(regions) == effective_max_regions
+            or selected_token_count >= effective_max_total_tokens
+        ):
             break
 
     return regions
@@ -597,8 +606,8 @@ def analyze_relation_extraction_binary_pairs(
     dataset_type: str = "fs_tacred",
     gradient_batch_size: int | None = None,
     num_candidates: int = 5,
-    max_regions: int = 1,
-    max_total_region_tokens: int = 10,
+    max_regions: int | None = 1,
+    max_total_region_tokens: int | None = 10,
     max_region_tokens: int | None = None,
     region_expansion_threshold_ratio: float = 0.6,
     embedding_step_size: float = 1.0,
@@ -832,8 +841,8 @@ def analyze_relation_extraction_dataset(
     query_index: int = 0,
     gradient_batch_size: int | None = None,
     num_candidates: int = 5,
-    max_regions: int = 1,
-    max_total_region_tokens: int = 10,
+    max_regions: int | None = 1,
+    max_total_region_tokens: int | None = 10,
     max_region_tokens: int | None = None,
     region_expansion_threshold_ratio: float = 0.6,
     embedding_step_size: float = 1.0,
