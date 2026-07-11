@@ -9803,3 +9803,6 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "fewrel_superstart_etgpo_gradpo_prob_node4_gemma_unified_opt_fs_fewrel_20260517_023518" \
   > nohup_outs/fewrel_superstart_etgpo_gradpo_prob_node4_gemma_unified_opt_fs_fewrel_20260517_023518.out 2>&1 & 
+
+
+### random-span selection experiments
