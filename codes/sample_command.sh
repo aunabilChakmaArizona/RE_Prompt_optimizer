@@ -7551,7 +7551,7 @@ nohup python -u agents/agent_gradient_eval_debug.py \
   --output-substring "superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node2_qwen4_v9" \
   > nohup_outs/superstart_llm_prob_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_20260508_122409_node2_qwen4_v9.out 2>&1 &
 
-## Evoprompt DE
+## Evoprompt DE #here
 # Qwen trainings/20260513_093517_Qwen-Qwen3-4B/population.json - node 14 and 42 : 14=	19.97,	26.04; 42 = 22.72,	32.35
 # Gemma trainings/20260513_093554_google-gemma-3-4b-it/population.json - node 26 and 34: 17.47	20.34	; 34 =	18.13	22.72	
 
@@ -8497,9 +8497,18 @@ python -u agents/agent_gradient_eval_debug.py \
   --output-root-dir "../gradients_experiments" \
   --output-substring "superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v8"
 
+### first stage scores
+### fs_tacred 2nd stage runs
+# qwen RPO node 2: 29.01, node 10: 30.29
+# gemma node3: 13.16, node 18 15.06
 
+## Evoprompt DE #here
+# Qwen trainings/20260513_093517_Qwen-Qwen3-4B/population.json - node 14 and 42 : 14=	19.97,	26.04; 42 = 22.72,	32.35
+# Gemma trainings/20260513_093554_google-gemma-3-4b-it/population.json - node 26 and 34: 17.47	20.34	; 34 =	18.13	22.72	
 
-
+## ETGPO
+#qwen node 2 21.02
+#gemma node0 15.53
 
 ### fs_fewrel 2nd stage runs 
 
@@ -9806,3 +9815,632 @@ nohup python -u agents/agent_gradient_eval_debug.py \
 
 
 ### random-span selection experiments
+
+# done on rose cuda2
+# tacred_qwen_rpo_node_x_gradpo-gen_random 
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 2 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node2_qwen4_v7" \
+  > nohup_outs/random_superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node2_qwen4_v7.out 2>&1 &
+
+# done on rose cuda2
+# tacred_qwen_rpo_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260508_122409_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 10 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node10_qwen4_v7" \
+  > nohup_outs/random_superstart_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260508_122409_node10_qwen4_v7.out 2>&1 &
+
+
+
+# done on rose cuda1
+# tacred_qwen_evoprompt_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260513_093517_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 14 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node14_qwen4_v9" \
+  > nohup_outs/random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node14_qwen4_v9.out 2>&1 &
+
+
+# done on rose cuda1
+# tacred_qwen_evoprompt_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:1" \
+  --prompt-source-path "../trainings/20260513_093517_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 42 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node42_qwen4_v9" \
+  > nohup_outs/random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt2_sz20000_20260513_093517_Qwen_node42_qwen4_v9.out 2>&1 &
+
+
+# done on rose cuda1
+# tacred_qwen_etgpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260513_230331/generated_prompt_candidates.json" \
+  --prompt-node-id 2 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra" \
+  > nohup_outs/random_superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r5_er_0.6_mt1_top0.95_sz20000_unified_opt_fs_tacred_20260513_230331_node2_qwen4_v9_ultra.out 2>&1 & 
+
+
+
+# done on rose cuda1
+# tacred_gemma_rpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v8" \
+  > nohup_outs/random_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node3_v8.out 2>&1 & 
+
+
+
+# done on rose cuda1
+# tacred_gemma_rpo_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260508_120655_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 18 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v8" \
+  > nohup_outs/random_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node18_v8.out 2>&1 & 
+
+
+# done on rose cuda1
+# tacred_gemma_evoprompt_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --prompt-source-path "../trainings/20260513_093554_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 26 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node26_v8" \
+  > nohup_outs/random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node26_v8.out 2>&1 & 
+
+# done on rose cuda1
+# tacred_gemma_evoprompt_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --prompt-source-path "../trainings/20260513_093554_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 34 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node34_v8" \
+  > nohup_outs/random_superstart_evoprompt_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_20260508_120655_google-gemma-3-4b-it_node34_v8.out 2>&1 & 
+
+
+# done on rose cuda1
+# tacred_gemma_etgpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --population-path "../unified_optimization_results/unified_opt_fs_tacred_20260514_025450/generated_prompt_candidates.json" \
+  --prompt-node-id 0 \
+  --dataset-type "fs_tacred" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_tacred_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v8" \
+  > nohup_outs/random_superstart_etgpo_llm_cand_sugg_beam5_C5_Q1_stdp2.0_px_0.5_log_r3_er_0.6_mt3_sz30000_unified_opt_fs_tacred_20260514_025450_google-gemma-3-4b-it_node1_v8.out 2>&1 & 
+
+# done on rose cuda1
+# fewrel_qwen_rpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --population-path "../trainings/20260517_021906_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 3 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_rpo_gradpo_node3_20260517_021906_Qwen" \
+  > nohup_outs/random_fewrel_superstart_rpo_gradpo_node3_20260517_021906_Qwen.out 2>&1 & 
+
+
+# done on rose cuda1
+# fewrel_qwen_rpo_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --population-path "../trainings/20260517_021906_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 13 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_rpo_gradpo_node13_20260517_021906_Qwen" \
+  > nohup_outs/random_fewrel_superstart_rpo_gradpo_node13_20260517_021906_Qwen.out 2>&1 & 
+
+
+# done on rose cuda1
+# fewrel_qwen_evoprompt_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --population-path "../trainings/20260517_193615_Qwen-Qwen3-4B/population.json" \
+  --prompt-node-id 25 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_evoprompt_gradpo_node25_20260517_193615_Qwen" \
+  > nohup_outs/random_fewrel_superstart_evoprompt_gradpo_node25_20260517_193615_Qwen.out 2>&1 & 
+
+
+
+# done on rose cuda1
+# fewrel_qwen_etgpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "Qwen/Qwen3-4B" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --population-path "../unified_optimization_results/unified_opt_fs_fewrel_20260517_023848/generated_prompt_candidates.json" \
+  --prompt-node-id 0 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 20000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 5 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --full-eval-split final_step_dev \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_etgpo_gradpo_node0_unified_opt_fs_fewrel_20260517_023848_Qwen" \
+  > nohup_outs/random_fewrel_superstart_etgpo_gradpo_node0_unified_opt_fs_fewrel_20260517_023848_Qwen.out 2>&1 & 
+
+
+# done on rose cuda1
+# fewrel_gemma_rpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --population-path "../trainings/20260517_022119_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 1 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_rpo_gradpo_node1_gemma_20260517_022119" \
+  > nohup_outs/random_fewrel_superstart_rpo_gradpo_node1_gemma_20260517_022119.out 2>&1 & 
+
+
+# done on rose cuda1
+# fewrel_gemma_rpo_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --population-path "../trainings/20260517_022119_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 7 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_rpo_gradpo_node7_gemma_20260517_022119" \
+  > nohup_outs/random_fewrel_superstart_rpo_gradpo_node7_gemma_20260517_022119.out 2>&1 & 
+
+
+# done on rose cuda1
+# fewrel_gemma_evoprompt_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --population-path "../trainings/20260517_193624_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 7 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_evoprompt_gradpo_node7_gemma_20260517_193624" \
+  > nohup_outs/random_fewrel_superstart_evoprompt_gradpo_node7_gemma_20260517_193624.out 2>&1 & 
+
+
+# done on rose cuda1
+# fewrel_gemma_evoprompt_node_y_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:0" \
+  --population-path "../trainings/20260517_193624_google-gemma-3-4b-it/population.json" \
+  --prompt-node-id 14 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_evoprompt_gradpo_node14_gemma_20260517_193624" \
+  > nohup_outs/random_fewrel_superstart_evoprompt_gradpo_node14_gemma_20260517_193624.out 2>&1 &
+
+
+# running on rose cuda1
+# fewrel_gemma_etgpo_node_x_gradpo-gen_random
+nohup python -u agents/agent_gradient_eval_debug.py \
+  --model "google/gemma-3-4b-it" \
+  --mode "LLM_CANDIDATE_SUGGESTION" \
+  --region-selection-mode random \
+  --device-map "cuda:2" \
+  --population-path "../unified_optimization_results/unified_opt_fs_fewrel_20260517_023518/generated_prompt_candidates.json" \
+  --prompt-node-id 4 \
+  --dataset-type "fs_fewrel" \
+  --train-gradient-sample-size 30000 \
+  --gradient-batch-size 2 \
+  --max-regions 10 \
+  --max-total-region-tokens 50 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold-ratio 0.6 \
+  --num-edit-regions 3 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --selection-perplexity-lambda 0.5 \
+  --use-log-fluency-score \
+  --meta-prompt-max-new-tokens 10000 \
+  --meta-prompt-batch-size 1 \
+  --validation-batch-size 8 \
+  --Q 1 \
+  --selection-f1-std-penalty 2.0 \
+  --train-samples "fs_fewrel_train_non_split_original_samples.pkl" \
+  --full-eval-split final_step_dev \
+  --output-root-dir "../gradients_experiments" \
+  --output-substring "random_fewrel_superstart_etgpo_gradpo_node4_gemma_unified_opt_fs_fewrel_20260517_023518" \
+  > nohup_outs/random_fewrel_superstart_etgpo_gradpo_node4_gemma_unified_opt_fs_fewrel_20260517_023518.out 2>&1 & 
+
+cat nohup_outs/random_fewrel_superstart_etgpo_gradpo_node4_gemma_unified_opt_fs_fewrel_20260517_023518.out | grep "full e"

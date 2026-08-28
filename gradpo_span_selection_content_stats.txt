@@ -1,0 +1,113 @@
+GRADPO-GEN TOP-GRADIENT SPAN CONTENT ANALYSIS
+
+Purpose
+This report summarizes what kinds of prompt regions GradPO-Gen selected
+using gradient scores. These are the top-gradient regions proposed for
+editing, not necessarily the spans ultimately changed in the retained prompt.
+
+Scope and extraction
+- 19 valid first-stage prompts were analyzed; the invalid
+  fewrel_qwen_evoprompt_node_y case was not refined.
+- Every GradPO-Gen attempt is included, including development improvements
+  and failures.
+- Selected regions were recovered from each run's logged tagged input prompt
+  and matched exactly to its first-stage prompt.
+- Categories below are a manual, mutually exclusive content taxonomy.
+
+Main statistics
+- Total runs: 19
+- Total selected regions: 75
+- Qwen: 9 runs × 5 regions = 45 regions
+- Gemma: 10 runs × 3 regions = 30 regions
+- Runs with a non-empty development improvement: 16
+- Runs with no development improvement: 3
+- Regions from development-improvement runs: 64
+- Regions from development-failure runs: 11
+- Unique exact span strings after case folding: 38
+- Occurrences belonging to a repeated exact span: 48/75 (64.0%)
+- Exact span types occurring only once: 27
+
+Content categories
+| Category | Count | Percent | Exact span strings |
+|:---|:---|:---|:---|
+| Sentence/support/query wording | 20 | 26.7% | `example sentence`, `sentence`, `sentence exempl`, `sentence exemplifying`, `sentence illustrates`, `sentence serves`, `sentence to` |
+| Relation name/description wording | 11 | 14.7% | `description`, `description of`, `name` |
+| Generic/function/partial wording | 17 | 22.7% | `a`, `are given`, `given a`, `itness`, `of`, `the`, `to`, `you`, `you are` |
+| Entity/relation-decision wording | 7 | 9.3% | `entities in`, `explicitly expresses`, `holds between the`, `instantiated between`, `marked subject`, `subject`, `subject and` |
+| Answer/decision wording | 6 | 8.0% | `answer`, `decide`, `determine if`, `only answer` |
+| Relation-description formatting | 6 | 8.0% | `brackets` |
+| Other general task/example wording | 6 | 8.0% | `exemplifies`, `exemplifying`, `instance`, `on the information`, `specified` |
+| Relation-specific illustrative fragments | 2 | 2.7% | `hier`, `province` |
+
+Most important interpretation
+- Only 2/75 selected regions (2.7%) clearly came from relation-specific
+  illustrative rules: `province` and the partial span `hier`.
+- `province` occurred inside a rule illustrating
+  `org:stateorprovince_of_headquarters`.
+- `hier` came from `hierarchies` in a rule contrasting `has part` with
+  `produced by`.
+- Neither is a complete relation label or named entity.
+- No selected region contains a complete dataset relation label or a named
+  instance entity.
+- The other 73/75 regions (97.3%) are shared instruction-level, structural,
+  decision, formatting, generic, or partial-word fragments.
+- Therefore, the selected gradient regions are overwhelmingly associated
+  with shared task instructions rather than individual relations or examples.
+
+Recurring exact spans
+| Exact span | Count | Percent |
+|:---|:---|:---|
+| `name` | 9 | 12.0% |
+| `sentence` | 9 | 12.0% |
+| `sentence exemplifying` | 6 | 8.0% |
+| `brackets` | 6 | 8.0% |
+| `you are` | 4 | 5.3% |
+| `the` | 3 | 4.0% |
+| `answer` | 3 | 4.0% |
+| `of` | 2 | 2.7% |
+| `instance` | 2 | 2.7% |
+| `you` | 2 | 2.7% |
+| `are given` | 2 | 2.7% |
+
+Six prominent recurring task-level spans
+- `name` (9), `sentence` (9), `sentence exemplifying` (6),
+  `brackets` (6), `You are` (4), and `Answer` (3).
+- Together these account for 37/75 selected regions (49.3%).
+- The remaining regions are mostly less-frequent instruction fragments and
+  generic words; this does not mean that the remaining 50.7% are
+  relation-specific.
+
+Suggested paper text
+Across all 19 GradPO-Gen runs, we recovered 75 selected high-gradient
+regions. Six recurring task-level spans—"name," "sentence," "sentence
+exemplifying," "brackets," "You are," and "Answer"—account for 49.3%
+of all selections. The remaining regions are mostly less-frequent
+instruction fragments and generic words. Only two selections (2.7%),
+"province" and the partial span "hier," came from relation-specific
+illustrative rules, and neither is a complete relation label or named entity.
+This suggests that the gradient signal primarily captures shared
+instruction-level wording rather than being dominated by individual
+relations or examples.
+
+Selected regions by run
+| GradPO-Gen code | Dev improvement | Regions | Selected region text |
+|:---|:---|:---|:---|
+| fewrel_gemma_etgpo_node_x_gradpo-gen | no | 3 | `name`, `sentence exemplifying`, `holds between the` |
+| fewrel_gemma_evoprompt_node_x_gradpo-gen | yes | 3 | `description`, `of`, `sentence serves` |
+| fewrel_gemma_evoprompt_node_y_gradpo-gen | yes | 3 | `Subject and`, `entities in`, `sentence` |
+| fewrel_gemma_rpo_node_x_gradpo-gen | yes | 3 | `name`, `sentence exemplifying`, `sentence` |
+| fewrel_gemma_rpo_node_y_gradpo-gen | yes | 3 | `sentence exemplifying`, `the`, `instance` |
+| fewrel_qwen_etgpo_node_x_gradpo-gen | yes | 5 | `You are`, `brackets`, `sentence`, `exemplifying`, `hier` |
+| fewrel_qwen_evoprompt_node_x_gradpo-gen | no | 5 | `name`, `sentence`, `Decide`, `specified`, `marked Subject` |
+| fewrel_qwen_rpo_node_x_gradpo-gen | yes | 5 | `You`, `are given`, `name`, `brackets`, `sentence` |
+| fewrel_qwen_rpo_node_y_gradpo-gen | yes | 5 | `name`, `brackets`, `instance`, `explicitly expresses`, `Answer` |
+| tacred_gemma_etgpo_node_x_gradpo-gen | yes | 3 | `a`, `name`, `sentence exemplifying` |
+| tacred_gemma_evoprompt_node_x_gradpo-gen | no | 3 | `sentence to`, `Subject`, `on the information` |
+| tacred_gemma_evoprompt_node_y_gradpo-gen | yes | 3 | `sentence exemplifying`, `itness`, `sentence illustrates` |
+| tacred_gemma_rpo_node_x_gradpo-gen | yes | 3 | `The`, `of`, `the` |
+| tacred_gemma_rpo_node_y_gradpo-gen | yes | 3 | `name`, `sentence exemplifying`, `To` |
+| tacred_qwen_etgpo_node_x_gradpo-gen | yes | 5 | `You`, `are given`, `name`, `brackets`, `Answer` |
+| tacred_qwen_evoprompt_node_x_gradpo-gen | yes | 5 | `You are`, `given a`, `sentence`, `exemplifies`, `Determine if` |
+| tacred_qwen_evoprompt_node_y_gradpo-gen | yes | 5 | `You are`, `example sentence`, `instantiated between`, `sentence`, `Answer` |
+| tacred_qwen_rpo_node_x_gradpo-gen | yes | 5 | `You are`, `description of`, `brackets`, `sentence exempl`, `sentence` |
+| tacred_qwen_rpo_node_y_gradpo-gen | yes | 5 | `name`, `brackets`, `sentence`, `province`, `Only answer` |

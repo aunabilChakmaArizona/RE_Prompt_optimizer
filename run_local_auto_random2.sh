@@ -1,0 +1,35 @@
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_tacred_test_episodes_1shots.pkl --dataset_core tacred --ways 5 --shots 1 --query 0 --cuda cuda:2 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code tacred_gemma_etgpo_node_x_gradpo-gen_random --prompt 'You are given a relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+
+Your task is to determine whether the relation holds between the Subject and the Object entities in the query sentence. Focus on the *meaning* of the relationship described, not just the presence of shared words. Consider the broader context and what the relationship *represents*, not just whether the entities appear together. 
+
+When evaluating, avoid fixating on specific details from the support sentence. Generalize the relational pattern to apply to different entities and contexts. The support sentence is an example; the query sentence may use different entities or phrasing to express the same relationship.
+
+Be mindful of nuances in meaning. The relation type describes a specific connection; do not infer the relationship unless the connection is clearly and directly present in the query sentence, even if related concepts are mentioned. Focus on the *core* of the relation.
+
+If the relation holds between the Subject and the Object entities in the query sentence, indicate "yes"; otherwise, indicate "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model Qwen/Qwen3-4B --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:2 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_qwen_rpo_node_x_gradpo-gen_random --prompt 'You are given a relation name, a description of the relation in brackets, a support instance which one exemplifies the relation, and a query sentence. The relation connects a **subject entity** and an **object entity**, which are marked with the <subject> and <object> tags, respectively. Your task is to determine whether the relation described in the support instance is valid between the subject and object entities in the query sentence.  
+
+**Key Steps:**  
+1. **Identify the subject and object entities** in the query sentence (they are marked with <subject> and <object> tags).  
+2. **Analyze the relation** based on the provided description and the support instance. The relation must be a direct, specific connection between the subject and object entities as defined in the description.  
+3. **Check the query sentence** for explicit evidence of the relation. If the subject and object entities in the query are not connected by the relation described (e.g., the object is not the correct entity type, or the connection is not explicitly stated), answer "no."  
+
+Take the case of the relation "director," the subject (e.g., a film) must be connected to the object (e.g., a person) through the relation described in the support instance. If the object as the query is a genre or a different entity type, the answer is "no."  
+
+If the relation is valid between the subject and object entities in the query sentence, answer "yes"; otherwise, answer "no."'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:2 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_rpo_node_y_gradpo-gen_random --prompt 'You are given a specified relation, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the Object entities. The Subject and the Object entities are indicated with the subject and object tags, respectively.
+You need to determine if the query sentence expresses the given relation between the Subject and the Object entities, even if it’s not stated directly.
+
+Consider the support instance as an example of the relation. However, it might not be directly applicable to every query. Focus on understanding the *type* of relationship described in the support instance, not on finding a word-for-word match.
+
+Then the query sentence, at its heart, describes the same kind of relationship as the support instance? If yes, answer "yes"; otherwise, answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:2 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_evoprompt_node_y_gradpo-gen_random --prompt 'Decide whether the given relation accurately depicts the specified relationship between the tagged concept and Object entities in the query sentence. The support sentence exemplifies the relation; consider it for understanding the relation’s nature, but focus solely on the query sentence for evaluating the presence of this relation. Verify the relation’s definition, entity roles, and whether the relationship is explicitly stated or reasonably inferred from the query. Answer "yes" if the relation accurately reflects the relationship between the Subject and Object in the query; otherwise answer "no".'
+python -u codes/final_model_run_icl_dynamic_prompt.py --model google/gemma-3-4b-it --dataset fs_fewrel_test_episodes_1shots.pkl --dataset_core fewrel --ways 5 --shots 1 --query 0 --cuda cuda:2 --ep_start 0 --ep_end 150000 --batch_size 15 --data_root data --output_dir outputs/opt_prompt --code fewrel_gemma_etgpo_node_x_gradpo-gen_random --prompt 'You are given this relation name, a description of the relation in brackets, a support sentence exemplifying the relation, and a query sentence.
+
+A relation connects the Subject and the item entities. The Subject and the item entities are indicated with the subject and object tags, respectively.
+
+You need to decide whether the relation holds between the Subject and the item entities in the query sentence. Focus on the *core meaning* of the relation, not superficial word matches with the support sentence. Consider the broader context of the query sentence and how the relationship might apply even if the specific entities or wording are different. Recognize that relationships can exist even if the query uses different phrasing or figurative language (e.g., '"'"'like,'"'"' '"'"'similar to'"'"') to express the connection. Adapt your reasoning to the specific context of the query; a relationship that applies to cities might not directly apply to events in the same way. If the query demonstrates a the same underlying relationship between the Subject and Object as defined by the relation, answer "yes"; otherwise, answer "no".'
