@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from agents.agent_decoding import model_default_sampling_parameters
 from math_grading.graders import (
     grade_math_answer,
     grader_metadata,
@@ -46,7 +47,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default="Qwen/Qwen3-4B", help="Hugging Face model name or path.")
     parser.add_argument("--dataset", default=str(DEFAULT_DATASET_PATH), help="Prepared math JSONL test file.")
     parser.add_argument("--device", "--cuda", dest="device", default=None, help="Model device, such as cuda:0.")
+    parser.add_argument(
+        "--backend",
+        choices=("transformers", "vllm"),
+        default="transformers",
+        help="Inference backend. Transformers remains the default.",
+    )
     parser.add_argument("--batch_size", type=int, default=4, help="Number of prompts generated per batch.")
+    parser.add_argument(
+        "--gpu_memory_utilization",
+        type=float,
+        default=0.90,
+        help="Fraction of selected GPU memory available to the vLLM engine.",
+    )
     parser.add_argument("--max_new_tokens", type=int, default=4096, help="Maximum generated tokens per problem.")
     parser.add_argument("--start", "--ep_start", dest="start", type=int, default=0, help="First test index.")
     parser.add_argument("--end", "--ep_end", dest="end", type=int, default=None, help="Exclusive final test index.")
@@ -96,11 +109,49 @@ def extract_tagged_answer(response: str) -> str | None:
     return matches[-1].strip()
 
 
+def extract_last_boxed_answer(response: str) -> str | None:
+    """Extract the content of the last balanced LaTeX boxed expression."""
+    box_starts = list(re.finditer(r"\\boxed\s*\{", response))
+    for box_start in reversed(box_starts):
+        opening_brace = response.find("{", box_start.start())
+        depth = 0
+        for index in range(opening_brace, len(response)):
+            character = response[index]
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    answer = response[opening_brace + 1 : index].strip()
+                    if answer:
+                        return answer
+                    break
+    return None
+
+
+def extract_math_answer(response: str) -> tuple[str | None, str]:
+    """Use an answer tag first and the last boxed answer as a fallback."""
+    tagged_answer = extract_tagged_answer(response)
+    if tagged_answer:
+        return tagged_answer, "answer_tag"
+
+    boxed_answer = extract_last_boxed_answer(response)
+    if boxed_answer:
+        return boxed_answer, "boxed_fallback"
+    return None, "missing"
+
+
 def validate_answer_processing() -> None:
     """Check representative extraction and simple-normalization cases."""
     assert extract_tagged_answer("work <answer>0042</answer>") == "0042"
     assert extract_tagged_answer("<answer>1</answer> then <answer>2</answer>") == "2"
     assert extract_tagged_answer("answer 42") is None
+    assert extract_last_boxed_answer("work \\boxed{\\frac{1}{2}}") == "\\frac{1}{2}"
+    assert extract_last_boxed_answer("\\boxed{1} then \\boxed{2}") == "2"
+    assert extract_last_boxed_answer("unfinished \\boxed{3") is None
+    assert extract_math_answer("\\boxed{1} <answer>2</answer>") == ("2", "answer_tag")
+    assert extract_math_answer("final \\boxed{3}") == ("3", "boxed_fallback")
+    assert extract_math_answer("no final answer") == (None, "missing")
     assert normalize_numeric_answer("0042") == "42"
     assert normalize_numeric_answer("$\\boxed{000.500}$") == "0.5"
     assert normalize_numeric_answer("000") == "0"
@@ -156,6 +207,16 @@ def empty_group_statistics() -> dict[str, int]:
     }
 
 
+def accuracy_statistics(correct: int, total: int) -> dict[str, int | float]:
+    """Create correct, incorrect, and accuracy values for one grader."""
+    return {
+        "correct": correct,
+        "incorrect": total - correct,
+        "accuracy": correct / total,
+        "accuracy_percent": 100.0 * correct / total,
+    }
+
+
 def score_predictions(
     records: Sequence[dict[str, Any]], responses: Sequence[str], task_type: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -165,7 +226,9 @@ def score_predictions(
 
     results = []
     correct_counts = {"simple": 0, "openai": 0, "math_verify": 0}
+    tag_only_correct_counts = {"simple": 0, "openai": 0, "math_verify": 0}
     missing_tag_count = 0
+    extraction_counts = {"answer_tag": 0, "boxed_fallback": 0, "missing": 0}
     simple_normalization_failure_count = 0
     grading_error_counts = {"openai": 0, "math_verify": 0}
     grouped_statistics: dict[str, dict[str, dict[str, Any]]] = {
@@ -175,16 +238,22 @@ def score_predictions(
     }
 
     for record, response in zip(records, responses):
-        extracted_answer = extract_tagged_answer(response)
+        tagged_answer = extract_tagged_answer(response)
+        extracted_answer, extraction_source = extract_math_answer(response)
         grades = grade_math_answer(extracted_answer, str(record["answer"]), task_type)
 
-        if extracted_answer is None:
+        if tagged_answer is None:
             missing_tag_count += 1
-        elif grades["normalized_prediction"] is None:
+        extraction_counts[extraction_source] += 1
+        if extracted_answer is not None and grades["normalized_prediction"] is None:
             simple_normalization_failure_count += 1
 
         for grader_name in correct_counts:
             correct_counts[grader_name] += int(grades[f"{grader_name}_correct"])
+            if extraction_source == "answer_tag":
+                tag_only_correct_counts[grader_name] += int(
+                    grades[f"{grader_name}_correct"]
+                )
         for grader_name in grading_error_counts:
             grading_error_counts[grader_name] += int(grades[f"{grader_name}_error"] is not None)
 
@@ -209,6 +278,7 @@ def score_predictions(
             "normalized_gold_answer": grades["normalized_gold_answer"],
             "raw_response": response,
             "extracted_answer": extracted_answer,
+            "answer_extraction_source": extraction_source,
             "normalized_prediction": grades["normalized_prediction"],
             "simple_correct": grades["simple_correct"],
             "openai_correct": grades["openai_correct"],
@@ -234,30 +304,74 @@ def score_predictions(
     total = len(records)
     statistics = {
         "total": total,
-        "simple": {
-            "correct": correct_counts["simple"],
-            "incorrect": total - correct_counts["simple"],
-            "accuracy": correct_counts["simple"] / total,
-            "accuracy_percent": 100.0 * correct_counts["simple"] / total,
-        },
-        "openai": {
-            "correct": correct_counts["openai"],
-            "incorrect": total - correct_counts["openai"],
-            "accuracy": correct_counts["openai"] / total,
-            "accuracy_percent": 100.0 * correct_counts["openai"] / total,
-        },
-        "math_verify": {
-            "correct": correct_counts["math_verify"],
-            "incorrect": total - correct_counts["math_verify"],
-            "accuracy": correct_counts["math_verify"] / total,
-            "accuracy_percent": 100.0 * correct_counts["math_verify"] / total,
+        "simple": accuracy_statistics(correct_counts["simple"], total),
+        "openai": accuracy_statistics(correct_counts["openai"], total),
+        "math_verify": accuracy_statistics(correct_counts["math_verify"], total),
+        "tag_only": {
+            grader_name: accuracy_statistics(tag_only_correct_counts[grader_name], total)
+            for grader_name in tag_only_correct_counts
         },
         "missing_answer_tags": missing_tag_count,
+        "answer_extraction": extraction_counts,
         "simple_normalization_failures": simple_normalization_failure_count,
         "grading_errors": grading_error_counts,
         **grouped_statistics,
     }
     return results, statistics
+
+
+def run_inference_backend(
+    args: argparse.Namespace, prompts: Sequence[str]
+) -> tuple[list[str], float, dict[str, Any]]:
+    """Generate responses with the selected Transformers or vLLM backend."""
+    enable_thinking = not args.disable_thinking
+    log_label = f"math_test_{safe_name(args.code)}"
+    decoding_parameters = model_default_sampling_parameters(args.model)
+
+    if args.backend == "vllm":
+        from agents.agent_vllm_models import (
+            load_vllm_model_and_tokenizer,
+            vllm_backend_metadata,
+        )
+        from agents.agent_vllm_prompting import run_prompts_vllm
+
+        model, tokenizer = load_vllm_model_and_tokenizer(
+            args.model,
+            device=args.device,
+            gpu_memory_utilization=args.gpu_memory_utilization,
+        )
+        started_at = time.time()
+        responses = run_prompts_vllm(
+            prompts,
+            model_id=args.model,
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=args.max_new_tokens,
+            enable_thinking=enable_thinking,
+            do_log=True,
+            log_label=log_label,
+        )
+        return responses, time.time() - started_at, vllm_backend_metadata()
+
+    from agents.agent_llm_prompting import run_prompts
+    from agents.agent_models import load_model_and_tokenizer
+
+    model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device)
+    started_at = time.time()
+    responses = run_prompts(
+        prompts,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.max_new_tokens,
+        batch_size=args.batch_size,
+        enable_thinking=enable_thinking,
+        do_log=True,
+        log_label=log_label,
+        do_sample=True,
+        **decoding_parameters,
+    )
+    metadata = {"name": "transformers", "batching": "fixed"}
+    return responses, time.time() - started_at, metadata
 
 
 def write_jsonl(path: Path, records: Sequence[dict[str, Any]]) -> None:
@@ -290,15 +404,14 @@ def main() -> None:
     validate_answer_processing()
     validate_grading_dependencies()
 
-    from agents.agent_llm_prompting import run_prompts
-    from agents.agent_models import load_model_and_tokenizer
-
     if args.start < 0:
         raise ValueError("--start must be non-negative.")
     if args.end is not None and args.end <= args.start:
         raise ValueError("--end must be greater than --start.")
     if args.batch_size <= 0 or args.max_new_tokens <= 0:
         raise ValueError("--batch_size and --max_new_tokens must be positive.")
+    if not 0.0 < args.gpu_memory_utilization <= 1.0:
+        raise ValueError("--gpu_memory_utilization must be greater than 0 and at most 1.")
 
     dataset_path = resolve_repo_path(args.dataset)
     output_dir = resolve_repo_path(args.output_dir)
@@ -309,6 +422,7 @@ def main() -> None:
     instruction_prompt = args.prompt.strip()
     if not instruction_prompt:
         raise ValueError("--prompt must not be empty.")
+    decoding_parameters = model_default_sampling_parameters(args.model)
     prompts = [build_math_prompt(instruction_prompt, record["question"]) for record in records]
     run_dir = prepare_run_directory(output_dir, args.code, args.overwrite)
     (run_dir / "prompt.txt").write_text(
@@ -319,22 +433,13 @@ def main() -> None:
     print(f"Dataset: {dataset_path}")
     print(f"Task type: {task_type}")
     print(f"Examples: {len(records)} ({args.start}:{args.end})")
+    print(f"Backend: {args.backend}")
+    print(f"Decoding: sampling {decoding_parameters}")
+    if args.backend == "vllm":
+        print("Batching: continuous (--batch_size is not used by vLLM)")
     print(f"Output: {run_dir}")
 
-    model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device)
-    started_at = time.time()
-    responses = run_prompts(
-        prompts,
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=args.max_new_tokens,
-        batch_size=args.batch_size,
-        enable_thinking=not args.disable_thinking,
-        do_log=True,
-        log_label=f"math_test_{safe_name(args.code)}",
-        do_sample=False,
-    )
-    elapsed_seconds = time.time() - started_at
+    responses, elapsed_seconds, backend_metadata = run_inference_backend(args, prompts)
 
     results, statistics = score_predictions(records, responses, task_type)
     summary = {
@@ -348,10 +453,17 @@ def main() -> None:
         "settings": {
             "device": args.device,
             "batch_size": args.batch_size,
+            "batch_size_applies": args.backend == "transformers",
             "max_new_tokens": args.max_new_tokens,
             "thinking_enabled": not args.disable_thinking,
-            "do_sample": False,
+            "do_sample": True,
+            **decoding_parameters,
+            "backend": args.backend,
+            "gpu_memory_utilization": (
+                args.gpu_memory_utilization if args.backend == "vllm" else None
+            ),
         },
+        "backend": backend_metadata,
         "elapsed_seconds": elapsed_seconds,
         "graders": grader_metadata(),
         "statistics": statistics,
@@ -367,7 +479,13 @@ def main() -> None:
             f"{grader_name} accuracy: {grader_stats['correct']}/{statistics['total']} "
             f"({grader_stats['accuracy_percent']:.2f}%)"
         )
+    tag_only_math_verify = statistics["tag_only"]["math_verify"]
+    print(
+        f"tag-only math_verify accuracy: {tag_only_math_verify['correct']}/"
+        f"{statistics['total']} ({tag_only_math_verify['accuracy_percent']:.2f}%)"
+    )
     print(f"Missing answer tags: {statistics['missing_answer_tags']}")
+    print(f"Answer extraction: {statistics['answer_extraction']}")
     print(f"Simple normalization failures: {statistics['simple_normalization_failures']}")
     print(f"Grading errors: {statistics['grading_errors']}")
     print(f"Saved results to: {run_dir}")

@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from agents.agent_decoding import model_default_sampling_parameters
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET_PATH = REPO_ROOT / "data" / "processed" / "openbookqa" / "test.jsonl"
@@ -30,7 +32,19 @@ def parse_args(description: str, default_instruction: str) -> argparse.Namespace
     parser.add_argument("--model", default="Qwen/Qwen3-4B", help="Hugging Face model name or path.")
     parser.add_argument("--dataset", default=str(DEFAULT_DATASET_PATH), help="Prepared QA JSONL test file.")
     parser.add_argument("--device", "--cuda", dest="device", default=None, help="Model device, such as cuda:0.")
+    parser.add_argument(
+        "--backend",
+        choices=("transformers", "vllm"),
+        default="transformers",
+        help="Inference backend. Transformers remains the default.",
+    )
     parser.add_argument("--batch_size", type=int, default=4, help="Number of prompts generated per batch.")
+    parser.add_argument(
+        "--gpu_memory_utilization",
+        type=float,
+        default=0.90,
+        help="Fraction of selected GPU memory available to the vLLM engine.",
+    )
     parser.add_argument("--max_new_tokens", type=int, default=1024, help="Maximum generated tokens per question.")
     parser.add_argument("--start", "--ep_start", dest="start", type=int, default=0, help="First test index.")
     parser.add_argument("--end", "--ep_end", dest="end", type=int, default=None, help="Exclusive final test index.")
@@ -239,6 +253,62 @@ def prepare_run_directory(
     return run_dir
 
 
+def run_inference_backend(
+    args: argparse.Namespace,
+    prompts: Sequence[str],
+    mode_name: str,
+    enable_thinking: bool,
+) -> tuple[list[str], float, dict[str, Any]]:
+    """Generate QA responses with the selected Transformers or vLLM backend."""
+    log_label = f"qa_test_{safe_name(mode_name)}_{safe_name(args.code)}"
+    decoding_parameters = model_default_sampling_parameters(args.model)
+
+    if args.backend == "vllm":
+        from agents.agent_vllm_models import (
+            load_vllm_model_and_tokenizer,
+            vllm_backend_metadata,
+        )
+        from agents.agent_vllm_prompting import run_prompts_vllm
+
+        model, tokenizer = load_vllm_model_and_tokenizer(
+            args.model,
+            device=args.device,
+            gpu_memory_utilization=args.gpu_memory_utilization,
+        )
+        started_at = time.time()
+        responses = run_prompts_vllm(
+            prompts,
+            model_id=args.model,
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=args.max_new_tokens,
+            enable_thinking=enable_thinking,
+            do_log=True,
+            log_label=log_label,
+        )
+        return responses, time.time() - started_at, vllm_backend_metadata()
+
+    from agents.agent_llm_prompting import run_prompts
+    from agents.agent_models import load_model_and_tokenizer
+
+    model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device)
+    started_at = time.time()
+    responses = run_prompts(
+        prompts,
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=args.max_new_tokens,
+        batch_size=args.batch_size,
+        enable_thinking=enable_thinking,
+        do_log=True,
+        log_label=log_label,
+        do_sample=True,
+        **decoding_parameters,
+    )
+    metadata = {"name": "transformers", "batching": "fixed"}
+    return responses, time.time() - started_at, metadata
+
+
 def run_qa_test_inference(
     *,
     mode_name: str,
@@ -253,15 +323,14 @@ def run_qa_test_inference(
     )
     validate_answer_processing()
 
-    from agents.agent_llm_prompting import run_prompts
-    from agents.agent_models import load_model_and_tokenizer
-
     if args.start < 0:
         raise ValueError("--start must be non-negative.")
     if args.end is not None and args.end <= args.start:
         raise ValueError("--end must be greater than --start.")
     if args.batch_size <= 0 or args.max_new_tokens <= 0:
         raise ValueError("--batch_size and --max_new_tokens must be positive.")
+    if not 0.0 < args.gpu_memory_utilization <= 1.0:
+        raise ValueError("--gpu_memory_utilization must be greater than 0 and at most 1.")
 
     dataset_path = resolve_repo_path(args.dataset)
     output_dir = resolve_repo_path(args.output_dir)
@@ -272,6 +341,7 @@ def run_qa_test_inference(
     instruction_prompt = args.prompt.strip()
     if not instruction_prompt:
         raise ValueError("--prompt must not be empty.")
+    decoding_parameters = model_default_sampling_parameters(args.model)
     prompts = [
         build_qa_prompt(
             instruction_prompt,
@@ -303,22 +373,18 @@ def run_qa_test_inference(
     print(f"Dataset: {dataset_path}")
     print(f"Examples: {len(records)} ({args.start}:{args.end})")
     print(f"Thinking enabled: {enable_thinking}")
+    print(f"Backend: {args.backend}")
+    print(f"Decoding: sampling {decoding_parameters}")
+    if args.backend == "vllm":
+        print("Batching: continuous (--batch_size is not used by vLLM)")
     print(f"Output: {run_dir}")
 
-    model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device)
-    started_at = time.time()
-    responses = run_prompts(
+    responses, elapsed_seconds, backend_metadata = run_inference_backend(
+        args,
         prompts,
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=args.max_new_tokens,
-        batch_size=args.batch_size,
-        enable_thinking=enable_thinking,
-        do_log=True,
-        log_label=f"qa_test_{safe_name(mode_name)}_{safe_name(args.code)}",
-        do_sample=False,
+        mode_name,
+        enable_thinking,
     )
-    elapsed_seconds = time.time() - started_at
 
     results, statistics = score_predictions(records, responses)
     summary = {
@@ -333,10 +399,17 @@ def run_qa_test_inference(
         "settings": {
             "device": args.device,
             "batch_size": args.batch_size,
+            "batch_size_applies": args.backend == "transformers",
             "max_new_tokens": args.max_new_tokens,
             "thinking_enabled": enable_thinking,
-            "do_sample": False,
+            "do_sample": True,
+            **decoding_parameters,
+            "backend": args.backend,
+            "gpu_memory_utilization": (
+                args.gpu_memory_utilization if args.backend == "vllm" else None
+            ),
         },
+        "backend": backend_metadata,
         "elapsed_seconds": elapsed_seconds,
         "examples_per_second": len(records) / elapsed_seconds if elapsed_seconds else None,
         "statistics": statistics,
