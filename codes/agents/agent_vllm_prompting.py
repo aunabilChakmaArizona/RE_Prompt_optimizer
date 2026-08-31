@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any, Sequence
 
 from agents.agent_decoding import model_default_sampling_parameters
+from agents.agent_token_usage import TokenUsage, create_token_usage
 
 
 _SAMPLE_LOGGED_LABELS: set[str] = set()
@@ -96,10 +97,11 @@ def run_prompts_vllm(
     enable_thinking: bool = True,
     do_log: bool = False,
     log_label: str | None = None,
-) -> list[str]:
+    return_token_usage: bool = False,
+) -> list[str] | tuple[list[str], list[TokenUsage]]:
     """Generate all prompts with vLLM-managed continuous batching."""
     if not prompts:
-        return []
+        return ([], []) if return_token_usage else []
     if max_new_tokens <= 0:
         raise ValueError("max_new_tokens must be positive.")
 
@@ -142,11 +144,22 @@ def run_prompts_vllm(
         )
 
     outputs = []
-    for request_output in request_outputs:
+    token_usages = []
+    for formatted_prompt, request_output in zip(formatted_prompts, request_outputs):
         if not request_output.outputs:
             raise RuntimeError("vLLM returned a request without a generated output.")
-        outputs.append(request_output.outputs[0].text)
+        completion_output = request_output.outputs[0]
+        outputs.append(completion_output.text)
+        if return_token_usage:
+            token_usages.append(
+                create_token_usage(
+                    len(formatted_prompt["prompt_token_ids"]),
+                    len(completion_output.token_ids),
+                )
+            )
 
     if log_label and outputs:
         _log_first_sample(log_label, prompts[0], outputs[0])
+    if return_token_usage:
+        return outputs, token_usages
     return outputs

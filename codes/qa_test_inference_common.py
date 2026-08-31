@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from agents.agent_decoding import model_default_sampling_parameters
+from agents.agent_token_usage import TokenUsage, summarize_token_usage
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -172,18 +173,22 @@ def validate_records(records: Sequence[dict[str, Any]]) -> None:
 
 
 def score_predictions(
-    records: Sequence[dict[str, Any]], responses: Sequence[str]
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    token_usages: Sequence[TokenUsage],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Extract option labels and calculate multiple-choice accuracy."""
     if len(records) != len(responses):
         raise ValueError("The number of model responses does not match the number of records.")
+    if len(records) != len(token_usages):
+        raise ValueError("The number of token-usage records does not match the test records.")
 
     results = []
     correct_count = 0
     missing_tag_count = 0
     invalid_label_count = 0
 
-    for record, response in zip(records, responses):
+    for record, response, token_usage in zip(records, responses, token_usages):
         extracted_answer = extract_tagged_answer(response)
         valid_labels = {
             str(choice["label"]).strip().upper() for choice in record["choices"]
@@ -208,6 +213,7 @@ def score_predictions(
                 "gold_answer": gold_label,
                 "gold_answer_text": record.get("answer_text"),
                 "raw_response": response,
+                "token_usage": dict(token_usage),
                 "extracted_answer": extracted_answer,
                 "predicted_answer": predicted_label,
                 "correct": is_correct,
@@ -223,6 +229,7 @@ def score_predictions(
         "accuracy_percent": 100.0 * correct_count / total,
         "missing_answer_tags": missing_tag_count,
         "invalid_choice_labels": invalid_label_count,
+        "token_usage": summarize_token_usage(token_usages),
     }
     return results, statistics
 
@@ -258,7 +265,7 @@ def run_inference_backend(
     prompts: Sequence[str],
     mode_name: str,
     enable_thinking: bool,
-) -> tuple[list[str], float, dict[str, Any]]:
+) -> tuple[list[str], list[TokenUsage], float, dict[str, Any]]:
     """Generate QA responses with the selected Transformers or vLLM backend."""
     log_label = f"qa_test_{safe_name(mode_name)}_{safe_name(args.code)}"
     decoding_parameters = model_default_sampling_parameters(args.model)
@@ -276,7 +283,7 @@ def run_inference_backend(
             gpu_memory_utilization=args.gpu_memory_utilization,
         )
         started_at = time.time()
-        responses = run_prompts_vllm(
+        responses, token_usages = run_prompts_vllm(
             prompts,
             model_id=args.model,
             model=model,
@@ -285,15 +292,21 @@ def run_inference_backend(
             enable_thinking=enable_thinking,
             do_log=True,
             log_label=log_label,
+            return_token_usage=True,
         )
-        return responses, time.time() - started_at, vllm_backend_metadata()
+        return (
+            responses,
+            token_usages,
+            time.time() - started_at,
+            vllm_backend_metadata(),
+        )
 
     from agents.agent_llm_prompting import run_prompts
     from agents.agent_models import load_model_and_tokenizer
 
     model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device)
     started_at = time.time()
-    responses = run_prompts(
+    responses, token_usages = run_prompts(
         prompts,
         model=model,
         tokenizer=tokenizer,
@@ -303,10 +316,11 @@ def run_inference_backend(
         do_log=True,
         log_label=log_label,
         do_sample=True,
+        return_token_usage=True,
         **decoding_parameters,
     )
     metadata = {"name": "transformers", "batching": "fixed"}
-    return responses, time.time() - started_at, metadata
+    return responses, token_usages, time.time() - started_at, metadata
 
 
 def run_qa_test_inference(
@@ -379,14 +393,14 @@ def run_qa_test_inference(
         print("Batching: continuous (--batch_size is not used by vLLM)")
     print(f"Output: {run_dir}")
 
-    responses, elapsed_seconds, backend_metadata = run_inference_backend(
+    responses, token_usages, elapsed_seconds, backend_metadata = run_inference_backend(
         args,
         prompts,
         mode_name,
         enable_thinking,
     )
 
-    results, statistics = score_predictions(records, responses)
+    results, statistics = score_predictions(records, responses, token_usages)
     summary = {
         "code": args.code,
         "mode": mode_name,
@@ -425,5 +439,6 @@ def run_qa_test_inference(
     )
     print(f"Missing answer tags: {statistics['missing_answer_tags']}")
     print(f"Invalid choice labels: {statistics['invalid_choice_labels']}")
+    print(f"Token usage: {statistics['token_usage']}")
     print(f"Elapsed inference time: {elapsed_seconds:.2f}s")
     print(f"Saved results to: {run_dir}")

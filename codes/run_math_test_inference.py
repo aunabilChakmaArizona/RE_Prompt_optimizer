@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from agents.agent_decoding import model_default_sampling_parameters
+from agents.agent_token_usage import TokenUsage, summarize_token_usage
 from math_grading.graders import (
     grade_math_answer,
     grader_metadata,
@@ -218,11 +219,16 @@ def accuracy_statistics(correct: int, total: int) -> dict[str, int | float]:
 
 
 def score_predictions(
-    records: Sequence[dict[str, Any]], responses: Sequence[str], task_type: str
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    token_usages: Sequence[TokenUsage],
+    task_type: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Extract answers, run three graders, and collect summary counts."""
     if len(records) != len(responses):
         raise ValueError("The number of model responses does not match the number of records.")
+    if len(records) != len(token_usages):
+        raise ValueError("The number of token-usage records does not match the test records.")
 
     results = []
     correct_counts = {"simple": 0, "openai": 0, "math_verify": 0}
@@ -237,7 +243,7 @@ def score_predictions(
         "by_level": {},
     }
 
-    for record, response in zip(records, responses):
+    for record, response, token_usage in zip(records, responses, token_usages):
         tagged_answer = extract_tagged_answer(response)
         extracted_answer, extraction_source = extract_math_answer(response)
         grades = grade_math_answer(extracted_answer, str(record["answer"]), task_type)
@@ -277,6 +283,7 @@ def score_predictions(
             "gold_answer": record["answer"],
             "normalized_gold_answer": grades["normalized_gold_answer"],
             "raw_response": response,
+            "token_usage": dict(token_usage),
             "extracted_answer": extracted_answer,
             "answer_extraction_source": extraction_source,
             "normalized_prediction": grades["normalized_prediction"],
@@ -315,6 +322,7 @@ def score_predictions(
         "answer_extraction": extraction_counts,
         "simple_normalization_failures": simple_normalization_failure_count,
         "grading_errors": grading_error_counts,
+        "token_usage": summarize_token_usage(token_usages),
         **grouped_statistics,
     }
     return results, statistics
@@ -322,7 +330,7 @@ def score_predictions(
 
 def run_inference_backend(
     args: argparse.Namespace, prompts: Sequence[str]
-) -> tuple[list[str], float, dict[str, Any]]:
+) -> tuple[list[str], list[TokenUsage], float, dict[str, Any]]:
     """Generate responses with the selected Transformers or vLLM backend."""
     enable_thinking = not args.disable_thinking
     log_label = f"math_test_{safe_name(args.code)}"
@@ -341,7 +349,7 @@ def run_inference_backend(
             gpu_memory_utilization=args.gpu_memory_utilization,
         )
         started_at = time.time()
-        responses = run_prompts_vllm(
+        responses, token_usages = run_prompts_vllm(
             prompts,
             model_id=args.model,
             model=model,
@@ -350,15 +358,21 @@ def run_inference_backend(
             enable_thinking=enable_thinking,
             do_log=True,
             log_label=log_label,
+            return_token_usage=True,
         )
-        return responses, time.time() - started_at, vllm_backend_metadata()
+        return (
+            responses,
+            token_usages,
+            time.time() - started_at,
+            vllm_backend_metadata(),
+        )
 
     from agents.agent_llm_prompting import run_prompts
     from agents.agent_models import load_model_and_tokenizer
 
     model, tokenizer = load_model_and_tokenizer(args.model, device_map=args.device)
     started_at = time.time()
-    responses = run_prompts(
+    responses, token_usages = run_prompts(
         prompts,
         model=model,
         tokenizer=tokenizer,
@@ -368,10 +382,11 @@ def run_inference_backend(
         do_log=True,
         log_label=log_label,
         do_sample=True,
+        return_token_usage=True,
         **decoding_parameters,
     )
     metadata = {"name": "transformers", "batching": "fixed"}
-    return responses, time.time() - started_at, metadata
+    return responses, token_usages, time.time() - started_at, metadata
 
 
 def write_jsonl(path: Path, records: Sequence[dict[str, Any]]) -> None:
@@ -439,9 +454,11 @@ def main() -> None:
         print("Batching: continuous (--batch_size is not used by vLLM)")
     print(f"Output: {run_dir}")
 
-    responses, elapsed_seconds, backend_metadata = run_inference_backend(args, prompts)
+    responses, token_usages, elapsed_seconds, backend_metadata = run_inference_backend(
+        args, prompts
+    )
 
-    results, statistics = score_predictions(records, responses, task_type)
+    results, statistics = score_predictions(records, responses, token_usages, task_type)
     summary = {
         "code": args.code,
         "model": args.model,
@@ -486,6 +503,7 @@ def main() -> None:
     )
     print(f"Missing answer tags: {statistics['missing_answer_tags']}")
     print(f"Answer extraction: {statistics['answer_extraction']}")
+    print(f"Token usage: {statistics['token_usage']}")
     print(f"Simple normalization failures: {statistics['simple_normalization_failures']}")
     print(f"Grading errors: {statistics['grading_errors']}")
     print(f"Saved results to: {run_dir}")
