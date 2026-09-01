@@ -92,14 +92,18 @@ def run_prompts_vllm(
     tokenizer: Any,
     system_message: str | None = None,
     max_new_tokens: int = 10000,
+    batch_size: int | None = None,
     use_chat_template: bool = True,
     add_generation_prompt: bool = True,
     enable_thinking: bool = True,
+    do_sample: bool = True,
     do_log: bool = False,
     log_label: str | None = None,
     return_token_usage: bool = False,
+    seed: int | None = None,
+    **gen_kwargs,
 ) -> list[str] | tuple[list[str], list[TokenUsage]]:
-    """Generate all prompts with vLLM-managed continuous batching."""
+    """Generate prompts with the same interface and continuous vLLM batching."""
     if not prompts:
         return ([], []) if return_token_usage else []
     if max_new_tokens <= 0:
@@ -122,16 +126,29 @@ def run_prompts_vllm(
         enable_thinking=enable_thinking,
     )
     decoding_parameters = model_default_sampling_parameters(model_id)
-    sampling_params = SamplingParams(
+    decoding_parameters.update(gen_kwargs)
+    if not do_sample:
+        decoding_parameters.update(
+            {"temperature": 0.0, "top_p": 1.0, "top_k": -1}
+        )
+    sampling_arguments = {
         **decoding_parameters,
-        max_tokens=max_new_tokens,
-        skip_special_tokens=True,
-    )
+        "max_tokens": max_new_tokens,
+        "skip_special_tokens": True,
+    }
+    if seed is None:
+        sampling_params = SamplingParams(**sampling_arguments)
+    else:
+        sampling_params = [
+            SamplingParams(**sampling_arguments, seed=seed + prompt_index)
+            for prompt_index in range(len(formatted_prompts))
+        ]
 
     if do_log:
         print(
             f"[agent_vllm_prompting] submitting {len(formatted_prompts)} prompts "
-            f"with continuous batching and sampling={decoding_parameters}"
+            "with continuous batching "
+            f"(requested_batch_size={batch_size}) and sampling={decoding_parameters}"
         )
     request_outputs = model.generate(
         formatted_prompts,
