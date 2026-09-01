@@ -9,63 +9,53 @@ from __future__ import annotations
 QA_EVOPROMPT_SEEDS = {
     "reasoning": [
         {
-            "label": "human_1_placeholder",
+            "label": "human_1",
             "prompt": (
-                "Read the question and all answer choices carefully, reason "
-                "step by step, and select the single best answer."
+                "Answer the following multiple-choice question. Think step by step carefully and select the best answer."
             ),
         },
         {
-            "label": "human_2_placeholder",
+            "label": "human_2",
             "prompt": (
-                "Use relevant knowledge and logical reasoning to compare the "
-                "choices, check your conclusion, and choose the best answer."
+                "Read the multiple-choice question and go through the options carefully before deciding. Pick the answer that seems most appropriate based on the question, and return only its label. Take a moment to think, but don’t overcomplicate it."
             ),
         },
         {
-            "label": "automatic_1_placeholder",
+            "label": "automatic_1",
             "prompt": (
-                "Analyze what the question asks, identify the relevant facts, "
-                "eliminate inconsistent choices, and select the best-supported "
-                "answer after reasoning carefully."
+                "Read the multiple-choice question carefully, think through the options, and select the best answer. Return only the final answer."
             ),
         },
         {
-            "label": "automatic_2_placeholder",
+            "label": "automatic_2",
             "prompt": (
-                "Solve the question systematically by interpreting it, evaluating "
-                "each choice, verifying the conclusion, and selecting the correct "
-                "answer."
+                "Carefully read the multiple-choice question and all provided answer choices. Think through the problem before answering, compare the available options, and select the single best answer. Pay attention to important details, avoid unsupported assumptions, and choose the option that most directly answers the question. Return only the final selected answer, without showing your reasoning or adding extra commentary."
             ),
         },
     ],
     "non_reasoning": [
         {
-            "label": "human_1_placeholder",
+            "label": "human_1",
             "prompt": (
-                "Read the question and all answer choices carefully, then select "
-                "the single best answer directly."
+                "Answer the following multiple-choice question. Select the best answer only."
             ),
         },
         {
-            "label": "human_2_placeholder",
+            "label": "human_2",
             "prompt": (
-                "Use relevant knowledge to compare the choices and choose the "
-                "best answer without providing an explanation."
+                "You are given a multiple-choice question, and your task is to choose the best answer and output its label. Read the question and options carefully, but keep the decision straightforward and avoid overthinking. Return only the label of the corret answer."
             ),
         },
         {
-            "label": "automatic_1_placeholder",
+            "label": "automatic_1",
             "prompt": (
-                "Identify what the question asks and select the option that is "
-                "best supported by the available choices."
+                "Answer the following multiple-choice question by selecting the best option. Return only the final answer."
             ),
         },
         {
-            "label": "automatic_2_placeholder",
+            "label": "automatic_2",
             "prompt": (
-                "Evaluate the choices and return the most appropriate answer "
-                "directly and concisely."
+                "Read the multiple-choice question and all provided answer choices, then select the single best answer. Focus on the information given, choose the option that most accurately answers the question, and avoid adding assumptions beyond what is necessary. Do not provide explanations, reasoning, or additional commentary. Return only the final selected answer."
             ),
         },
     ],

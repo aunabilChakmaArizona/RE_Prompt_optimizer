@@ -19,12 +19,12 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "outputs" / "qa_test"
 ANSWER_PATTERN = re.compile(r"<answer\s*>(.*?)</answer\s*>", re.IGNORECASE | re.DOTALL)
 
 REASONING_INITIAL_PROMPT = (
-    "Answer the following multiple-choice question. Think step by step carefully "
-    "and select the best answer."
+    "You are given a multiple-choice question and a set of answer choices. "
+    "Think step by step carefully and select the best answer."
 )
 NON_REASONING_INITIAL_PROMPT = (
-    "Answer the following multiple-choice question. Select the best answer directly "
-    "without reasoning or explanation."
+    "You are given a multiple-choice question and a set of answer choices. "
+    "Select the best answer."
 )
 REASONING_ANSWER_INSTRUCTION = (
     "After you finish reasoning, output only the option label exactly once between the tags <answer> and </answer>, for example: <answer>B</answer>."
