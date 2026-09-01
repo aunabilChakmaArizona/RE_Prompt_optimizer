@@ -10,7 +10,9 @@ from typing import Any, Sequence
 
 from qa_test_inference_common import (
     NON_REASONING_ANSWER_INSTRUCTION,
+    NON_REASONING_INITIAL_PROMPT,
     REASONING_ANSWER_INSTRUCTION,
+    REASONING_INITIAL_PROMPT,
     build_qa_prompt,
     extract_tagged_answer,
     normalize_choice_label,
@@ -24,14 +26,6 @@ DEFAULT_VALIDATION_PATH = (
     REPO_ROOT / "data" / "processed" / "openbookqa" / "validation.jsonl"
 )
 DEFAULT_TEST_PATH = REPO_ROOT / "data" / "processed" / "openbookqa" / "test.jsonl"
-
-REASONING_INITIAL_PROMPT = (
-    "Answer the following multiple-choice question. Think step by step carefully and select the best answer."
-)
-NON_REASONING_INITIAL_PROMPT = (
-    "Answer the following multiple-choice question. Select the best answer directly without reasoning or explanation."
-)
-
 
 @dataclass(frozen=True)
 class QAMode:
@@ -224,4 +218,3 @@ def corpus_texts(records: Sequence[dict[str, Any]]) -> list[str]:
         if record.get("fact"):
             texts.append(str(record["fact"]))
     return [text for text in texts if text.strip()]
-

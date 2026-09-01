@@ -59,7 +59,7 @@ def rpo_feedback_prompt(
     examples: Sequence[str],
 ) -> str:
     """Ask the optimizer to diagnose a small mixed set of QA predictions."""
-    return f"""You are analyzing an instruction for OpenBookQA multiple-choice questions.
+    return f"""You are analyzing an instruction for solving multiple-choice questions.
 
 Only the first instruction is editable. The answer-format instruction, question, and choices are fixed.
 
@@ -72,7 +72,7 @@ Fixed answer instruction:
 Prediction examples:
 {chr(10).join(examples)}
 
-Briefly identify instruction-level weaknesses that explain the mistakes. Do not copy a question, answer choice, or dataset fact into the instruction. Return the diagnosis inside <feedback> and </feedback>."""
+Briefly identify instruction-level weaknesses that explain the mistakes. Keep the instruction task-generic: do not copy question-specific text or mention any dataset or benchmark. Return the diagnosis inside <feedback> and </feedback>."""
 
 
 def rpo_rewrite_prompt(
@@ -92,12 +92,12 @@ Feedback:
 The fixed answer instruction is not part of the editable text:
 {mode.answer_instruction}
 
-Write one concise, general OpenBookQA instruction. Do not include specific questions, facts, or answer choices. Return only the revised instruction inside <prompt> and </prompt>."""
+Write one concise, general instruction for solving multiple-choice questions. Do not include question-specific text or mention any dataset or benchmark. Return only the revised instruction inside <prompt> and </prompt>."""
 
 
 def evoprompt_seed_prompt(initial_prompt: str, mode: QAMode, count: int) -> str:
     """Request diverse AI seeds for EvoPrompt's initial population."""
-    return f"""Create {count} diverse general instructions for OpenBookQA multiple-choice questions.
+    return f"""Create {count} diverse general instructions for solving multiple-choice questions.
 
 Basic instruction:
 <prompt>{initial_prompt}</prompt>
@@ -105,7 +105,7 @@ Basic instruction:
 The answer format is fixed separately as:
 {mode.answer_instruction}
 
-Each instruction must be self-contained, concise, and must not contain example-specific facts. Return each instruction in its own <prompt>...</prompt> block."""
+Each instruction must be self-contained, concise, task-generic, and must not contain question-specific text or mention any dataset or benchmark. Return each instruction in its own <prompt>...</prompt> block."""
 
 
 def evoprompt_de_prompt(
@@ -117,7 +117,7 @@ def evoprompt_de_prompt(
     mode: QAMode,
 ) -> str:
     """Construct one differential-evolution crossover meta-prompt."""
-    return f"""Generate a better OpenBookQA instruction through differential evolution.
+    return f"""Generate a better instruction for solving multiple-choice questions through differential evolution.
 
 1. Identify useful differences between Prompt 1 and Prompt 2.
 2. Selectively combine those differences with Prompt 3.
@@ -132,7 +132,7 @@ Prompt 3: {donor_c}
 The following answer-format text is fixed and must not be copied into the instruction:
 {mode.answer_instruction}
 
-Return one concise general instruction, with no example-specific facts, inside <prompt> and </prompt>."""
+Return one concise, task-generic instruction with no question-specific text or dataset or benchmark names inside <prompt> and </prompt>."""
 
 
 def etgpo_taxonomy_prompt(
@@ -142,7 +142,7 @@ def etgpo_taxonomy_prompt(
     max_categories: int,
 ) -> str:
     """Ask ETGPO to update a compact taxonomy of instruction-level errors."""
-    return f"""Analyze OpenBookQA mistakes and update a compact taxonomy of instruction-level failure types.
+    return f"""Analyze mistakes from multiple-choice question answering and update a compact taxonomy of instruction-level failure types.
 
 Current taxonomy:
 {json.dumps(list(current_taxonomy), ensure_ascii=False)}
@@ -150,7 +150,7 @@ Current taxonomy:
 New mistakes:
 {chr(10).join(error_examples)}
 
-Return JSON with key "categories" containing between {min_categories} and {max_categories} categories. Each category must have "name", "description", and "count". Return the complete updated taxonomy and merge equivalent categories. Focus on general reasoning or answer-selection behavior, not individual science topics, questions, or facts."""
+Return JSON with key "categories" containing between {min_categories} and {max_categories} categories. Each category must have "name", "description", and "count". Return the complete updated taxonomy and merge equivalent categories. Focus on general reasoning or answer-selection behavior, not individual topics or questions. Do not mention any dataset or benchmark."""
 
 
 def etgpo_guidance_prompt(
@@ -160,7 +160,7 @@ def etgpo_guidance_prompt(
     candidate_count: int,
 ) -> str:
     """Ask ETGPO to turn its error taxonomy into candidate instructions."""
-    return f"""Use this error taxonomy to improve an OpenBookQA instruction.
+    return f"""Use this error taxonomy to improve an instruction for solving multiple-choice questions.
 
 Current instruction:
 <prompt>{instruction_prompt}</prompt>
@@ -171,7 +171,7 @@ Error taxonomy:
 The answer format is fixed separately:
 {mode.answer_instruction}
 
-Generate {candidate_count} concise, general candidate instructions. Do not include example-specific facts. Return each in a separate <prompt>...</prompt> block."""
+Generate {candidate_count} concise, task-generic candidate instructions. Do not include question-specific text or mention any dataset or benchmark. Return each in a separate <prompt>...</prompt> block."""
 
 
 def lpo_location_prompt(
@@ -182,7 +182,7 @@ def lpo_location_prompt(
     max_words_per_location: int,
 ) -> str:
     """Ask LPO to tag a few local instruction spans worth rewriting."""
-    return f"""Find local spans in an editable OpenBookQA instruction that should be improved.
+    return f"""Find local spans in an editable instruction for solving multiple-choice questions that should be improved.
 
 Instruction:
 <prompt>{instruction_prompt}</prompt>
@@ -204,7 +204,7 @@ def lpo_rewrite_prompt(
     mode: QAMode,
 ) -> str:
     """Ask LPO to rewrite only marked local instruction spans."""
-    return f"""Locally improve the marked spans in this OpenBookQA instruction.
+    return f"""Locally improve the marked spans in this instruction for solving multiple-choice questions.
 
 Marked instruction:
 {marked_prompt}
@@ -212,7 +212,7 @@ Marked instruction:
 Selected locations:
 {json.dumps(list(locations), ensure_ascii=False)}
 
-Preserve all unmarked wording as closely as possible. Do not add example-specific facts. The fixed answer instruction is separate:
+Preserve all unmarked wording as closely as possible. Keep the result task-generic, with no question-specific text or dataset or benchmark names. The fixed answer instruction is separate:
 {mode.answer_instruction}
 
 Return the complete revised editable instruction inside <prompt> and </prompt>, without edit tags."""
@@ -230,7 +230,7 @@ def gradpo_candidate_prompt(
             f"span_{region['region_rank']}: {region['region_text']!r} "
             f"({region['token_count']} target-model tokens)"
         )
-    return f"""Suggest local replacements for gradient-selected spans in an OpenBookQA instruction.
+    return f"""Suggest local replacements for gradient-selected spans in an instruction for solving multiple-choice questions.
 
 Marked instruction:
 {marked_prompt}
@@ -238,5 +238,5 @@ Marked instruction:
 Spans:
 {chr(10).join(region_lines)}
 
-For each span, give {candidate_count} concise replacement phrases that fit its context and preserve a general instruction. Do not copy any dataset example. Return JSON only in this form:
+For each span, give {candidate_count} concise replacement phrases that fit its context and preserve a task-generic instruction. Do not copy text from any provided question or mention any dataset or benchmark. Return JSON only in this form:
 {{"span_1": {{"candidates": ["..."]}}, "span_2": {{"candidates": ["..."]}}}}"""

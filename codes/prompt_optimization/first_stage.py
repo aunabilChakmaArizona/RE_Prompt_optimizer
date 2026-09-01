@@ -231,11 +231,11 @@ def _evoprompt_human_seed(context: QAOptimizationContext) -> str:
     """Return the second fixed human seed for the selected QA mode."""
     if context.mode.name == "reasoning":
         return (
-            "Solve the multiple-choice question using relevant scientific knowledge, "
+            "Solve the multiple-choice question using relevant knowledge, "
             "check each option, and choose the best supported answer."
         )
     return (
-        "Use relevant scientific knowledge to compare the choices and select the "
+        "Use relevant knowledge to compare the choices and select the "
         "single best answer to the multiple-choice question."
     )
 

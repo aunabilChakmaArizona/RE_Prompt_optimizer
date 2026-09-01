@@ -559,8 +559,8 @@ def _allowed_candidate_token(tokenizer, token_id: int) -> bool:
 def qa_proposal_header(record: dict[str, Any], mode: QAMode) -> str:
     """Build GreaTer's instruction-generation context around one QA example."""
     return (
-        "You are optimizing an instruction prompt for an OpenBookQA multiple-choice "
-        "question answering model.\n\n"
+        "You are optimizing an instruction prompt for a multiple-choice question "
+        "answering model.\n\n"
         "The instruction will appear before a fixed answer-format instruction, the "
         "question, and its labeled choices. The model must select the single best "
         "option.\n\n"

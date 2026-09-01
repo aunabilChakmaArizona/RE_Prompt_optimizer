@@ -748,7 +748,7 @@ def _gradpo_synthesis_prompt(
                 ]
             )
         )
-    return f"""You are an expert prompt editor for an OpenBookQA multiple-choice task.
+    return f"""You are an expert prompt editor for a multiple-choice question-answering task.
 
 Current instruction with targeted spans:
 ```
@@ -758,7 +758,7 @@ Current instruction with targeted spans:
 Chosen replacements:
 {chr(10).join(replacement_blocks)}
 
-Generate the revised instruction by applying the chosen replacements to their spans. Use each replacement as provided, except for minimal local spelling or grammatical adjustments needed for coherence. Do not modify other parts of the instruction. Remove all span tags.
+Generate the revised instruction by applying the chosen replacements to their spans. Use each replacement as provided, except for minimal local spelling or grammatical adjustments needed for coherence. Do not modify other parts of the instruction. Keep it task-generic, do not mention any dataset or benchmark, and remove all span tags.
 
 Output only the complete revised instruction."""
 
