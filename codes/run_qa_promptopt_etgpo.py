@@ -31,10 +31,10 @@ def parse_args() -> argparse.Namespace:
         help="Fraction of observed errors the selected categories should cover.",
     )
     parser.add_argument(
-        "--min-categories",
+        "--min-problems",
         type=int,
         default=2,
-        help="Minimum number of error categories used for refinement.",
+        help="Minimum distinct failed questions required for a selected category.",
     )
     parser.add_argument(
         "--max-categories",
@@ -46,15 +46,15 @@ def parse_args() -> argparse.Namespace:
         "--num-candidates",
         type=int,
         default=5,
-        help="Number of refined prompt candidates generated from the taxonomy.",
+        help="Independent generations made by passing the same guidance prompt k times.",
     )
     args = parser.parse_args()
     if args.train_sample_size <= 0 or args.error_batch_size <= 0:
         parser.error("ETGPO sample and batch sizes must be positive.")
     if not 0.0 < args.error_coverage <= 1.0:
         parser.error("--error-coverage must be greater than zero and at most one.")
-    if not 1 <= args.min_categories <= args.max_categories:
-        parser.error("ETGPO category limits are invalid.")
+    if args.min_problems <= 0 or args.max_categories <= 0:
+        parser.error("ETGPO category-selection limits must be positive.")
     if args.num_candidates <= 0:
         parser.error("--num-candidates must be positive.")
     return args

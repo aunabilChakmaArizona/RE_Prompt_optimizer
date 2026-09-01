@@ -12,10 +12,10 @@ from prompt_optimization.evaluation import (
     select_mixed_feedback,
 )
 from prompt_optimization.meta_prompts import (
+    etgpo_first_taxonomy_prompt,
     etgpo_guidance_prompt,
-    etgpo_taxonomy_prompt,
+    etgpo_update_taxonomy_prompt,
     evoprompt_de_prompt,
-    evoprompt_seed_prompt,
     extract_json_object,
     extract_tagged_prompts,
     rpo_feedback_prompt,
@@ -30,8 +30,9 @@ from prompt_optimization.optimizer_common import (
     generate_optimizer_texts,
     generate_tagged_candidates,
 )
+from prompt_optimization.qa_evoprompt_seeds import QA_EVOPROMPT_SEEDS
 from prompt_optimization.qa_task import (
-    feedback_example,
+    etgpo_failure_example,
     rpo_feedback_example,
     sample_records,
 )
@@ -239,77 +240,49 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     )
 
 
-def _evoprompt_human_seed(context: QAOptimizationContext) -> str:
-    """Return the second fixed human seed for the selected QA mode."""
-    if context.mode.name == "reasoning":
-        return (
-            "Solve the multiple-choice question using relevant knowledge, "
-            "check each option, and choose the best supported answer."
-        )
-    return (
-        "Use relevant knowledge to compare the choices and select the "
-        "single best answer to the multiple-choice question."
-    )
-
-
 def _build_evoprompt_population(
     context: QAOptimizationContext,
     population_size: int,
 ) -> list[str]:
-    """Create two human and remaining AI-generated EvoPrompt seeds."""
-    if population_size < 5:
-        raise ValueError("EvoPrompt-DE requires a population size of at least five.")
-    ai_count = population_size - 2
-    meta_prompt = evoprompt_seed_prompt(
-        context.initial_prompt,
-        context.mode,
-        ai_count,
-    )
-    ai_seeds: list[str] = []
-    for attempt in range(1, 4):
-        outputs = generate_optimizer_texts(
-            context,
-            [meta_prompt],
-            log_label="qa_evoprompt_initial_population",
-        )
-        ai_seeds = unique_nonempty([*ai_seeds, *extract_tagged_prompts(outputs)])
-        context.logger.event(
-            "evoprompt_seed_generation",
-            attempt=attempt,
-            meta_prompt=meta_prompt,
-            raw_outputs=outputs,
-            parsed_ai_seeds=ai_seeds,
-        )
-        if len(ai_seeds) >= ai_count:
-            break
-        context.logger.event(
-            "evoprompt_seed_retry",
-            attempt=attempt,
-            distinct_ai_seeds=len(ai_seeds),
-            required_ai_seeds=ai_count,
+    """Load the fixed five-prompt EvoPrompt population for one QA mode."""
+    fixed_seeds = QA_EVOPROMPT_SEEDS[context.mode.name]
+    population_records = [
+        {"label": "source_prompt", "prompt": context.initial_prompt},
+        *fixed_seeds,
+    ]
+    if population_size != len(population_records):
+        raise ValueError(
+            "The fixed QA EvoPrompt population contains exactly "
+            f"{len(population_records)} prompts; received --population-size "
+            f"{population_size}."
         )
     population = unique_nonempty(
-        [context.initial_prompt, _evoprompt_human_seed(context), *ai_seeds]
+        [str(item["prompt"]) for item in population_records]
     )
     if len(population) < population_size:
-        raise RuntimeError(
-            "The optimizer did not produce enough distinct EvoPrompt seed prompts. "
-            f"Expected {population_size}, received {len(population)}."
+        raise ValueError(
+            "The fixed EvoPrompt population contains duplicate or empty prompts. "
+            f"Expected {population_size} distinct prompts, received {len(population)}."
         )
-    return population[:population_size]
+    context.logger.event(
+        "evoprompt_fixed_initial_population",
+        population=population_records,
+    )
+    return population
 
 
 def _sample_de_donors(
     population: Sequence[str],
     target_index: int,
+    current_best_prompt: str,
     rng: random.Random,
 ) -> tuple[str, str, str]:
-    """Sample three distinct donor prompts other than the DE target."""
+    """Sample two random donors and use the current best as EvoPrompt's third donor."""
     candidates = [prompt for index, prompt in enumerate(population) if index != target_index]
     if len(candidates) < 3:
         raise ValueError("Differential evolution needs three non-target donors.")
-    donor_a, donor_b, donor_c = rng.sample(candidates, 3)
-    return donor_a, donor_b, donor_c
+    donor_a, donor_b, _ = rng.sample(candidates, 3)
+    return donor_a, donor_b, current_best_prompt
 
 
 def _evaluate_prompt_sequence(
@@ -368,16 +341,18 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
             phase="evoprompt_parent_fitness",
             iteration=iteration,
         )
+        current_best_prompt = best_scored_candidate(parent_scores)["prompt"]
         de_meta_prompts = []
+        de_parent_records = []
         for target_index, target_prompt in enumerate(population):
             donor_a, donor_b, donor_c = _sample_de_donors(
                 population,
                 target_index,
+                current_best_prompt,
                 context.rng,
             )
             de_meta_prompts.append(
                 evoprompt_de_prompt(
-                    context.initial_prompt,
                     target_prompt,
                     donor_a,
                     donor_b,
@@ -385,10 +360,20 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
                     context.mode,
                 )
             )
+            de_parent_records.append(
+                {
+                    "target_index": target_index,
+                    "target_prompt": target_prompt,
+                    "donor_a": donor_a,
+                    "donor_b": donor_b,
+                    "donor_c_current_best": donor_c,
+                }
+            )
         raw_outputs = generate_optimizer_texts(
             context,
             de_meta_prompts,
             log_label="qa_evoprompt_de_generation",
+            enable_thinking=False,
         )
         children = []
         for target_prompt, raw_output in zip(population, raw_outputs):
@@ -397,6 +382,8 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
         context.logger.event(
             "evoprompt_de_generation",
             iteration=iteration,
+            current_best_prompt=current_best_prompt,
+            parents=de_parent_records,
             meta_prompts=de_meta_prompts,
             raw_outputs=raw_outputs,
             parsed_children=children,
@@ -476,35 +463,187 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
     )
 
 
-def _merge_taxonomy(
+def _add_taxonomy_categories(
     taxonomy: Sequence[dict[str, Any]],
     additions: Sequence[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Merge ETGPO categories by normalized name and accumulate counts."""
-    merged: dict[str, dict[str, Any]] = {}
-    for category in [*taxonomy, *additions]:
-        name = str(category.get("name", "")).strip()
+    """Add genuinely new ETGPO categories while preserving accumulated statistics."""
+    merged = [dict(category) for category in taxonomy]
+    by_name = {
+        str(category["category_name"]).strip().casefold(): category
+        for category in merged
+    }
+    descriptive_fields = (
+        "summary",
+        "description",
+        "example",
+        "error_type",
+        "why_leads_to_wrong_answer",
+    )
+    for addition in additions:
+        name = str(
+            addition.get("category_name", addition.get("name", ""))
+        ).strip()
         if not name:
             continue
         key = name.casefold()
-        count = int(category.get("count", 1) or 1)
-        if key not in merged:
-            merged[key] = {
-                "name": name,
-                "description": str(category.get("description", "")).strip(),
-                "count": count,
+        if key not in by_name:
+            category = {
+                "category_name": name,
+                **{
+                    field: str(addition.get(field, "")).strip()
+                    for field in descriptive_fields
+                },
+                "trace_count": 0,
+                "problem_ids": [],
             }
-        else:
-            merged[key]["count"] += count
-            if not merged[key]["description"]:
-                merged[key]["description"] = str(
-                    category.get("description", "")
-                ).strip()
-    return sorted(merged.values(), key=lambda item: int(item["count"]), reverse=True)
+            merged.append(category)
+            by_name[key] = category
+            continue
+        existing = by_name[key]
+        for field in descriptive_fields:
+            if not existing.get(field) and addition.get(field):
+                existing[field] = str(addition[field]).strip()
+    return merged
+
+
+def _resolve_failure_number(value: Any, batch_size: int) -> int | None:
+    """Convert an ETGPO failure identifier into a valid one-based batch position."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if 1 <= number <= batch_size else None
+
+
+def _record_taxonomy_assignments(
+    taxonomy: Sequence[dict[str, Any]],
+    prior_assignments: Sequence[dict[str, Any]],
+    raw_assignments: Sequence[dict[str, Any]],
+    batch: Sequence[tuple[dict[str, Any], dict[str, Any]]],
+    batch_index: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Record one category assignment per failure and update category counts."""
+    updated_taxonomy = [dict(category) for category in taxonomy]
+    for category in updated_taxonomy:
+        category["problem_ids"] = list(category.get("problem_ids", []))
+    assignments = [dict(assignment) for assignment in prior_assignments]
+    assignment_by_failure: dict[int, dict[str, Any]] = {}
+    for assignment in raw_assignments:
+        failure_number = _resolve_failure_number(
+            assignment.get("failure_id"),
+            len(batch),
+        )
+        if failure_number is not None and failure_number not in assignment_by_failure:
+            assignment_by_failure[failure_number] = assignment
+
+    for failure_number, (record, _) in enumerate(batch, start=1):
+        raw_assignment = assignment_by_failure.get(failure_number, {})
+        category_name = str(raw_assignment.get("category_name", "")).strip()
+        if not category_name:
+            category_name = "Uncategorized model error"
+        updated_taxonomy = _add_taxonomy_categories(
+            updated_taxonomy,
+            [
+                {
+                    "category_name": category_name,
+                    "summary": "A failure that the taxonomy response did not classify.",
+                    "description": (
+                        "The model selected an incorrect answer, but the taxonomy "
+                        "response did not provide a usable category assignment."
+                    ),
+                    "error_type": "unclassified error",
+                }
+            ],
+        )
+        category_by_name = {
+            str(category["category_name"]).strip().casefold(): category
+            for category in updated_taxonomy
+        }
+        category = category_by_name[category_name.casefold()]
+        canonical_name = str(category["category_name"])
+        problem_id = str(record["id"])
+        category["trace_count"] = int(category.get("trace_count", 0)) + 1
+        if problem_id not in category["problem_ids"]:
+            category["problem_ids"].append(problem_id)
+        trace_details = raw_assignment.get("trace_details", {})
+        if not isinstance(trace_details, dict):
+            trace_details = {"trace_specific_details": str(trace_details)}
+        assignments.append(
+            {
+                "batch_index": batch_index,
+                "failure_id": failure_number,
+                "problem_id": problem_id,
+                "category_name": canonical_name,
+                "trace_details": trace_details,
+            }
+        )
+    return updated_taxonomy, assignments
+
+
+def _select_taxonomy_categories(
+    taxonomy: Sequence[dict[str, Any]],
+    total_failures: int,
+    coverage_threshold: float,
+    max_categories: int,
+    min_problems: int,
+) -> tuple[list[dict[str, Any]], float]:
+    """Select frequent categories until the requested failure coverage is reached."""
+    ranked = sorted(
+        taxonomy,
+        key=lambda category: (
+            -int(category.get("trace_count", 0)),
+            str(category.get("category_name", "")).casefold(),
+        ),
+    )
+    eligible = [
+        category
+        for category in ranked
+        if len(category.get("problem_ids", [])) >= min_problems
+    ]
+    if not eligible:
+        eligible = ranked
+    selected: list[dict[str, Any]] = []
+    covered_failures = 0
+    target_failures = coverage_threshold * total_failures
+    for category in eligible:
+        if len(selected) >= max_categories or covered_failures >= target_failures:
+            break
+        selected.append(dict(category))
+        covered_failures += int(category.get("trace_count", 0))
+    achieved_coverage = covered_failures / total_failures if total_failures else 0.0
+    return selected, achieved_coverage
+
+
+def _etgpo_candidate_from_output(
+    raw_output: str,
+    source_prompt: str,
+) -> str | None:
+    """Extract one complete ETGPO prompt from one independent guidance response."""
+    parsed = extract_json_object(raw_output)
+    if parsed:
+        full_prompt = str(parsed.get("full_prompt", "")).strip()
+        if full_prompt:
+            return full_prompt
+        preamble = str(parsed.get("preamble", "")).strip()
+        guidance_items = parsed.get("guidance_items", [])
+        guidance_texts = []
+        if isinstance(guidance_items, list):
+            guidance_texts = [
+                str(item.get("guidance_text", "")).strip()
+                for item in guidance_items
+                if isinstance(item, dict) and item.get("guidance_text")
+            ]
+        pieces = [source_prompt, preamble, *guidance_texts]
+        assembled = "\n\n".join(piece for piece in pieces if piece)
+        if assembled != source_prompt:
+            return assembled
+    tagged = extract_tagged_prompts([raw_output])
+    return tagged[0] if tagged else None
 
 
 def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
-    """Run one taxonomy-guided ETGPO refinement over sampled QA errors."""
+    """Run ETGPO taxonomy construction and repeated guidance generation for QA."""
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -528,71 +667,96 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         if not prediction["correct"]
     ]
     context.rng.shuffle(errors)
-    coverage_count = math.ceil(len(errors) * args.error_coverage)
     taxonomy: list[dict[str, Any]] = []
+    assignments: list[dict[str, Any]] = []
     processed = 0
     batch_index = 0
-    while processed < coverage_count:
+    while processed < len(errors):
         batch = errors[processed : processed + args.error_batch_size]
         if not batch:
             break
         batch_index += 1
         examples = [
-            feedback_example(record, prediction, index)
+            etgpo_failure_example(record, prediction, index, context.mode)
             for index, (record, prediction) in enumerate(batch, start=1)
         ]
-        meta_prompt = etgpo_taxonomy_prompt(
-            taxonomy,
-            examples,
-            args.min_categories,
-            args.max_categories,
-        )
+        if batch_index == 1:
+            meta_prompt = etgpo_first_taxonomy_prompt(examples, context.mode)
+        else:
+            meta_prompt = etgpo_update_taxonomy_prompt(
+                taxonomy,
+                examples,
+                context.mode,
+            )
         raw_output = generate_optimizer_texts(
             context,
             [meta_prompt],
             log_label="qa_etgpo_taxonomy",
         )[0]
         parsed = extract_json_object(raw_output) or {}
-        categories = parsed.get("categories", [])
+        category_key = "categories" if batch_index == 1 else "new_categories"
+        categories = parsed.get(category_key, [])
         if isinstance(categories, list):
-            taxonomy = _merge_taxonomy(
-                [],
+            taxonomy = _add_taxonomy_categories(
+                taxonomy,
                 [item for item in categories if isinstance(item, dict)],
             )
+        raw_assignments = parsed.get("failure_assignments", [])
+        if not isinstance(raw_assignments, list):
+            raw_assignments = []
+        taxonomy, assignments = _record_taxonomy_assignments(
+            taxonomy,
+            assignments,
+            [item for item in raw_assignments if isinstance(item, dict)],
+            batch,
+            batch_index,
+        )
         processed += len(batch)
         context.logger.event(
             "etgpo_taxonomy_batch",
             batch_index=batch_index,
             processed_errors=processed,
-            target_coverage_count=coverage_count,
+            total_errors=len(errors),
             taxonomy=taxonomy,
+            assignments=assignments[-len(batch) :],
             meta_prompt=meta_prompt,
             raw_output=raw_output,
+            parsed_output=parsed,
         )
-    if not taxonomy and errors:
-        taxonomy = [
-            {
-                "name": "general instruction failure",
-                "description": "The instruction did not reliably guide selection of the correct option.",
-                "count": len(errors),
-            }
-        ]
-    taxonomy = taxonomy[: args.max_categories]
-    guidance_meta_prompt = etgpo_guidance_prompt(
-        context.initial_prompt,
-        context.mode,
+    selected_taxonomy, achieved_coverage = _select_taxonomy_categories(
         taxonomy,
-        args.num_candidates,
+        len(errors),
+        args.error_coverage,
+        args.max_categories,
+        args.min_problems,
     )
-    candidates, raw_outputs = generate_tagged_candidates(
-        context,
-        [guidance_meta_prompt],
-        log_label="qa_etgpo_guidance",
-        include_prompts=[context.initial_prompt],
-    )
-    candidate_prompts = [
-        prompt for prompt in candidates if prompt != context.initial_prompt
-    ]
+    raw_outputs: list[str] = []
+    candidate_prompts: list[str] = []
+    guidance_meta_prompt = ""
+    if selected_taxonomy:
+        guidance_meta_prompt = etgpo_guidance_prompt(
+            context.initial_prompt,
+            context.mode,
+            selected_taxonomy,
+            len(errors),
+        )
+        raw_outputs = generate_optimizer_texts(
+            context,
+            [guidance_meta_prompt] * args.num_candidates,
+            log_label="qa_etgpo_guidance",
+        )
+        candidate_prompts = unique_nonempty(
+            [
+                candidate
+                for raw_output in raw_outputs
+                if (
+                    candidate := _etgpo_candidate_from_output(
+                        raw_output,
+                        context.initial_prompt,
+                    )
+                )
+            ]
+        )
     scored = evaluate_candidates(
         context,
         candidate_prompts,
@@ -604,8 +768,9 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     context.logger.event(
         "etgpo_guidance_generation",
         meta_prompt=guidance_meta_prompt,
+        repeated_generation_count=args.num_candidates if selected_taxonomy else 0,
         raw_outputs=raw_outputs,
-        parsed_candidates=candidates,
+        parsed_candidates=candidate_prompts,
     )
     source = {
         "prompt": context.initial_prompt,
@@ -615,7 +780,20 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     selected = best_scored_candidate(scored) if scored else source
     if float(selected["accuracy"]) <= float(source["accuracy"]):
         selected = source
-    save_json(context.run_dir / "taxonomy.json", taxonomy)
+    taxonomy_payload = {
+        "total_failures": len(errors),
+        "processed_failures": processed,
+        "categories": taxonomy,
+        "assignments": assignments,
+        "selection": {
+            "coverage_threshold": args.error_coverage,
+            "achieved_coverage": achieved_coverage,
+            "minimum_problems": args.min_problems,
+            "maximum_categories": args.max_categories,
+            "selected_categories": selected_taxonomy,
+        },
+    }
+    save_json(context.run_dir / "taxonomy.json", taxonomy_payload)
     return finalize_run(
         context,
         initial_evaluation=initial_evaluation,
@@ -627,7 +805,13 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "train_error_count": len(errors),
             "processed_error_count": processed,
             "error_coverage": args.error_coverage,
+            "achieved_error_coverage": achieved_coverage,
             "taxonomy": taxonomy,
+            "selected_taxonomy": selected_taxonomy,
+            "taxonomy_assignments": assignments,
+            "guidance_generation_count": (
+                args.num_candidates if selected_taxonomy else 0
+            ),
             "raw_guidance_outputs": raw_outputs,
         },
     )

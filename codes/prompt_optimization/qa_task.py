@@ -232,6 +232,45 @@ def rpo_feedback_example(
     )
 
 
+def etgpo_failure_example(
+    record: dict[str, Any],
+    prediction: dict[str, Any],
+    index: int,
+    mode: QAMode,
+) -> str:
+    """Format one failed QA response for ETGPO taxonomy analysis."""
+    predicted = prediction.get("predicted_answer") or "INVALID"
+    raw_response = str(prediction.get("raw_response", "")).strip() or "EMPTY"
+    response_heading = (
+        "Model's Reasoning and Response"
+        if mode.name == "reasoning"
+        else "Model's Response"
+    )
+    return "\n".join(
+        [
+            f"## Failure {index}",
+            f"Problem ID: {record['id']}",
+            "",
+            "### Question",
+            str(record["question"]),
+            "",
+            "### Choices",
+            choices_as_text(record),
+            "",
+            "### Correct Answer",
+            str(record["answer"]),
+            "",
+            f"### {response_heading}",
+            raw_response,
+            "",
+            "### Model's Selected Answer",
+            str(predicted),
+            "",
+            "---",
+        ]
+    )
+
+
 def corpus_texts(records: Sequence[dict[str, Any]]) -> list[str]:
     """Collect question, choice, and fact text for copied-content checks."""
     texts: list[str] = []

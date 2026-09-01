@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
         "--population-size",
         type=int,
         default=5,
-        help="Number of prompts in the population; at least five are required.",
+        help="Fixed population size; QA EvoPrompt uses exactly five saved seeds.",
     )
     parser.add_argument(
         "--train-sample-size",
@@ -38,8 +38,10 @@ def parse_args() -> argparse.Namespace:
         help="Training questions sampled to score prompts each iteration.",
     )
     args = parser.parse_args()
-    if args.iterations <= 0 or args.population_size < 5:
-        parser.error("EvoPrompt needs positive iterations and population size at least 5.")
+    if args.iterations <= 0:
+        parser.error("--iterations must be positive.")
+    if args.population_size != 5:
+        parser.error("QA EvoPrompt uses exactly five fixed population prompts.")
     if args.train_sample_size <= 0:
         parser.error("--train-sample-size must be positive.")
     return args

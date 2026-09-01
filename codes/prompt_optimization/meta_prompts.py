@@ -122,83 +122,303 @@ You may modify, add to, or remove any instructions or content in the current pro
 Please reason through the problem, but output only the revised prompt inside <prompt> and </prompt>."""
 
 
-def evoprompt_seed_prompt(initial_prompt: str, mode: QAMode, count: int) -> str:
-    """Request diverse AI seeds for EvoPrompt's initial population."""
-    return f"""Create {count} diverse general instructions for solving multiple-choice questions.
+EVOPROMPT_DE_EXAMPLES = {
+    "reasoning": """Please follow the instruction step-by-step to generate a better prompt.
+1. Identify the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the question and answer choices carefully, reason step by step, and choose the best-supported answer.
+Prompt 2: Analyze what the question asks, recall the relevant facts, compare every option, and verify the final choice.
+2. Randomly mutate the different parts.
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts from step 2, and generate a new prompt.
+Prompt 3: Solve the question systematically, eliminate choices that conflict with the evidence, and check that the remaining answer fully addresses the question.
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: Answer the following multiple-choice question. Think step by step carefully and select the best answer.
 
-Basic instruction:
-<prompt>{initial_prompt}</prompt>
+1. Identifying the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the question and answer choices carefully, reason step by step, and choose the best-supported answer.
+Prompt 2: Analyze what the question asks, recall the relevant facts, compare every option, and verify the final choice.
+Different parts:
+"read the question and answer choices carefully" vs "analyze what the question asks"
+"reason step by step" vs "recall the relevant facts"
+"choose the best-supported answer" vs "compare every option and verify the final choice"
 
-The answer format is fixed separately as:
-{mode.answer_instruction}
+2. Randomly mutate the different parts:
+"read the question and answer choices carefully" -> "identify the question's exact requirement"
+"reason step by step" -> "build a logically connected solution"
+"recall the relevant facts" -> "use only facts relevant to the decision"
+"compare every option" -> "test each choice against the reasoning"
 
-Each instruction must be self-contained, concise, task-generic, and must not contain question-specific text or mention any dataset or benchmark. Return each instruction in its own <prompt>...</prompt> block."""
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts in step 2 and generate a new prompt:
+Prompt 3: Solve the question systematically, eliminate choices that conflict with the evidence, and check that the remaining answer fully addresses the question.
+New Prompt: Identify the question's exact requirement, build a logically connected solution using relevant facts, test each choice against the reasoning, and eliminate choices that conflict with the evidence.
+
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: Answer the following multiple-choice question. Think step by step carefully and select the best answer.
+Final Prompt: <prompt>Identify exactly what the question asks, reason through the relevant facts step by step, test the answer choices against that reasoning, eliminate inconsistent choices, and select the best-supported answer.</prompt>""",
+    "non_reasoning": """Please follow the instruction step-by-step to generate a better prompt.
+1. Identify the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the question and choices carefully and select the single best answer directly.
+Prompt 2: Identify what the question asks, compare the available choices, and return the most appropriate answer without explanation.
+2. Randomly mutate the different parts.
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts from step 2, and generate a new prompt.
+Prompt 3: Use relevant knowledge to evaluate the choices and choose the option best supported by the question.
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: Answer the following multiple-choice question. Select the best answer directly without reasoning or explanation.
+
+1. Identifying the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the question and choices carefully and select the single best answer directly.
+Prompt 2: Identify what the question asks, compare the available choices, and return the most appropriate answer without explanation.
+Different parts:
+"read the question and choices carefully" vs "identify what the question asks"
+"select the single best answer" vs "compare the available choices"
+"directly" vs "without explanation"
+
+2. Randomly mutate the different parts:
+"read the question and choices carefully" -> "focus on the question's exact requirement"
+"select the single best answer" -> "choose the best-supported option"
+"compare the available choices" -> "evaluate each choice for relevance and correctness"
+
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts in step 2 and generate a new prompt:
+Prompt 3: Use relevant knowledge to evaluate the choices and choose the option best supported by the question.
+New Prompt: Focus on the question's exact requirement, use relevant knowledge to evaluate each choice for relevance and correctness, and choose the best-supported option.
+
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: Answer the following multiple-choice question. Select the best answer directly without reasoning or explanation.
+Final Prompt: <prompt>Focus on exactly what the question asks, use relevant knowledge to evaluate the available choices, and select the single best-supported answer directly without explanation.</prompt>""",
+}
 
 
 def evoprompt_de_prompt(
-    basic_prompt: str,
     target_prompt: str,
     donor_a: str,
     donor_b: str,
     donor_c: str,
     mode: QAMode,
 ) -> str:
-    """Construct one differential-evolution crossover meta-prompt."""
-    return f"""Generate a better instruction for solving multiple-choice questions through differential evolution.
+    """Construct the worked-example DE prompt used to mutate one population member."""
+    return f"""{EVOPROMPT_DE_EXAMPLES[mode.name]}
 
-1. Identify useful differences between Prompt 1 and Prompt 2.
-2. Selectively combine those differences with Prompt 3.
-3. Crossover the result with the target and basic prompts.
-
-Basic Prompt: {basic_prompt}
-Target Prompt: {target_prompt}
+Please follow the instruction step-by-step to generate a better prompt.
+1. Identify the different parts between Prompt 1 and Prompt 2:
 Prompt 1: {donor_a}
 Prompt 2: {donor_b}
+2. Randomly mutate the different parts.
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts in step 2, and generate a new prompt.
 Prompt 3: {donor_c}
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: {target_prompt}
 
-The following answer-format text is fixed and must not be copied into the instruction:
-{mode.answer_instruction}
-
-Return one concise, task-generic instruction with no question-specific text or dataset or benchmark names inside <prompt> and </prompt>."""
+1. """
 
 
-def etgpo_taxonomy_prompt(
-    current_taxonomy: Sequence[dict[str, Any]],
+def etgpo_first_taxonomy_prompt(
     error_examples: Sequence[str],
-    min_categories: int,
-    max_categories: int,
+    mode: QAMode,
 ) -> str:
-    """Ask ETGPO to update a compact taxonomy of instruction-level errors."""
-    return f"""Analyze mistakes from multiple-choice question answering and update a compact taxonomy of instruction-level failure types.
+    """Ask ETGPO to create issue categories from its first batch of QA failures."""
+    if mode.name == "reasoning":
+        analysis_steps = """1. Find the EARLIEST point in the response's reasoning where it went wrong.
+2. Explain what specifically went wrong.
+3. Explain why that error led to the wrong selected answer."""
+    else:
+        analysis_steps = """1. Infer the earliest decision error, missing evidence, or misleading cue behind the response.
+2. Explain what specifically went wrong in selecting the answer.
+3. Explain why that error led to the wrong selected answer."""
+    schema = {
+        "categories": [
+            {
+                "category_name": "Short descriptive name",
+                "summary": "One-sentence error pattern",
+                "description": "Detailed self-contained description",
+                "example": "A concrete self-contained example",
+                "error_type": "Type of error",
+                "why_leads_to_wrong_answer": "How this error causes wrong answers",
+            }
+        ],
+        "failure_assignments": [
+            {
+                "failure_id": 1,
+                "problem_id": "ID shown in the failure",
+                "category_name": "Assigned category name",
+                "trace_details": {
+                    "trace_specific_location": "Where the error occurred",
+                    "trace_specific_details": "What specifically went wrong",
+                },
+            }
+        ],
+    }
+    return f"""You are an expert at analyzing why language models fail on multiple-choice question answering.
 
-Current taxonomy:
-{json.dumps(list(current_taxonomy), ensure_ascii=False)}
-
-New mistakes:
 {chr(10).join(error_examples)}
 
-Return JSON with key "categories" containing between {min_categories} and {max_categories} categories. Each category must have "name", "description", and "count". Return the complete updated taxonomy and merge equivalent categories. Focus on general reasoning or answer-selection behavior, not individual topics or questions. Do not mention any dataset or benchmark."""
+## Your Task
+
+Analyze every failure and identify its root cause. Be as descriptive as possible.
+
+For each failure:
+{analysis_steps}
+
+Create issue categories that capture each type of error. Categories should be general enough to potentially apply to other traces, but specific enough to be meaningful.
+
+IMPORTANT: Each category must be SELF-CONTAINED and understandable by someone who has NOT seen the original problems.
+
+## Output Format
+
+Return only one JSON object matching this structure:
+```json
+{json.dumps(schema, ensure_ascii=False, indent=2)}
+```"""
+
+
+def etgpo_update_taxonomy_prompt(
+    existing_categories: Sequence[dict[str, Any]],
+    error_examples: Sequence[str],
+    mode: QAMode,
+) -> str:
+    """Ask ETGPO to assign another failure batch and add only genuinely new issues."""
+    category_lines = []
+    for category in existing_categories:
+        category_lines.append(
+            "\n".join(
+                [
+                    f"### Category: {category['category_name']}",
+                    f"- Summary: {category.get('summary', '')}",
+                    f"- Description: {category.get('description', '')}",
+                    f"- Example: {category.get('example', '')}",
+                    f"- Error Type: {category.get('error_type', '')}",
+                    "- Why it leads to wrong answer: "
+                    f"{category.get('why_leads_to_wrong_answer', '')}",
+                    f"- Failures assigned so far: {category.get('trace_count', 0)}",
+                ]
+            )
+        )
+    trace_location = (
+        "Earliest reasoning location" if mode.name == "reasoning" else "Decision error or misleading cue"
+    )
+    schema = {
+        "new_categories": [
+            {
+                "category_name": "Short descriptive name for a new error",
+                "summary": "One-sentence error pattern",
+                "description": "Detailed self-contained description",
+                "example": "A concrete self-contained example",
+                "error_type": "Type of error",
+                "why_leads_to_wrong_answer": "How this error causes wrong answers",
+            }
+        ],
+        "failure_assignments": [
+            {
+                "failure_id": 1,
+                "problem_id": "ID shown in the failure",
+                "is_new_category": False,
+                "category_name": "Existing or new category name",
+                "trace_details": {
+                    "trace_specific_location": trace_location,
+                    "trace_specific_details": "What specifically went wrong",
+                },
+            }
+        ],
+    }
+    return f"""You are an expert at analyzing why language models fail on multiple-choice question answering.
+
+## Existing Issue Categories
+
+{chr(10).join(category_lines)}
+
+## New Failures
+
+{chr(10).join(error_examples)}
+
+## Your Task
+
+For every new failure, decide whether its root cause fits an existing category. Reuse that category whenever it fits. Create a new category only when the error is fundamentally different. New categories must be self-contained, generalizable, specific, and actionable.
+
+## Output Format
+
+Return only one JSON object matching this structure:
+```json
+{json.dumps(schema, ensure_ascii=False, indent=2)}
+```
+
+The "new_categories" list must contain only categories that do not already exist."""
 
 
 def etgpo_guidance_prompt(
     instruction_prompt: str,
     mode: QAMode,
     taxonomy: Sequence[dict[str, Any]],
-    candidate_count: int,
+    total_failures: int,
 ) -> str:
-    """Ask ETGPO to turn its error taxonomy into candidate instructions."""
-    return f"""Use this error taxonomy to improve an instruction for solving multiple-choice questions.
+    """Ask ETGPO to turn selected frequent error categories into one improved prompt."""
+    category_sections = []
+    for index, category in enumerate(taxonomy, start=1):
+        failure_count = int(category.get("trace_count", 0))
+        problem_count = len(category.get("problem_ids", []))
+        coverage = 100.0 * failure_count / total_failures if total_failures else 0.0
+        category_sections.append(
+            f"""## Category {index}: {category['category_name']}
 
-Current instruction:
-<prompt>{instruction_prompt}</prompt>
+**Statistics:** {failure_count} failures ({coverage:.1f}%), {problem_count} problems
 
-Error taxonomy:
-{json.dumps(list(taxonomy), ensure_ascii=False, indent=2)}
+**Summary:** {category.get('summary', '')}
 
-The answer format is fixed separately:
-{mode.answer_instruction}
+**Description:** {category.get('description', '')}
 
-Generate {candidate_count} concise, task-generic candidate instructions. Do not include question-specific text or mention any dataset or benchmark. Return each in a separate <prompt>...</prompt> block."""
+**Example:** {category.get('example', '')}
+
+**Error Type:** {category.get('error_type', '')}
+
+**Why it leads to wrong answer:** {category.get('why_leads_to_wrong_answer', '')}
+
+---"""
+        )
+    schema = {
+        "guidance_items": [
+            {
+                "category_name": "Name of the category",
+                "guidance_text": "The full guidance text for this category",
+            }
+        ],
+        "preamble": "1-2 sentence introduction",
+        "full_prompt": "Complete enhanced prompt starting with base instruction",
+    }
+    return f"""You are an expert at improving language model performance on multiple-choice question answering.
+
+I have identified the following error categories from model failures. Generate guidance to help avoid these errors.
+
+{chr(10).join(category_sections)}
+
+## Your Task
+
+Generate guidance text that:
+1. Addresses each failure category with specific, actionable advice
+2. Is written as instructions TO the model
+3. Uses concrete examples where helpful
+4. Is prioritized by frequency
+
+Generate DETAILED guidance with examples. Each item should include:
+- Description of the error pattern
+- Actionable advice on how to avoid it
+- WRONG example showing the error
+- CORRECT example showing proper approach
+
+## Critical Constraints
+
+- The goal is ACCURACY, not caution. Never generate guidance that encourages the model to refuse, abstain, or say "not specified" when an answer can be reasonably provided.
+- CORRECT examples must always show the model providing a substantive answer. Never show abstention/refusal as the correct behavior.
+- Preserve this task behavior: {QA_TASK_DESCRIPTIONS[mode.name]}
+
+## Output Format
+
+Return a JSON object with:
+
+```json
+{json.dumps(schema, ensure_ascii=False, indent=2)}
+```
+
+The "full_prompt" should start with:
+"{instruction_prompt}"
+
+Then add the preamble and guidance items."""
 
 
 def lpo_location_prompt(

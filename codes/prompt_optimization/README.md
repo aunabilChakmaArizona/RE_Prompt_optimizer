@@ -39,6 +39,8 @@ Validation selection uses exact option-label accuracy. A second-stage candidate 
 
 Generated evaluations are reseeded deterministically by mode, split, and record subset, so every candidate sees the same sampling stream and repeated prompt evaluations are reproducible.
 
+EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. ETGPO analyzes every sampled failure, selects frequent categories to the requested coverage, and passes one identical guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes.
+
 For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</answer>` responses, but loss is applied only to the inner gold option-label token. This prevents fixed answer tags from dominating the instruction gradient.
 
 `GradPO-Gen-Random` matches the rebuttal control: it uses the same target-model candidate generation and beam search as GradPO-Gen, but randomly samples from the common gradient-derived editable-region pool instead of taking the highest-gradient regions.
@@ -48,8 +50,8 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 | Method | Main defaults |
 | --- | --- |
 | RPO | 10 iterations, snapshots at 5/10, feedback sample 100, separate feedback for 3 mixed examples, population 10, parent temperature 1.0 |
-| EvoPrompt-DE | 10 iterations, snapshots at 5/10, population 5, train fitness sample 1,000 |
-| ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, 2-5 categories, 5 candidates |
+| EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000 |
+| ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
 | LPO | 1 iteration, train sample 512, 3 mistakes, at most 5 locations, at most 3 words/location, 5 rewrites |
 | GreaTer / TG | 1 token, train sample 512, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
 | GradPO | 1 iteration, train sample 512, 5 candidates/span, beam 5 with target-model synthesis, expansion ratio 0.6, fluency weight 0.5 |
