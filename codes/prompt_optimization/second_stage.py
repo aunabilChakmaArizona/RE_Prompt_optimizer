@@ -11,9 +11,11 @@ except ImportError:
     torch = None
 
 from agents.agent_decoding import model_default_sampling_parameters
+from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1
 from prompt_optimization.cli_common import QAOptimizationContext
 from prompt_optimization.evaluation import metric_accuracy
 from prompt_optimization.meta_prompts import (
+    QA_TASK_DESCRIPTIONS,
     extract_json_object,
     extract_tagged_prompts,
     gradpo_candidate_prompt,
@@ -29,6 +31,7 @@ from prompt_optimization.optimizer_common import (
     generate_optimizer_texts,
 )
 from prompt_optimization.qa_task import (
+    QAMode,
     feedback_example,
     sample_label_balanced_records,
 )
@@ -732,8 +735,9 @@ def _gradpo_synthesis_prompt(
     instruction_prompt: str,
     regions: Sequence[dict[str, Any]],
     replacements: dict[int, str],
+    mode: QAMode,
 ) -> str:
-    """Ask the target model to apply chosen replacements with minimal local repair."""
+    """Adapt the relation-extraction GradPO synthesis prompt to one QA mode."""
     marked_prompt = mark_selected_regions(instruction_prompt, regions)
     replacement_blocks = []
     for region in regions:
@@ -748,19 +752,18 @@ def _gradpo_synthesis_prompt(
                 ]
             )
         )
-    return f"""You are an expert prompt editor for a multiple-choice question-answering task.
-
-Current instruction with targeted spans:
-```
-{marked_prompt}
-```
-
-Chosen replacements:
-{chr(10).join(replacement_blocks)}
-
-Generate the revised instruction by applying the chosen replacements to their spans. Use each replacement as provided, except for minimal local spelling or grammatical adjustments needed for coherence. Do not modify other parts of the instruction. Keep it task-generic, do not mention any dataset or benchmark, and remove all span tags.
-
-Output only the complete revised instruction."""
+    qa_prompt = "\n\n".join(
+        [
+            "You are an expert prompt generator for a multiple-choice question-answering task.",
+            QA_TASK_DESCRIPTIONS[mode.name],
+            GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1,
+        ]
+    )
+    return (
+        qa_prompt
+        .replace("#ALL_MARKED_PROMPT#", marked_prompt)
+        .replace("#SELECTED_REPLACEMENTS#", "\n\n".join(replacement_blocks))
+    )
 
 
 def _normalize_synthesized_prompt(raw_output: str) -> str:
@@ -836,6 +839,7 @@ def _beam_search_replacements(
                         context.initial_prompt,
                         regions,
                         complete_replacements,
+                        context.mode,
                     )
                 )
             if missing_prompts:

@@ -414,12 +414,14 @@ Output only the combinations in the following JSON format:
 ```
 '''
 
-GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = '''You are an expert prompt generator for a relation extraction inference task.
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_ROLE_V1 = (
+    "You are an expert prompt generator for a relation extraction inference task."
+)
 
-A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
-The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object entities.
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_TASK_V1 = '''A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
+The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object entities.'''
 
-You are given the current instruction prompt with targeted spans below:
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1 = '''You are given the current instruction prompt with targeted spans below:
 ```
 #ALL_MARKED_PROMPT#
 ```
@@ -436,6 +438,14 @@ Do not modify any other parts of the prompt (but remove the span tags).
 
 Output only the revised prompt.
 '''
+
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = (
+    GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_ROLE_V1
+    + "\n\n"
+    + GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_TASK_V1
+    + "\n\n"
+    + GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1
+)
 
 GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_SINGLE_REGION_V1 = '''You are an expert prompt generator for a relation extraction inference task.
 

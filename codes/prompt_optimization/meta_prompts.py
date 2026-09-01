@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any, Sequence
 
+from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1
 from prompt_optimization.qa_task import QAMode
 
 
@@ -471,19 +472,20 @@ def gradpo_candidate_prompt(
     candidate_count: int,
 ) -> str:
     """Ask GradPO-Gen for short replacements at selected gradient spans."""
-    region_lines = []
+    region_blocks = []
     for region in selected_regions:
-        region_lines.append(
-            f"span_{region['region_rank']}: {region['region_text']!r} "
-            f"({region['token_count']} target-model tokens)"
+        region_blocks.append(
+            "\n".join(
+                [
+                    f"Span {region['region_rank']}",
+                    f"Text: ```{region['region_text']}```",
+                ]
+            )
         )
-    return f"""Suggest local replacements for gradient-selected spans in an instruction for solving multiple-choice questions.
-
-Marked instruction:
-{marked_prompt}
-
-Spans:
-{chr(10).join(region_lines)}
-
-For each span, give {candidate_count} concise replacement phrases that fit its context and preserve a task-generic instruction. Do not copy text from any provided question or mention any dataset or benchmark. Return JSON only in this form:
-{{"span_1": {{"candidates": ["..."]}}, "span_2": {{"candidates": ["..."]}}}}"""
+    return (
+        GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1
+        .replace("#MARKED_PROMPT#", marked_prompt)
+        .replace("#REGION_CANDIDATE_REQUEST_BLOCKS#", "\n\n".join(region_blocks))
+        .replace("#NUM_CANDIDATES#", str(candidate_count))
+        .replace("#NUM_REGIONS#", str(len(selected_regions)))
+    )
