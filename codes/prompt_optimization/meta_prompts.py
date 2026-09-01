@@ -11,6 +11,13 @@ from prompt_optimization.qa_task import QAMode
 
 PROMPT_PATTERN = re.compile(r"<prompt\s*>(.*?)</prompt\s*>", re.IGNORECASE | re.DOTALL)
 
+QA_TASK_DESCRIPTIONS = {
+    "reasoning": """A multiple-choice question contains several labeled options, with one best answer.
+The task requires reasoning carefully and then outputting the correct option label.""",
+    "non_reasoning": """A multiple-choice question contains several labeled options, with one best answer.
+The task requires directly outputting the correct option label without reasoning or explanation.""",
+}
+
 
 def unique_nonempty(values: Sequence[str]) -> list[str]:
     """Keep distinct non-empty strings in their original order."""
@@ -54,45 +61,65 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
 
 
 def rpo_feedback_prompt(
-    instruction_prompt: str,
     mode: QAMode,
-    examples: Sequence[str],
+    example: str,
 ) -> str:
-    """Ask the optimizer to diagnose a small mixed set of QA predictions."""
-    return f"""You are analyzing an instruction for solving multiple-choice questions.
+    """Ask the optimizer for feedback about one correct or incorrect QA response."""
+    task_description = QA_TASK_DESCRIPTIONS[mode.name]
+    if mode.name == "reasoning":
+        analysis_instruction = """Analyze the reasoning in the LLM response and explain how it led to the selected answer.
+- If the answer is correct, explain which reasoning steps, evidence, or cues were useful.
+- If the answer is incorrect, explain which reasoning step, misunderstanding, missing evidence, or heuristic likely caused the error."""
+    else:
+        analysis_instruction = """The LLM was asked to answer directly, so its response may not contain explicit reasoning. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
+- If the answer is correct, explain what likely supported the decision.
+- If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error."""
 
-Only the first instruction is editable. The answer-format instruction, question, and choices are fixed.
+    return f"""You are an expert feedback model for a multiple-choice question-answering task. You specialize in explaining why a question-answering system arrived at a particular answer, for both correct and incorrect predictions.
 
-Current editable instruction:
-<prompt>{instruction_prompt}</prompt>
+{task_description}
 
-Fixed answer instruction:
-{mode.answer_instruction}
+You are given one task instance containing the question, choices, ground-truth answer, the LLM's response, and whether its selected answer was correct or incorrect.
 
-Prediction examples:
-{chr(10).join(examples)}
+The ground-truth answer and outcome are provided as contextual information. Your task is to explain the most likely reasoning or decision process that led to the LLM's answer, not to solve the question again.
 
-Briefly identify instruction-level weaknesses that explain the mistakes. Keep the instruction task-generic: do not copy question-specific text or mention any dataset or benchmark. Return the diagnosis inside <feedback> and </feedback>."""
+{analysis_instruction}
+
+Instance:
+```
+{example}
+```
+
+Please reason through the problem, but provide your final feedback only inside <feedback> and </feedback>."""
 
 
 def rpo_rewrite_prompt(
     instruction_prompt: str,
-    feedback: str,
+    feedback_examples: Sequence[str],
     mode: QAMode,
 ) -> str:
-    """Ask RPO to produce one revised editable QA instruction."""
-    return f"""Improve the editable instruction using the feedback below.
+    """Ask RPO to revise one QA instruction from separate example feedback."""
+    task_description = QA_TASK_DESCRIPTIONS[mode.name]
 
-Current instruction:
-<prompt>{instruction_prompt}</prompt>
+    return f"""You are an expert prompt generator for a multiple-choice question-answering task. You specialize in revising and improving prompts based on feedback from previous model predictions.
 
-Feedback:
-{feedback}
+{task_description}
 
-The fixed answer instruction is not part of the editable text:
-{mode.answer_instruction}
+You are given below a prompt that is used by another LLM to answer the questions:
+```
+{instruction_prompt}
+```
 
-Write one concise, general instruction for solving multiple-choice questions. Do not include question-specific text or mention any dataset or benchmark. Return only the revised instruction inside <prompt> and </prompt>."""
+Using this prompt, another LLM was tested on {len(feedback_examples)} task instances. Below, you are given the inputs, responses, and feedback for each task.
+```
+{chr(10).join(feedback_examples)}
+```
+
+Carefully read the inputs, outputs, and feedback to identify problems with the current prompt.
+Your task is to generate a revised version of the prompt that helps the other LLM generalize better when using it.
+You may modify, add to, or remove any instructions or content in the current prompt to improve prediction and generalization.
+
+Please reason through the problem, but output only the revised prompt inside <prompt> and </prompt>."""
 
 
 def evoprompt_seed_prompt(initial_prompt: str, mode: QAMode, count: int) -> str:

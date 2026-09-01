@@ -209,6 +209,29 @@ def feedback_example(
     )
 
 
+def rpo_feedback_example(
+    record: dict[str, Any],
+    prediction: dict[str, Any],
+    index: int,
+) -> str:
+    """Format one QA response with its full reasoning for RPO feedback."""
+    predicted = prediction.get("predicted_answer") or "INVALID"
+    outcome = "correct" if prediction.get("correct") else "incorrect"
+    raw_response = str(prediction.get("raw_response", "")).strip() or "EMPTY"
+    return "\n".join(
+        [
+            f"Task {index}",
+            f"Question: {record['question']}",
+            f"Choices: {choices_as_text(record)}",
+            f"Ground-Truth Answer: {record['answer']}",
+            f"LLM Selected Answer: {predicted}",
+            f"Outcome: {outcome}",
+            "LLM Response:",
+            raw_response,
+        ]
+    )
+
+
 def corpus_texts(records: Sequence[dict[str, Any]]) -> list[str]:
     """Collect question, choice, and fact text for copied-content checks."""
     texts: list[str] = []

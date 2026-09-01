@@ -30,7 +30,11 @@ from prompt_optimization.optimizer_common import (
     generate_optimizer_texts,
     generate_tagged_candidates,
 )
-from prompt_optimization.qa_task import feedback_example, sample_records
+from prompt_optimization.qa_task import (
+    feedback_example,
+    rpo_feedback_example,
+    sample_records,
+)
 from prompt_optimization.run_io import save_json, save_text
 
 
@@ -109,24 +113,32 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             feedback_evaluation,
             args.feedback_examples,
         )
-        example_texts = [
-            feedback_example(record, prediction, index)
+        feedback_example_texts = [
+            rpo_feedback_example(record, prediction, index)
             for index, (record, prediction) in enumerate(selected, start=1)
         ]
-        diagnosis_meta_prompt = rpo_feedback_prompt(
-            parent["prompt"],
-            context.mode,
-            example_texts,
-        )
-        diagnosis_outputs = generate_optimizer_texts(
+        feedback_meta_prompts = [
+            rpo_feedback_prompt(context.mode, example_text)
+            for example_text in feedback_example_texts
+        ]
+        feedback_raw_outputs = generate_optimizer_texts(
             context,
-            [diagnosis_meta_prompt],
+            feedback_meta_prompts,
             log_label="qa_rpo_feedback_generation",
         )
-        diagnosis = extract_feedback(diagnosis_outputs[0])
+        feedback_texts = [
+            extract_feedback(raw_output) for raw_output in feedback_raw_outputs
+        ]
+        rewrite_feedback_examples = [
+            f"{example_text}\nFeedback: {feedback_text}"
+            for example_text, feedback_text in zip(
+                feedback_example_texts,
+                feedback_texts,
+            )
+        ]
         rewrite_meta_prompt = rpo_rewrite_prompt(
             parent["prompt"],
-            diagnosis,
+            rewrite_feedback_examples,
             context.mode,
         )
         candidates, rewrite_outputs = generate_tagged_candidates(
@@ -138,10 +150,10 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "rpo_optimizer_trace",
             iteration=iteration,
             parent_node_id=parent["node_id"],
-            feedback_examples=example_texts,
-            diagnosis_meta_prompt=diagnosis_meta_prompt,
-            diagnosis_raw_outputs=diagnosis_outputs,
-            diagnosis=diagnosis,
+            feedback_examples=feedback_example_texts,
+            feedback_meta_prompts=feedback_meta_prompts,
+            feedback_raw_outputs=feedback_raw_outputs,
+            feedback_texts=feedback_texts,
             rewrite_meta_prompt=rewrite_meta_prompt,
             rewrite_raw_outputs=rewrite_outputs,
             parsed_candidates=candidates,
@@ -170,7 +182,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                 "evaluation": child_score["evaluation"],
                 "parent_node_id": parent["node_id"],
                 "iteration": iteration,
-                "diagnosis": diagnosis,
+                "feedback_texts": feedback_texts,
                 "feedback_record_ids": [record["id"] for record, _ in selected],
             }
             next_node_id += 1

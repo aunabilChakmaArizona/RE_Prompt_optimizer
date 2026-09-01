@@ -41,7 +41,10 @@ def parse_args() -> argparse.Namespace:
         "--feedback-examples",
         type=int,
         default=3,
-        help="Correct and incorrect examples shown in each feedback request.",
+        help=(
+            "Number of mixed correct/incorrect examples that receive separate "
+            "feedback each iteration."
+        ),
     )
     parser.add_argument(
         "--population-sampling-temperature",

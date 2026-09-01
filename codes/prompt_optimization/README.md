@@ -47,7 +47,7 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 
 | Method | Main defaults |
 | --- | --- |
-| RPO | 10 iterations, snapshots at 5/10, feedback sample 100, 3 mixed examples, population 10, parent temperature 1.0 |
+| RPO | 10 iterations, snapshots at 5/10, feedback sample 100, separate feedback for 3 mixed examples, population 10, parent temperature 1.0 |
 | EvoPrompt-DE | 10 iterations, snapshots at 5/10, population 5, train fitness sample 1,000 |
 | ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, 2-5 categories, 5 candidates |
 | LPO | 1 iteration, train sample 512, 3 mistakes, at most 5 locations, at most 3 words/location, 5 rewrites |
