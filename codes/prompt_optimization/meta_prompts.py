@@ -6,7 +6,11 @@ import json
 import re
 from typing import Any, Sequence
 
-from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1
+from agents.agent_prompts import (
+    GRADIENT_REGION_CANDIDATE_SUGGESTION_PROMPT_V1,
+    LPO_LOCAL_REWRITE_BODY_V1,
+    LPO_LOCATION_TAGGING_BODY_V1,
+)
 from prompt_optimization.qa_task import QAMode
 
 
@@ -425,45 +429,37 @@ Then add the preamble and guidance items."""
 def lpo_location_prompt(
     instruction_prompt: str,
     mode: QAMode,
-    mistakes: Sequence[str],
+    feedback_examples: Sequence[str],
     max_locations: int,
     max_words_per_location: int,
 ) -> str:
-    """Ask LPO to tag a few local instruction spans worth rewriting."""
-    return f"""Find local spans in an editable instruction for solving multiple-choice questions that should be improved.
-
-Instruction:
-<prompt>{instruction_prompt}</prompt>
-
-Fixed answer instruction:
-{mode.answer_instruction}
-
-Representative mistakes:
-{chr(10).join(mistakes)}
-
-Select at most {max_locations} exact, non-overlapping substrings from the editable instruction. Each substring may contain at most {max_words_per_location} words. Return JSON only:
-{{"locations": [{{"text": "exact substring", "reason": "short reason"}}]}}
-Do not select text from the examples or the fixed answer instruction."""
+    """Adapt the shared LPO location-tagging body to one QA mode."""
+    qa_prompt = "\n\n".join(
+        [QA_TASK_DESCRIPTIONS[mode.name], LPO_LOCATION_TAGGING_BODY_V1]
+    )
+    return (
+        qa_prompt
+        .replace("#INFERENCE_PROMPT#", instruction_prompt)
+        .replace("#FEEDBACK_EXAMPLES#", "\n\n".join(feedback_examples))
+        .replace("#MAX_EDIT_TAGS#", str(max_locations))
+        .replace("#MAX_WORDS_PER_EDIT_TAG#", str(max_words_per_location))
+    )
 
 
 def lpo_rewrite_prompt(
     marked_prompt: str,
-    locations: Sequence[dict[str, Any]],
+    feedback_examples: Sequence[str],
     mode: QAMode,
 ) -> str:
-    """Ask LPO to rewrite only marked local instruction spans."""
-    return f"""Locally improve the marked spans in this instruction for solving multiple-choice questions.
-
-Marked instruction:
-{marked_prompt}
-
-Selected locations:
-{json.dumps(list(locations), ensure_ascii=False)}
-
-Preserve all unmarked wording as closely as possible. Keep the result task-generic, with no question-specific text or dataset or benchmark names. The fixed answer instruction is separate:
-{mode.answer_instruction}
-
-Return the complete revised editable instruction inside <prompt> and </prompt>, without edit tags."""
+    """Adapt the shared LPO local-rewrite body to one QA mode."""
+    qa_prompt = "\n\n".join(
+        [QA_TASK_DESCRIPTIONS[mode.name], LPO_LOCAL_REWRITE_BODY_V1]
+    )
+    return (
+        qa_prompt
+        .replace("#TAGGED_PROMPT#", marked_prompt)
+        .replace("#FEEDBACK_EXAMPLES#", "\n\n".join(feedback_examples))
+    )
 
 
 def gradpo_candidate_prompt(

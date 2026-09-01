@@ -52,7 +52,7 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 | RPO | 10 iterations, snapshots at 5/10, feedback sample 100, separate feedback for 3 mixed examples, population 10, parent temperature 1.0 |
 | EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000 |
 | ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
-| LPO | 1 iteration, train sample 512, 3 mistakes, at most 5 locations, at most 3 words/location, 5 rewrites |
+| LPO | 1 iteration, train sample 512, 3 mixed feedback examples, at most 5 locations, at most 3 words/location, 5 rewrites |
 | GreaTer / TG | 1 token, train sample 512, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
 | GradPO | 1 iteration, train sample 512, 5 candidates/span, beam 5 with target-model synthesis, expansion ratio 0.6, fluency weight 0.5 |
 | GradPO Qwen | 5 spans, at most 2 target-model tokens/span |

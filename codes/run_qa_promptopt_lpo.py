@@ -16,13 +16,15 @@ def parse_args() -> argparse.Namespace:
         "--train-sample-size",
         type=int,
         default=512,
-        help="Training questions sampled to analyze prompt mistakes.",
+        help="Training questions sampled to collect prompt feedback.",
     )
     parser.add_argument(
+        "--feedback-examples",
         "--mistake-examples",
+        dest="feedback_examples",
         type=int,
         default=3,
-        help="Incorrect QA examples shown to LPO for diagnosis.",
+        help="Mixed correct and incorrect QA examples shown to LPO.",
     )
     parser.add_argument(
         "--max-locations",
@@ -51,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     positive_values = (
         args.train_sample_size,
-        args.mistake_examples,
+        args.feedback_examples,
         args.max_locations,
         args.max_words_per_location,
         args.num_candidates,

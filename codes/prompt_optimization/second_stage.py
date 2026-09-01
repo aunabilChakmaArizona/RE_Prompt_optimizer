@@ -13,11 +13,10 @@ except ImportError:
 from agents.agent_decoding import model_default_sampling_parameters
 from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1
 from prompt_optimization.cli_common import QAOptimizationContext
-from prompt_optimization.evaluation import metric_accuracy
+from prompt_optimization.evaluation import metric_accuracy, select_mixed_feedback
 from prompt_optimization.meta_prompts import (
     QA_TASK_DESCRIPTIONS,
     extract_json_object,
-    extract_tagged_prompts,
     gradpo_candidate_prompt,
     lpo_location_prompt,
     lpo_rewrite_prompt,
@@ -79,51 +78,152 @@ def _strictly_select_against_source(
     return (best_candidate if improved else source), improved
 
 
-def _resolve_lpo_locations(
+def _parse_lpo_tagged_prompt(
     instruction_prompt: str,
-    raw_locations: Sequence[dict[str, Any]],
+    raw_tagged_prompt: str,
     *,
     max_locations: int,
     max_words_per_location: int,
     tokenizer,
-) -> list[dict[str, Any]]:
-    """Align exact LPO location strings to non-overlapping instruction spans."""
-    occupied: list[tuple[int, int]] = []
+) -> tuple[str, list[dict[str, Any]], list[str]]:
+    """Parse LPO's returned full prompt and its local edit scopes."""
+    tagged_prompt = raw_tagged_prompt.strip()
+    fenced = re.search(
+        r"```(?:text)?\s*(.*?)\s*```",
+        tagged_prompt,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if fenced:
+        tagged_prompt = fenced.group(1).strip()
+    wrapped = re.search(
+        r"\[P\](.*?)\[/P\]",
+        tagged_prompt,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if wrapped:
+        tagged_prompt = wrapped.group(1).strip()
+    wrapped = re.search(
+        r"<p>(.*?)</p>",
+        tagged_prompt,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if wrapped:
+        tagged_prompt = wrapped.group(1).strip()
+
+    warnings: list[str] = []
     locations: list[dict[str, Any]] = []
-    for raw_location in raw_locations:
-        text = str(raw_location.get("text", "")).strip()
-        if not text or len(re.findall(r"\b\w+\b", text)) > max_words_per_location:
+    plain_parts: list[str] = []
+    tagged_parts: list[str] = []
+    cursor = 0
+    tag_count = 0
+    for match in re.finditer(
+        r"<edit>(.*?)</edit>",
+        tagged_prompt,
+        flags=re.DOTALL | re.IGNORECASE,
+    ):
+        span_text = match.group(1)
+        prefix = tagged_prompt[cursor : match.start()]
+        plain_parts.append(prefix)
+        tagged_parts.append(prefix)
+        tag_count += 1
+        if tag_count > max_locations:
+            warnings.append("extra_edit_tags_ignored")
+            plain_parts.append(span_text)
+            tagged_parts.append(span_text)
+            cursor = match.end()
             continue
-        starts = [
-            match.start()
-            for match in re.finditer(re.escape(text), instruction_prompt)
-        ]
-        for start in starts:
-            end = start + len(text)
-            if any(start < used_end and end > used_start for used_start, used_end in occupied):
-                continue
-            occupied.append((start, end))
-            locations.append(
-                {
-                    "region_rank": len(locations) + 1,
-                    "start_char": start,
-                    "end_char": end,
-                    "region_text": instruction_prompt[start:end],
-                    "text": instruction_prompt[start:end],
-                    "reason": str(raw_location.get("reason", "")).strip(),
-                    "token_count": len(
-                        tokenizer.encode(
-                            instruction_prompt[start:end],
-                            add_special_tokens=False,
-                        )
-                    ),
-                    "selection_mode": "optimizer_reasoning",
-                }
+
+        start_char = sum(len(part) for part in plain_parts)
+        word_count = len(re.findall(r"\S+", span_text))
+        if word_count > max_words_per_location:
+            warnings.append(f"edit_tag_{len(locations) + 1}_exceeds_word_limit")
+        plain_parts.append(span_text)
+        tagged_parts.append(f"<edit>{span_text}</edit>")
+        end_char = sum(len(part) for part in plain_parts)
+        locations.append(
+            {
+                "location_rank": len(locations) + 1,
+                "region_rank": len(locations) + 1,
+                "start_char": start_char,
+                "end_char": end_char,
+                "region_text": span_text,
+                "text": span_text,
+                "word_count": word_count,
+                "token_count": len(
+                    tokenizer.encode(span_text, add_special_tokens=False)
+                ),
+                "selection_mode": "optimizer_reasoning",
+            }
+        )
+        cursor = match.end()
+
+    suffix = tagged_prompt[cursor:]
+    plain_parts.append(suffix)
+    tagged_parts.append(suffix)
+    plain_prompt = "".join(plain_parts)
+    sanitized_tagged_prompt = "".join(tagged_parts)
+    if not locations:
+        warnings.append("no_edit_tags_found")
+    if plain_prompt.strip() != instruction_prompt.strip():
+        warnings.extend(
+            [
+                "tagged_prompt_plain_text_differs_from_input",
+                "using_tagged_prompt_as_returned",
+            ]
+        )
+    return sanitized_tagged_prompt, locations, warnings
+
+
+def _clean_lpo_candidate_prompt(text: str) -> str:
+    """Remove LPO's output wrappers and local edit tags from one candidate."""
+    cleaned = text.strip()
+    fenced = re.search(
+        r"```(?:text)?\s*(.*?)\s*```",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if fenced:
+        cleaned = fenced.group(1).strip()
+    cleaned = re.sub(r"\[/?p\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"</?p>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"</?edit>", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
+
+
+def _lpo_candidate_prompts_from_outputs(
+    raw_outputs: Sequence[str],
+    fallback_prompt: str,
+) -> list[str]:
+    """Extract and clean LPO candidates using the relation-extraction protocol."""
+    candidates: list[str] = []
+    for raw_output in raw_outputs:
+        found_tagged_prompt = False
+        for pattern in (r"\[P\](.*?)\[/P\]", r"<p>(.*?)</p>"):
+            for match in re.finditer(
+                pattern,
+                raw_output,
+                flags=re.DOTALL | re.IGNORECASE,
+            ):
+                text = match.group(1).strip()
+                if text:
+                    candidates.append(text)
+                    found_tagged_prompt = True
+        if found_tagged_prompt:
+            continue
+        parsed = extract_json_object(raw_output) or {}
+        raw_candidates = parsed.get("candidate_prompts")
+        if isinstance(raw_candidates, list):
+            candidates.extend(
+                str(item).strip() for item in raw_candidates if str(item).strip()
             )
-            break
-        if len(locations) >= max_locations:
-            break
-    return sorted(locations, key=lambda item: int(item["start_char"]))
+        elif raw_output.strip():
+            candidates.append(raw_output.strip())
+    return unique_nonempty(
+        [
+            _clean_lpo_candidate_prompt(candidate)
+            for candidate in [fallback_prompt, *candidates]
+        ]
+    )
 
 
 def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
@@ -146,19 +246,19 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         split_name="train_selection",
         log_label="qa_lpo_train_selection",
     )
-    mistakes = [
-        (record, prediction)
-        for record, prediction in zip(train_records, train_evaluation["predictions"])
-        if not prediction["correct"]
-    ][: args.mistake_examples]
-    mistake_texts = [
+    feedback_pairs = select_mixed_feedback(
+        train_records,
+        train_evaluation,
+        args.feedback_examples,
+    )
+    feedback_texts = [
         feedback_example(record, prediction, index)
-        for index, (record, prediction) in enumerate(mistakes, start=1)
+        for index, (record, prediction) in enumerate(feedback_pairs, start=1)
     ]
     location_meta_prompt = lpo_location_prompt(
         context.initial_prompt,
         context.mode,
-        mistake_texts,
+        feedback_texts,
         args.max_locations,
         args.max_words_per_location,
     )
@@ -167,14 +267,10 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         [location_meta_prompt],
         log_label="qa_lpo_location_tagging",
     )[0]
-    parsed_locations = extract_json_object(location_output) or {}
-    raw_locations = parsed_locations.get("locations", [])
-    if not isinstance(raw_locations, list):
-        raw_locations = []
     _, target_tokenizer = context.model_pool.ensure(TARGET_ROLE)
-    locations = _resolve_lpo_locations(
+    tagged_prompt, locations, location_warnings = _parse_lpo_tagged_prompt(
         context.initial_prompt,
-        [item for item in raw_locations if isinstance(item, dict)],
+        location_output,
         max_locations=args.max_locations,
         max_words_per_location=args.max_words_per_location,
         tokenizer=target_tokenizer,
@@ -184,17 +280,19 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         {
             "method": "lpo",
             "raw_location_output": location_output,
+            "tagged_prompt": tagged_prompt,
             "locations": locations,
+            "warnings": location_warnings,
         },
     )
 
     candidate_prompts = [context.initial_prompt]
     rewrite_outputs: list[str] = []
+    rewrite_meta_prompt = None
     if locations:
-        marked_prompt = mark_selected_regions(context.initial_prompt, locations)
         rewrite_meta_prompt = lpo_rewrite_prompt(
-            marked_prompt,
-            locations,
+            tagged_prompt,
+            feedback_texts,
             context.mode,
         )
         rewrite_outputs = generate_optimizer_texts(
@@ -202,16 +300,26 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             [rewrite_meta_prompt] * args.num_candidates,
             log_label="qa_lpo_local_rewrite",
         )
-        candidate_prompts = unique_nonempty(
-            [context.initial_prompt, *extract_tagged_prompts(rewrite_outputs)]
+        candidate_prompts = _lpo_candidate_prompts_from_outputs(
+            rewrite_outputs,
+            context.initial_prompt,
         )
+        maximum_candidate_characters = 2 * len(context.initial_prompt)
+        candidate_prompts = [
+            prompt
+            for index, prompt in enumerate(candidate_prompts)
+            if index == 0 or len(prompt) <= maximum_candidate_characters
+        ]
     save_json(
         context.run_dir / "optimizer_trace.json",
         {
             "location_meta_prompt": location_meta_prompt,
             "location_raw_output": location_output,
+            "tagged_prompt": tagged_prompt,
             "parsed_locations": locations,
-            "rewrite_meta_prompt": rewrite_meta_prompt if locations else None,
+            "location_warnings": location_warnings,
+            "feedback_examples": feedback_texts,
+            "rewrite_meta_prompt": rewrite_meta_prompt,
             "rewrite_raw_outputs": rewrite_outputs,
             "parsed_candidate_prompts": candidate_prompts,
         },
@@ -250,7 +358,9 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "iterations": 1,
             "improved_on_validation": improved,
             "selected_location_count": len(locations),
-            "mistake_record_ids": [record["id"] for record, _ in mistakes],
+            "feedback_record_ids": [
+                record["id"] for record, _ in feedback_pairs
+            ],
             "raw_rewrite_outputs": rewrite_outputs,
         },
     )

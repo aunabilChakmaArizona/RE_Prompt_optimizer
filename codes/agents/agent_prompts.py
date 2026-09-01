@@ -469,9 +469,9 @@ Do not modify any other parts of the prompt (but remove the target span tags).
 Output only the revised prompt.
 '''
 
-LPO_LOCATION_TAGGING_PROMPT_V1 = '''A relation extraction prompt helps an LLM decide whether a query sentence expresses a target relation between the subject and object entities, using a support sentence for that relation. The classifier must answer with exactly one token: "yes" or "no".
+LPO_RELATION_TASK_DESCRIPTION_V1 = '''A relation extraction prompt helps an LLM decide whether a query sentence expresses a target relation between the subject and object entities, using a support sentence for that relation. The classifier must answer with exactly one token: "yes" or "no".'''
 
-Current prompt:
+LPO_LOCATION_TAGGING_BODY_V1 = '''Current prompt:
 ```
 #INFERENCE_PROMPT#
 ```
@@ -491,9 +491,13 @@ Reply with the full prompt enclosed within <p> and </p> tags, with the edit loca
 Do not include any other text.
 '''
 
-LPO_LOCAL_REWRITE_PROMPT_V1 = '''A relation extraction prompt helps an LLM decide whether a query sentence expresses a target relation between the subject and object entities, using a support sentence for that relation. The classifier must answer with exactly one token: "yes" or "no".
+LPO_LOCATION_TAGGING_PROMPT_V1 = (
+    LPO_RELATION_TASK_DESCRIPTION_V1
+    + "\n\n"
+    + LPO_LOCATION_TAGGING_BODY_V1
+)
 
-Current prompt with local edit scopes:
+LPO_LOCAL_REWRITE_BODY_V1 = '''Current prompt with local edit scopes:
 ```
 #TAGGED_PROMPT#
 ```
@@ -508,6 +512,12 @@ Keep the <edit> and </edit> tags around the edited local scopes in the revised p
 
 Please reason through the problem, but output only the revised prompt enclosed within the <p> and </p> tags.
 '''
+
+LPO_LOCAL_REWRITE_PROMPT_V1 = (
+    LPO_RELATION_TASK_DESCRIPTION_V1
+    + "\n\n"
+    + LPO_LOCAL_REWRITE_BODY_V1
+)
 
 # Your task is to generate a revised instruction prompt by applying the given replacements to the corresponding spans.
 # Use the replacements exactly as provided.
