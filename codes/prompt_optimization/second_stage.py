@@ -36,7 +36,6 @@ from prompt_optimization.qa_task import (
 )
 from prompt_optimization.run_io import save_json
 from prompt_optimization.sequence_gradients import (
-    align_replacement_whitespace,
     build_gradient_region_pool,
     collect_instruction_gradients,
     mark_selected_regions,
@@ -257,8 +256,9 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
 def _sequential_greater_region(
     gradient_analysis: dict[str, Any],
     start_position: int,
+    check_isalnum: bool,
 ) -> dict[str, Any]:
-    """Choose the first editable prompt token at or after a sequential position."""
+    """Choose a sequential token with an optional alphanumeric-content check."""
     prompt = str(gradient_analysis["instruction_prompt"])
     records = list(gradient_analysis["token_gradients"])
     for record in records:
@@ -266,7 +266,10 @@ def _sequential_greater_region(
         start = int(record["char_start"])
         end = int(record["char_end"])
         text = prompt[start:end]
-        if token_index >= start_position and any(character.isalnum() for character in text):
+        if token_index >= start_position and (
+            not check_isalnum
+            or any(character.isalnum() for character in text)
+        ):
             return {
                 "region_rank": 1,
                 "peak_token_index": token_index,
@@ -280,50 +283,9 @@ def _sequential_greater_region(
                 "text": text,
                 "gradient_score": float(record["gradient_norm"]),
                 "selection_mode": "sequential",
+                "check_isalnum": check_isalnum,
             }
     raise ValueError("No editable token exists at or after --start-position.")
-
-
-def _prompt_for_single_token_candidate(
-    instruction_prompt: str,
-    region: dict[str, Any],
-    candidate_text: str,
-) -> str:
-    """Replace one aligned GreaTer token while preserving boundary whitespace."""
-    start = int(region["start_char"])
-    end = int(region["end_char"])
-    replacement = align_replacement_whitespace(
-        str(region["region_text"]),
-        candidate_text,
-    )
-    return (instruction_prompt[:start] + replacement + instruction_prompt[end:]).strip()
-
-
-def _is_stable_single_token_replacement(
-    source_token_ids: Sequence[int],
-    candidate_token_ids: Sequence[int],
-) -> bool:
-    """Check that retokenization changes at most one source and target token."""
-    prefix = 0
-    shared_length = min(len(source_token_ids), len(candidate_token_ids))
-    while (
-        prefix < shared_length
-        and source_token_ids[prefix] == candidate_token_ids[prefix]
-    ):
-        prefix += 1
-
-    source_suffix = len(source_token_ids)
-    candidate_suffix = len(candidate_token_ids)
-    while (
-        source_suffix > prefix
-        and candidate_suffix > prefix
-        and source_token_ids[source_suffix - 1]
-        == candidate_token_ids[candidate_suffix - 1]
-    ):
-        source_suffix -= 1
-        candidate_suffix -= 1
-
-    return source_suffix - prefix <= 1 and candidate_suffix - prefix <= 1
 
 
 def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
@@ -350,12 +312,17 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         batch_size=args.gradient_batch_size,
     )
     if args.variant == "greater":
-        region = _sequential_greater_region(gradient_analysis, args.start_position)
+        region = _sequential_greater_region(
+            gradient_analysis,
+            args.start_position,
+            args.check_isalnum,
+        )
     else:
         pool = build_gradient_region_pool(
             gradient_analysis,
             max_region_tokens=1,
             expansion_threshold_ratio=args.region_expansion_threshold,
+            check_isalnum=args.check_isalnum,
         )
         region = select_gradient_regions(
             pool,
@@ -364,6 +331,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
             rng=context.rng,
         )[0]
         region["text"] = region["region_text"]
+        region["check_isalnum"] = args.check_isalnum
     proposal_records = train_records[: min(args.proposal_example_size, len(train_records))]
     proposed_token_ids, proposal_metadata = proposal_token_candidates(
         gradient_analysis,
@@ -374,6 +342,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         tokenizer=tokenizer,
         top_k=args.proposal_top_k,
         min_candidates=args.proposal_min_candidates,
+        check_isalnum=args.check_isalnum,
     )
     candidate_tokens = rank_fixed_token_candidates(
         gradient_analysis,
@@ -396,31 +365,30 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
             if item["is_original"]
         )
         candidate_tokens.append(original)
-    source_token_ids = tokenizer.encode(
-        context.initial_prompt,
-        add_special_tokens=False,
-    )
+    source_token_ids = list(gradient_analysis["token_ids"])
+    token_index = int(region["peak_token_index"])
     stable_candidate_tokens = []
     candidate_prompts = [context.initial_prompt]
     for item in candidate_tokens:
-        candidate_prompt = _prompt_for_single_token_candidate(
-            context.initial_prompt,
-            region,
-            item["token_text"],
-        )
-        candidate_token_ids = tokenizer.encode(
+        candidate_token_ids = list(source_token_ids)
+        candidate_token_ids[token_index] = int(item["token_id"])
+        candidate_prompt = tokenizer.decode(
+            candidate_token_ids,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        ).strip()
+        retokenized_ids = tokenizer.encode(
             candidate_prompt,
             add_special_tokens=False,
         )
-        if not _is_stable_single_token_replacement(
-            source_token_ids,
-            candidate_token_ids,
-        ):
+        if retokenized_ids != candidate_token_ids:
             continue
         stable_candidate_tokens.append(
             {
                 **item,
                 "prompt": candidate_prompt,
+                "token_index": token_index,
+                "candidate_token_ids": candidate_token_ids,
             }
         )
         candidate_prompts.append(candidate_prompt)

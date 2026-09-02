@@ -397,8 +397,14 @@ def score_combined_objective(
     }
 
 
-def _editable_token(record: dict[str, Any], instruction_prompt: str) -> bool:
-    """Check that an aligned token covers at least one letter or number."""
+def _editable_token(
+    record: dict[str, Any],
+    instruction_prompt: str,
+    check_isalnum: bool,
+) -> bool:
+    """Optionally require an aligned token to contain a letter or number."""
+    if not check_isalnum:
+        return True
     start = int(record["char_start"])
     end = int(record["char_end"])
     return any(character.isalnum() for character in instruction_prompt[start:end])
@@ -409,6 +415,7 @@ def build_gradient_region_pool(
     *,
     max_region_tokens: int,
     expansion_threshold_ratio: float,
+    check_isalnum: bool = True,
 ) -> list[dict[str, Any]]:
     """Expand gradient peaks into non-overlapping editable local regions."""
     if max_region_tokens <= 0:
@@ -420,7 +427,7 @@ def build_gradient_region_pool(
     editable = {
         int(record["token_index"])
         for record in records
-        if _editable_token(record, prompt)
+        if _editable_token(record, prompt, check_isalnum)
     }
     scores = {int(record["token_index"]): float(record["gradient_norm"]) for record in records}
     ranked_peaks = sorted(editable, key=lambda index: (scores[index], -index), reverse=True)
@@ -546,12 +553,18 @@ def replace_selected_regions(
     return revised.strip()
 
 
-def _allowed_candidate_token(tokenizer, token_id: int) -> bool:
-    """Filter special, empty, control, and non-ASCII replacement tokens."""
+def _allowed_candidate_token(
+    tokenizer,
+    token_id: int,
+    check_isalnum: bool,
+) -> bool:
+    """Filter invalid candidates and optionally require word-like token text."""
     if token_id in set(tokenizer.all_special_ids):
         return False
     text = tokenizer.decode([token_id], skip_special_tokens=True)
-    if not text.strip() or not any(character.isalnum() for character in text):
+    if not text.strip():
+        return False
+    if check_isalnum and not any(character.isalnum() for character in text):
         return False
     return text.isascii() and "\n" not in text and "\r" not in text
 
@@ -583,6 +596,7 @@ def proposal_token_candidates(
     tokenizer,
     top_k: int,
     min_candidates: int,
+    check_isalnum: bool,
 ) -> tuple[list[int], dict[str, Any]]:
     """Intersect or frequency-rank GreaTer token proposals across QA examples."""
     require_torch()
@@ -617,7 +631,11 @@ def proposal_token_candidates(
             }
             for candidate_id in ranked_ids:
                 candidate_id = int(candidate_id)
-                if not _allowed_candidate_token(tokenizer, candidate_id):
+                if not _allowed_candidate_token(
+                    tokenizer,
+                    candidate_id,
+                    check_isalnum,
+                ):
                     continue
                 text = tokenizer.decode([candidate_id], skip_special_tokens=True)
                 normalized = text.strip().casefold()
@@ -657,6 +675,7 @@ def proposal_token_candidates(
         if len(selected) >= target_size:
             break
     return selected, {
+        "check_isalnum": check_isalnum,
         "proposal_example_count": len(proposal_records),
         "per_example_candidate_counts": [len(values) for values in candidate_sets],
         "strict_intersection_size": len(strict_intersection),

@@ -43,6 +43,14 @@ def parse_args() -> argparse.Namespace:
         help="First prompt-token position tested by sequential GreaTer.",
     )
     parser.add_argument(
+        "--check-isalnum",
+        action="store_true",
+        help=(
+            "Require selected and proposed tokens to contain a letter or number; "
+            "disabled by default to match original GreaTer."
+        ),
+    )
+    parser.add_argument(
         "--proposal-top-k",
         type=int,
         default=25,
