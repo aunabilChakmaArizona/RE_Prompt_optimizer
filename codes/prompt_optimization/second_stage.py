@@ -10,7 +10,6 @@ try:
 except ImportError:
     torch = None
 
-from agents.agent_decoding import model_default_sampling_parameters
 from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1
 from prompt_optimization.cli_common import QAOptimizationContext
 from prompt_optimization.evaluation import metric_accuracy, select_mixed_feedback
@@ -486,66 +485,6 @@ def _parse_gradpo_gen_candidates(
     return output
 
 
-def _sample_next_token_id(
-    logits,
-    *,
-    temperature: float,
-    top_p: float,
-    top_k: int,
-) -> int:
-    """Sample one token with the fixed target-model temperature, top-p, and top-k."""
-    scaled = logits.float() / max(temperature, 1e-6)
-    if top_k > 0 and top_k < scaled.numel():
-        threshold = torch.topk(scaled, k=top_k).values[-1]
-        scaled = scaled.masked_fill(scaled < threshold, float("-inf"))
-    probabilities = torch.softmax(scaled, dim=-1)
-    if top_p < 1.0:
-        sorted_probabilities, sorted_indices = torch.sort(probabilities, descending=True)
-        cumulative = torch.cumsum(sorted_probabilities, dim=-1)
-        remove = cumulative - sorted_probabilities > top_p
-        sorted_probabilities = sorted_probabilities.masked_fill(remove, 0.0)
-        sorted_probabilities = sorted_probabilities / sorted_probabilities.sum()
-        sampled_index = int(torch.multinomial(sorted_probabilities, 1).item())
-        return int(sorted_indices[sampled_index].item())
-    return int(torch.multinomial(probabilities, 1).item())
-
-
-def _probability_continuation(
-    prefix_ids: torch.Tensor,
-    first_token_id: int,
-    continuation_length: int,
-    model,
-    *,
-    temperature: float,
-    top_p: float,
-    top_k: int,
-) -> list[int]:
-    """Sample a fixed-length replacement continuation after one proposed token."""
-    if torch is None:
-        raise ImportError("GradPO-Prob requires PyTorch in the active environment.")
-    device = model_device(model)
-    generated = [first_token_id]
-    current = torch.cat(
-        [prefix_ids.to(device), torch.tensor([[first_token_id]], device=device)],
-        dim=1,
-    )
-    with torch.inference_mode():
-        for _ in range(max(0, continuation_length - 1)):
-            logits = model(input_ids=current, use_cache=False).logits[:, -1, :]
-            next_id = _sample_next_token_id(
-                logits[0],
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-            )
-            generated.append(next_id)
-            current = torch.cat(
-                [current, torch.tensor([[next_id]], device=device)],
-                dim=1,
-            )
-    return generated
-
-
 def _top_p_first_token_ids(
     logits,
     *,
@@ -615,13 +554,15 @@ def _gradpo_probability_candidates(
     candidate_count: int,
     model,
     tokenizer,
-    model_id: str,
+    max_new_tokens: int,
+    generation_batch_size: int,
 ) -> list[dict[str, Any]]:
     """Generate fixed-token-length span candidates from target-LM probabilities."""
     if torch is None:
         raise ImportError("GradPO-Prob requires PyTorch in the active environment.")
+    from agents.agent_llm_prompting import run_prompts
+
     device = model_device(model)
-    sampling = model_default_sampling_parameters(model_id)
     probability_top_p = 0.95
     output = []
     special_ids = set(tokenizer.all_special_ids)
@@ -659,19 +600,49 @@ def _gradpo_probability_candidates(
         )[:candidate_count]
         candidates = [str(region["region_text"])]
         candidate_details = []
-        for first_id in top_ids:
-            if first_id in special_ids:
-                continue
-            token_ids = _probability_continuation(
-                prefix_ids,
-                int(first_id),
-                int(region["token_count"]),
-                model,
-                temperature=float(sampling["temperature"]),
-                top_p=float(sampling["top_p"]),
-                top_k=int(sampling["top_k"]),
+        first_token_ids = [
+            int(first_id) for first_id in top_ids if int(first_id) not in special_ids
+        ]
+        prefix_token_ids = prefix_ids[0].detach().cpu().tolist()
+        first_token_texts = [
+            tokenizer.decode(
+                [first_id],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
             )
-            text = tokenizer.decode(token_ids, skip_special_tokens=True)
+            for first_id in first_token_ids
+        ]
+        continuation_prompts = [
+            tokenizer.decode(
+                [*prefix_token_ids, first_id],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+            for first_id in first_token_ids
+        ]
+        remaining_region_tokens = max(0, int(region["token_count"]) - 1)
+        if remaining_region_tokens > 0:
+            continuation_outputs = run_prompts(
+                continuation_prompts,
+                model=model,
+                tokenizer=tokenizer,
+                max_new_tokens=min(max_new_tokens, remaining_region_tokens),
+                batch_size=generation_batch_size,
+                use_chat_template=False,
+                add_generation_prompt=False,
+                enable_thinking=False,
+                do_sample=True,
+                do_log=True,
+                log_label=f"qa_gradpo_prob_region_candidates_r{region['region_rank']}",
+            )
+        else:
+            continuation_outputs = [""] * len(continuation_prompts)
+        for first_id, first_token_text, continuation_output in zip(
+            first_token_ids,
+            first_token_texts,
+            continuation_outputs,
+        ):
+            text = first_token_text + continuation_output
             if (
                 not text.strip()
                 or not text.isascii()
@@ -681,7 +652,12 @@ def _gradpo_probability_candidates(
                 continue
             candidates = unique_nonempty([*candidates, text])
             candidate_details.append(
-                {"first_token_id": int(first_id), "token_ids": token_ids, "text": text}
+                {
+                    "first_token_id": first_id,
+                    "first_token_text": first_token_text,
+                    "continuation_output": continuation_output,
+                    "text": text,
+                }
             )
             if len(candidates) >= candidate_count + 1:
                 break
@@ -996,7 +972,8 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             candidate_count=args.num_region_candidates,
             model=model,
             tokenizer=tokenizer,
-            model_id=args.model,
+            max_new_tokens=args.candidate_max_new_tokens,
+            generation_batch_size=args.synthesis_batch_size,
         )
     beam, beam_trace = _beam_search_replacements(
         context,

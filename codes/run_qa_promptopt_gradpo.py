@@ -94,7 +94,7 @@ def parse_args() -> argparse.Namespace:
         "--synthesis-batch-size",
         type=int,
         default=4,
-        help="Number of beam-synthesis requests processed together.",
+        help="Number of probability continuations or beam syntheses processed together.",
     )
     args = parser.parse_args()
     if args.backend == "vllm":
