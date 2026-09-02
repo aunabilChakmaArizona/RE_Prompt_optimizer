@@ -397,6 +397,46 @@ def score_combined_objective(
     }
 
 
+def _differentiable_instruction_nll(
+    instruction_token_ids: Sequence[int],
+    token_index: int,
+    selected_embedding: torch.Tensor,
+    *,
+    model,
+) -> torch.Tensor:
+    """Calculate instruction NLL through one relaxed candidate embedding."""
+    require_torch()
+    if len(instruction_token_ids) < 2:
+        return selected_embedding.sum() * 0.0
+    device = model_device(model)
+    input_ids = torch.tensor(
+        [list(instruction_token_ids)],
+        dtype=torch.long,
+        device=device,
+    )
+    base_embeddings = model.get_input_embeddings()(input_ids).detach()
+    replacement_embeddings = torch.zeros_like(base_embeddings)
+    replacement_mask = torch.zeros(
+        base_embeddings.shape[:2],
+        dtype=base_embeddings.dtype,
+        device=device,
+    )
+    replacement_embeddings[0, token_index, :] = selected_embedding[0]
+    replacement_mask[0, token_index] = 1.0
+    input_embeddings = (
+        base_embeddings * (1.0 - replacement_mask.unsqueeze(-1))
+        + replacement_embeddings * replacement_mask.unsqueeze(-1)
+    )
+    outputs = model(inputs_embeds=input_embeddings, use_cache=False)
+    shifted_logits = outputs.logits[:, :-1, :].contiguous()
+    shifted_labels = input_ids[:, 1:].contiguous()
+    return F.cross_entropy(
+        shifted_logits.view(-1, shifted_logits.size(-1)),
+        shifted_labels.view(-1),
+        reduction="mean",
+    )
+
+
 def _editable_token(
     record: dict[str, Any],
     instruction_prompt: str,
@@ -690,19 +730,118 @@ def rank_fixed_token_candidates(
     gradient_analysis: dict[str, Any],
     token_index: int,
     candidate_token_ids: Sequence[int],
+    records: Sequence[dict[str, Any]],
     *,
+    mode: QAMode,
     model,
     tokenizer,
+    batch_size: int,
+    fluency_lambda: float,
 ) -> list[dict[str, Any]]:
-    """Rank a fixed GreaTer proposal set by first-order QA task-loss change."""
+    """Rank fixed GreaTer candidates with a combined-loss one-hot gradient."""
     require_torch()
-    gradient = gradient_analysis["gradient_vectors"][token_index].to(model_device(model))
-    embeddings = model.get_input_embeddings().weight.detach()
+    if not records:
+        raise ValueError("GreaTer gradient records must not be empty.")
+    if batch_size <= 0:
+        raise ValueError("GreaTer gradient batch size must be positive.")
+    if fluency_lambda < 0:
+        raise ValueError("GreaTer fluency weight must be non-negative.")
+    instruction_prompt = str(gradient_analysis["instruction_prompt"])
+    instruction_token_ids = [int(value) for value in gradient_analysis["token_ids"]]
+    if not 0 <= token_index < len(instruction_token_ids):
+        raise IndexError(f"Prompt token index is out of range: {token_index}")
     current_id = int(gradient_analysis["token_ids"][token_index])
-    current_projection = torch.dot(embeddings[current_id].float(), gradient.float())
+    candidate_ids = list(dict.fromkeys(int(value) for value in candidate_token_ids))
+    if current_id not in candidate_ids:
+        raise ValueError("Current prompt token must be included in GreaTer candidates.")
+
+    freeze_model_parameters(model)
+    device = model_device(model)
+    embedding_layer = model.get_input_embeddings()
+    candidate_tensor = torch.tensor(candidate_ids, dtype=torch.long, device=device)
+    candidate_embeddings = embedding_layer.weight.detach()[candidate_tensor]
+    one_hot = torch.zeros(
+        (1, len(candidate_ids)),
+        dtype=candidate_embeddings.dtype,
+        device=device,
+    )
+    current_candidate_index = candidate_ids.index(current_id)
+    one_hot[0, current_candidate_index] = 1.0
+    one_hot.requires_grad_(True)
+
+    model.zero_grad(set_to_none=True)
+    original_padding_side = tokenizer.padding_side
+    tokenizer.padding_side = "left"
+    try:
+        for chunk_index, chunk in enumerate(batched(list(records), batch_size)):
+            payload = _encode_teacher_forced_batch(
+                instruction_prompt,
+                chunk,
+                mode,
+                tokenizer,
+            )
+            if list(payload["instruction_token_ids"]) != instruction_token_ids:
+                raise ValueError(
+                    "Instruction tokenization changed during GreaTer one-hot ranking."
+                )
+            encoded = payload["encoded"]
+            input_ids = encoded["input_ids"].to(device)
+            attention_mask = encoded["attention_mask"].to(device)
+            selected_embedding = one_hot @ candidate_embeddings
+            base_embeddings = embedding_layer(input_ids).detach()
+            replacement_embeddings = torch.zeros_like(base_embeddings)
+            replacement_mask = torch.zeros(
+                base_embeddings.shape[:2],
+                dtype=base_embeddings.dtype,
+                device=device,
+            )
+            for row_index, positions in enumerate(payload["instruction_positions"]):
+                prompt_position = int(positions[token_index])
+                replacement_embeddings[row_index, prompt_position, :] = (
+                    selected_embedding[0]
+                )
+                replacement_mask[row_index, prompt_position] = 1.0
+            input_embeddings = (
+                base_embeddings * (1.0 - replacement_mask.unsqueeze(-1))
+                + replacement_embeddings * replacement_mask.unsqueeze(-1)
+            )
+            outputs = model(
+                inputs_embeds=input_embeddings,
+                attention_mask=attention_mask,
+                use_cache=False,
+            )
+            task_loss = _label_loss_from_logits(
+                outputs.logits,
+                input_ids,
+                payload["answer_positions"],
+                reduction="sum",
+            ) / len(records)
+            combined_loss = task_loss
+            instruction_nll = None
+            if fluency_lambda > 0 and chunk_index == 0:
+                instruction_nll = _differentiable_instruction_nll(
+                    instruction_token_ids,
+                    token_index,
+                    selected_embedding,
+                    model=model,
+                )
+                combined_loss = combined_loss + fluency_lambda * instruction_nll
+            combined_loss.backward()
+            del encoded, input_ids, attention_mask, selected_embedding
+            del base_embeddings, replacement_embeddings, replacement_mask
+            del input_embeddings, outputs, task_loss, combined_loss
+            if instruction_nll is not None:
+                del instruction_nll
+            clear_cuda_cache()
+    finally:
+        tokenizer.padding_side = original_padding_side
+
+    if one_hot.grad is None:
+        raise RuntimeError("No GreaTer candidate one-hot gradient was produced.")
+    gradient = one_hot.grad.detach()[0].float()
     ranked = []
-    for candidate_id in candidate_token_ids:
-        score = torch.dot(embeddings[int(candidate_id)].float(), gradient.float())
+    for candidate_index, candidate_id in enumerate(candidate_ids):
+        one_hot_gradient = gradient[candidate_index]
         ranked.append(
             {
                 "token_id": int(candidate_id),
@@ -710,13 +849,15 @@ def rank_fixed_token_candidates(
                     [int(candidate_id)],
                     skip_special_tokens=True,
                 ),
-                "first_order_score": float((score - current_projection).detach().cpu()),
+                "one_hot_gradient": float(one_hot_gradient.detach().cpu()),
                 "is_original": int(candidate_id) == current_id,
             }
         )
+    del one_hot, candidate_embeddings, candidate_tensor, gradient
+    clear_cuda_cache()
     return sorted(
         ranked,
-        key=lambda item: (float(item["first_order_score"]), bool(not item["is_original"])),
+        key=lambda item: float(item["one_hot_gradient"]),
     )
 
 

@@ -344,24 +344,22 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         min_candidates=args.proposal_min_candidates,
         check_isalnum=args.check_isalnum,
     )
-    candidate_tokens = rank_fixed_token_candidates(
+    ranked_candidate_tokens = rank_fixed_token_candidates(
         gradient_analysis,
         int(region["peak_token_index"]),
         proposed_token_ids,
+        train_records,
+        mode=context.mode,
         model=model,
         tokenizer=tokenizer,
+        batch_size=args.gradient_batch_size,
+        fluency_lambda=args.fluency_lambda,
     )
-    candidate_tokens = candidate_tokens[: args.selection_top_mu]
+    candidate_tokens = ranked_candidate_tokens[: args.selection_top_mu]
     if not any(item["is_original"] for item in candidate_tokens):
         original = next(
             item
-            for item in rank_fixed_token_candidates(
-                gradient_analysis,
-                int(region["peak_token_index"]),
-                proposed_token_ids,
-                model=model,
-                tokenizer=tokenizer,
-            )
+            for item in ranked_candidate_tokens
             if item["is_original"]
         )
         candidate_tokens.append(original)
@@ -436,6 +434,10 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         context.run_dir / "token_candidates.json",
         {
             "proposal_metadata": proposal_metadata,
+            "gradient_ranking_method": "candidate_one_hot_combined_loss",
+            "gradient_ranking_record_count": len(train_records),
+            "gradient_ranking_fluency_lambda": args.fluency_lambda,
+            "gradient_ranked_candidates": ranked_candidate_tokens,
             "candidates": candidate_tokens,
             "objective_scores": objective_scores,
         },
