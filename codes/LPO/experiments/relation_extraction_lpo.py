@@ -42,7 +42,7 @@ from agents.agent_prompts import (
     LPO_LOCATION_TAGGING_PROMPT_V1,
 )
 from agents.agent_sample_feedback import sample_feedback_fn
-from agents.agent_utils import extract_json_object, load_json_file, stable_prf_score_or_neg_inf
+from agents.agent_utils import load_json_file, stable_prf_score_or_neg_inf
 
 PROMPT_SOURCE_SCRATCH = "scratch"
 PROMPT_SOURCE_POPULATION = "population"
@@ -422,81 +422,42 @@ def _build_rewrite_prompt(
     )
 
 
-def _parse_tagged_prompt(
-    *,
-    original_prompt: str,
-    raw_tagged_prompt: str,
-    max_edit_tags: int,
-    max_words_per_edit_tag: int,
-) -> Tuple[str, List[Dict[str, Any]], List[str]]:
-    tagged_prompt = raw_tagged_prompt.strip()
-    fenced = re.search(r"```(?:text)?\s*(.*?)\s*```", tagged_prompt, flags=re.DOTALL | re.IGNORECASE)
+def _extract_lpo_prompt(raw_output: str) -> str:
+    """Extract one full LPO prompt while leaving its edit tags untouched."""
+    prompt = raw_output.strip()
+    fenced = re.search(r"```(?:text)?\s*(.*?)\s*```", prompt, flags=re.DOTALL | re.IGNORECASE)
     if fenced:
-        tagged_prompt = fenced.group(1).strip()
-    prompt_wrapped = re.search(r"\[P\](.*?)\[/P\]", tagged_prompt, flags=re.DOTALL | re.IGNORECASE)
-    if prompt_wrapped:
-        tagged_prompt = prompt_wrapped.group(1).strip()
-    prompt_wrapped = re.search(r"<p>(.*?)</p>", tagged_prompt, flags=re.DOTALL | re.IGNORECASE)
-    if prompt_wrapped:
-        tagged_prompt = prompt_wrapped.group(1).strip()
+        prompt = fenced.group(1).strip()
+    for pattern in (r"\[P\](.*?)\[/P\]", r"<p>(.*?)</p>"):
+        wrapped = re.search(pattern, prompt, flags=re.DOTALL | re.IGNORECASE)
+        if wrapped:
+            return wrapped.group(1).strip()
+    return prompt
 
-    warnings: List[str] = []
-    spans: List[Dict[str, Any]] = []
-    plain_parts: List[str] = []
-    tagged_parts: List[str] = []
-    cursor = 0
-    tag_count = 0
-    for match in re.finditer(r"<edit>(.*?)</edit>", tagged_prompt, flags=re.DOTALL | re.IGNORECASE):
-        span_text = match.group(1)
-        prefix = tagged_prompt[cursor : match.start()]
-        plain_parts.append(prefix)
-        tagged_parts.append(prefix)
-        tag_count += 1
-        if tag_count > max_edit_tags:
-            warnings.append("extra_edit_tags_ignored")
-            plain_parts.append(span_text)
-            tagged_parts.append(span_text)
-            cursor = match.end()
-            continue
 
-        start_char = sum(len(part) for part in plain_parts)
-        word_count = len(re.findall(r"\S+", span_text))
-        if word_count > max_words_per_edit_tag:
-            warnings.append(f"edit_tag_{len(spans) + 1}_exceeds_word_limit")
-        plain_parts.append(span_text)
-        tagged_parts.append(f"<edit>{span_text}</edit>")
-        end_char = sum(len(part) for part in plain_parts)
-        spans.append(
-            {
-                "location_rank": len(spans) + 1,
-                "start_char": start_char,
-                "end_char": end_char,
-                "text": span_text,
-                "word_count": word_count,
-            }
+def _parse_tagged_prompt(raw_tagged_prompt: str) -> Tuple[str, List[Dict[str, Any]]]:
+    """Keep every edit span returned by LPO without enforcing prompt limits."""
+    tagged_prompt = _extract_lpo_prompt(raw_tagged_prompt)
+    spans = [
+        {
+            "location_rank": index,
+            "text": match.group(1),
+        }
+        for index, match in enumerate(
+            re.finditer(
+                r"<edit>(.*?)</edit>",
+                tagged_prompt,
+                flags=re.DOTALL | re.IGNORECASE,
+            ),
+            start=1,
         )
-        cursor = match.end()
-    suffix = tagged_prompt[cursor:]
-    plain_parts.append(suffix)
-    tagged_parts.append(suffix)
-    plain_prompt = "".join(plain_parts)
-    sanitized_tagged_prompt = "".join(tagged_parts)
-
-    if not spans:
-        warnings.append("no_edit_tags_found")
-    if plain_prompt.strip() != original_prompt.strip():
-        warnings.append("tagged_prompt_plain_text_differs_from_input")
-        warnings.append("using_tagged_prompt_as_returned")
-    return sanitized_tagged_prompt, spans, warnings
+    ]
+    return tagged_prompt, spans
 
 
 def _clean_candidate_prompt(text: str) -> str:
-    cleaned = text.strip()
-    fenced = re.search(r"```(?:text)?\s*(.*?)\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
-    if fenced:
-        cleaned = fenced.group(1).strip()
-    cleaned = re.sub(r"\[/?p\]", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"</?p>", "", cleaned, flags=re.IGNORECASE)
+    """Extract one rewritten prompt and remove only its edit tags."""
+    cleaned = _extract_lpo_prompt(text)
     cleaned = re.sub(r"</?edit>", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
 
@@ -505,33 +466,9 @@ def _candidate_prompts_from_raw_outputs(
     raw_outputs: Sequence[str],
     fallback_prompt: str,
 ) -> List[str]:
-    candidates: List[str] = []
-    for raw_output in raw_outputs:
-        found_tagged_prompt = False
-        for match in re.finditer(r"\[P\](.*?)\[/P\]", raw_output, flags=re.DOTALL | re.IGNORECASE):
-            text = match.group(1).strip()
-            if text:
-                candidates.append(text)
-                found_tagged_prompt = True
-        for match in re.finditer(r"<p>(.*?)</p>", raw_output, flags=re.DOTALL | re.IGNORECASE):
-            text = match.group(1).strip()
-            if text:
-                candidates.append(text)
-                found_tagged_prompt = True
-        if found_tagged_prompt:
-            continue
-        try:
-            parsed = extract_json_object(raw_output)
-        except (ValueError, TypeError, json.JSONDecodeError):
-            parsed = {}
-        raw_candidates = parsed.get("candidate_prompts") if isinstance(parsed, dict) else None
-        if isinstance(raw_candidates, list):
-            candidates.extend(str(item).strip() for item in raw_candidates if str(item).strip())
-            continue
-        if raw_output.strip():
-            candidates.append(raw_output.strip())
+    """Extract each rewritten LPO prompt and remove its edit tags."""
     deduped: List[str] = []
-    for candidate in [fallback_prompt] + candidates:
+    for candidate in [fallback_prompt, *raw_outputs]:
         cleaned = _clean_candidate_prompt(candidate)
         if cleaned and cleaned not in deduped:
             deduped.append(cleaned)
@@ -779,16 +716,10 @@ def main() -> None:
             do_log=True,
             log_label="relation_extraction_lpo_location",
         )[0]
-        tagged_prompt, edit_spans, tag_warnings = _parse_tagged_prompt(
-            original_prompt=step_input_prompt,
-            raw_tagged_prompt=raw_tagged_output,
-            max_edit_tags=args.max_edit_tags,
-            max_words_per_edit_tag=args.max_words_per_edit_tag,
-        )
+        tagged_prompt, edit_spans = _parse_tagged_prompt(raw_tagged_output)
         print(
             "[relation_extraction_lpo] location tagging:",
             f"locations={len(edit_spans)}",
-            f"warnings={tag_warnings}",
         )
         print(tagged_prompt)
 
@@ -824,18 +755,9 @@ def main() -> None:
                 raw_rewrite_outputs,
                 fallback_prompt=step_input_prompt,
             )
-            max_candidate_chars = 2 * len(step_input_prompt)
-            pre_filter_count = len(candidate_prompts)
-            candidate_prompts = [
-                prompt
-                for index, prompt in enumerate(candidate_prompts)
-                if index == 0 or len(prompt) <= max_candidate_chars
-            ]
             print(
                 "[relation_extraction_lpo] candidates generated:",
                 f"count={len(candidate_prompts)}",
-                f"dropped_too_long={pre_filter_count - len(candidate_prompts)}",
-                f"max_chars={max_candidate_chars}",
             )
             optimizer_model = None
             optimizer_tokenizer = None
@@ -893,7 +815,6 @@ def main() -> None:
             "raw_tagged_output": raw_tagged_output,
             "tagged_prompt": tagged_prompt,
             "edit_spans": edit_spans,
-            "tag_warnings": tag_warnings,
             "rewrite_prompt": rewrite_prompt,
             "raw_rewrite_outputs": raw_rewrite_outputs,
             "candidate_scores": scored_candidates,

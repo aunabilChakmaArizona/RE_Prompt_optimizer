@@ -78,114 +78,26 @@ def _strictly_select_against_source(
     return (best_candidate if improved else source), improved
 
 
-def _parse_lpo_tagged_prompt(
-    instruction_prompt: str,
-    raw_tagged_prompt: str,
-    *,
-    max_locations: int,
-    max_words_per_location: int,
-    tokenizer,
-) -> tuple[str, list[dict[str, Any]], list[str]]:
-    """Parse LPO's returned full prompt and its local edit scopes."""
-    tagged_prompt = raw_tagged_prompt.strip()
+def _extract_lpo_prompt(raw_output: str) -> str:
+    """Extract one full LPO prompt while leaving its edit tags untouched."""
+    prompt = raw_output.strip()
     fenced = re.search(
         r"```(?:text)?\s*(.*?)\s*```",
-        tagged_prompt,
+        prompt,
         flags=re.DOTALL | re.IGNORECASE,
     )
     if fenced:
-        tagged_prompt = fenced.group(1).strip()
-    wrapped = re.search(
-        r"\[P\](.*?)\[/P\]",
-        tagged_prompt,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    if wrapped:
-        tagged_prompt = wrapped.group(1).strip()
-    wrapped = re.search(
-        r"<p>(.*?)</p>",
-        tagged_prompt,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    if wrapped:
-        tagged_prompt = wrapped.group(1).strip()
-
-    warnings: list[str] = []
-    locations: list[dict[str, Any]] = []
-    plain_parts: list[str] = []
-    tagged_parts: list[str] = []
-    cursor = 0
-    tag_count = 0
-    for match in re.finditer(
-        r"<edit>(.*?)</edit>",
-        tagged_prompt,
-        flags=re.DOTALL | re.IGNORECASE,
-    ):
-        span_text = match.group(1)
-        prefix = tagged_prompt[cursor : match.start()]
-        plain_parts.append(prefix)
-        tagged_parts.append(prefix)
-        tag_count += 1
-        if tag_count > max_locations:
-            warnings.append("extra_edit_tags_ignored")
-            plain_parts.append(span_text)
-            tagged_parts.append(span_text)
-            cursor = match.end()
-            continue
-
-        start_char = sum(len(part) for part in plain_parts)
-        word_count = len(re.findall(r"\S+", span_text))
-        if word_count > max_words_per_location:
-            warnings.append(f"edit_tag_{len(locations) + 1}_exceeds_word_limit")
-        plain_parts.append(span_text)
-        tagged_parts.append(f"<edit>{span_text}</edit>")
-        end_char = sum(len(part) for part in plain_parts)
-        locations.append(
-            {
-                "location_rank": len(locations) + 1,
-                "region_rank": len(locations) + 1,
-                "start_char": start_char,
-                "end_char": end_char,
-                "region_text": span_text,
-                "text": span_text,
-                "word_count": word_count,
-                "token_count": len(
-                    tokenizer.encode(span_text, add_special_tokens=False)
-                ),
-                "selection_mode": "optimizer_reasoning",
-            }
-        )
-        cursor = match.end()
-
-    suffix = tagged_prompt[cursor:]
-    plain_parts.append(suffix)
-    tagged_parts.append(suffix)
-    plain_prompt = "".join(plain_parts)
-    sanitized_tagged_prompt = "".join(tagged_parts)
-    if not locations:
-        warnings.append("no_edit_tags_found")
-    if plain_prompt.strip() != instruction_prompt.strip():
-        warnings.extend(
-            [
-                "tagged_prompt_plain_text_differs_from_input",
-                "using_tagged_prompt_as_returned",
-            ]
-        )
-    return sanitized_tagged_prompt, locations, warnings
+        prompt = fenced.group(1).strip()
+    for pattern in (r"\[P\](.*?)\[/P\]", r"<p>(.*?)</p>"):
+        wrapped = re.search(pattern, prompt, flags=re.DOTALL | re.IGNORECASE)
+        if wrapped:
+            return wrapped.group(1).strip()
+    return prompt
 
 
 def _clean_lpo_candidate_prompt(text: str) -> str:
     """Remove LPO's output wrappers and local edit tags from one candidate."""
-    cleaned = text.strip()
-    fenced = re.search(
-        r"```(?:text)?\s*(.*?)\s*```",
-        cleaned,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    if fenced:
-        cleaned = fenced.group(1).strip()
-    cleaned = re.sub(r"\[/?p\]", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"</?p>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = _extract_lpo_prompt(text)
     cleaned = re.sub(r"</?edit>", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
 
@@ -194,34 +106,11 @@ def _lpo_candidate_prompts_from_outputs(
     raw_outputs: Sequence[str],
     fallback_prompt: str,
 ) -> list[str]:
-    """Extract and clean LPO candidates using the relation-extraction protocol."""
-    candidates: list[str] = []
-    for raw_output in raw_outputs:
-        found_tagged_prompt = False
-        for pattern in (r"\[P\](.*?)\[/P\]", r"<p>(.*?)</p>"):
-            for match in re.finditer(
-                pattern,
-                raw_output,
-                flags=re.DOTALL | re.IGNORECASE,
-            ):
-                text = match.group(1).strip()
-                if text:
-                    candidates.append(text)
-                    found_tagged_prompt = True
-        if found_tagged_prompt:
-            continue
-        parsed = extract_json_object(raw_output) or {}
-        raw_candidates = parsed.get("candidate_prompts")
-        if isinstance(raw_candidates, list):
-            candidates.extend(
-                str(item).strip() for item in raw_candidates if str(item).strip()
-            )
-        elif raw_output.strip():
-            candidates.append(raw_output.strip())
+    """Extract each rewritten LPO prompt and remove its edit tags."""
     return unique_nonempty(
         [
             _clean_lpo_candidate_prompt(candidate)
-            for candidate in [fallback_prompt, *candidates]
+            for candidate in [fallback_prompt, *raw_outputs]
         ]
     )
 
@@ -267,14 +156,21 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         [location_meta_prompt],
         log_label="qa_lpo_location_tagging",
     )[0]
-    _, target_tokenizer = context.model_pool.ensure(TARGET_ROLE)
-    tagged_prompt, locations, location_warnings = _parse_lpo_tagged_prompt(
-        context.initial_prompt,
-        location_output,
-        max_locations=args.max_locations,
-        max_words_per_location=args.max_words_per_location,
-        tokenizer=target_tokenizer,
-    )
+    tagged_prompt = _extract_lpo_prompt(location_output)
+    locations = [
+        {
+            "location_rank": index,
+            "text": match.group(1),
+        }
+        for index, match in enumerate(
+            re.finditer(
+                r"<edit>(.*?)</edit>",
+                tagged_prompt,
+                flags=re.DOTALL | re.IGNORECASE,
+            ),
+            start=1,
+        )
+    ]
     save_json(
         context.run_dir / "selected_spans.json",
         {
@@ -282,7 +178,6 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "raw_location_output": location_output,
             "tagged_prompt": tagged_prompt,
             "locations": locations,
-            "warnings": location_warnings,
         },
     )
 
@@ -304,12 +199,6 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             rewrite_outputs,
             context.initial_prompt,
         )
-        maximum_candidate_characters = 2 * len(context.initial_prompt)
-        candidate_prompts = [
-            prompt
-            for index, prompt in enumerate(candidate_prompts)
-            if index == 0 or len(prompt) <= maximum_candidate_characters
-        ]
     save_json(
         context.run_dir / "optimizer_trace.json",
         {
@@ -317,7 +206,6 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "location_raw_output": location_output,
             "tagged_prompt": tagged_prompt,
             "parsed_locations": locations,
-            "location_warnings": location_warnings,
             "feedback_examples": feedback_texts,
             "rewrite_meta_prompt": rewrite_meta_prompt,
             "rewrite_raw_outputs": rewrite_outputs,
