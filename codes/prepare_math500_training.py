@@ -22,7 +22,8 @@ SOURCE_URL = (
     f"{SOURCE_REVISION}/{SOURCE_FILE}"
 )
 EXPECTED_SHA256 = "eca6e667f4305dd5e5ba09b4fd55e7f3174a0fbe361cdfd4c44758b593a76933"
-VALIDATION_SIZE = 500
+VALIDATION_SIZE = 900
+VALIDATION_FOLD_COUNT = 3
 SPLIT_SEED = 42
 
 EMPTY_BOX_ANSWER_OVERRIDES = {
@@ -198,6 +199,52 @@ def stratified_split(
     return training_records, validation_records
 
 
+def assign_validation_folds(
+    records: list[dict[str, Any]], fold_count: int, seed: int
+) -> list[list[dict[str, Any]]]:
+    """Assign equal validation folds while balancing subject and level."""
+    if len(records) % fold_count != 0:
+        raise ValueError("Validation records must divide evenly across folds.")
+
+    groups: dict[tuple[str, int | None], list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        groups[(record["subject"], record["level"])].append(record)
+
+    random_generator = random.Random(seed)
+    folds: list[list[dict[str, Any]]] = [[] for _ in range(fold_count)]
+    next_tie_fold = 0
+    for key in sorted(groups, key=str):
+        group_records = list(groups[key])
+        random_generator.shuffle(group_records)
+        base_size, remainder = divmod(len(group_records), fold_count)
+        group_fold_sizes = [base_size] * fold_count
+        ranked_folds = sorted(
+            range(fold_count),
+            key=lambda index: (
+                len(folds[index]),
+                (index - next_tie_fold) % fold_count,
+            ),
+        )
+        for fold_index in ranked_folds[:remainder]:
+            group_fold_sizes[fold_index] += 1
+        next_tie_fold = (next_tie_fold + remainder) % fold_count
+
+        offset = 0
+        for fold_index, fold_size in enumerate(group_fold_sizes):
+            selected = group_records[offset : offset + fold_size]
+            for record in selected:
+                record["validation_fold"] = fold_index + 1
+            folds[fold_index].extend(selected)
+            offset += fold_size
+
+    expected_fold_size = len(records) // fold_count
+    if any(len(fold) != expected_fold_size for fold in folds):
+        raise ValueError("Could not create equal stratified validation folds.")
+    for fold in folds:
+        fold.sort(key=lambda record: record["id"])
+    return folds
+
+
 def distribution(records: list[dict[str, Any]], field: str) -> dict[str, int]:
     """Count records by a named metadata field using JSON-friendly keys."""
     counts = Counter("unknown" if record[field] is None else str(record[field]) for record in records)
@@ -227,6 +274,15 @@ def validate_splits(
     assert question_sets["train"].isdisjoint(question_sets["validation"])
     assert question_sets["train"].isdisjoint(question_sets["test"])
     assert question_sets["validation"].isdisjoint(question_sets["test"])
+    expected_fold_size = len(validation_records) // VALIDATION_FOLD_COUNT
+    validation_fold_counts = Counter(
+        record.get("validation_fold") for record in validation_records
+    )
+    assert validation_fold_counts == Counter(
+        {fold: expected_fold_size for fold in range(1, VALIDATION_FOLD_COUNT + 1)}
+    )
+    assert all("validation_fold" not in record for record in training_records)
+    assert all("validation_fold" not in record for record in test_records)
     return {split: len(records) for split, records in split_records.items()}
 
 
@@ -266,12 +322,20 @@ def main() -> None:
     training_records, validation_records = stratified_split(
         unique_records, VALIDATION_SIZE, SPLIT_SEED
     )
+    validation_folds = assign_validation_folds(
+        validation_records, VALIDATION_FOLD_COUNT, SPLIT_SEED
+    )
     test_records = read_jsonl(test_path)
     split_sizes = validate_splits(training_records, validation_records, test_records)
 
     processed_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(processed_dir / "train.jsonl", training_records)
     write_jsonl(processed_dir / "validation.jsonl", validation_records)
+    for fold_index, fold_records in enumerate(validation_folds, start=1):
+        write_jsonl(
+            processed_dir / f"validation_fold_{fold_index}.jsonl",
+            fold_records,
+        )
     write_json(
         processed_dir / "all.json",
         training_records + validation_records + test_records,
@@ -300,6 +364,8 @@ def main() -> None:
             },
             "preparation": {
                 "validation_size": VALIDATION_SIZE,
+                "validation_fold_count": VALIDATION_FOLD_COUNT,
+                "validation_fold_size": VALIDATION_SIZE // VALIDATION_FOLD_COUNT,
                 "split_seed": SPLIT_SEED,
                 "stratified_by": ["subject", "level"],
                 "raw_training_rows": len(all_training_records),
@@ -317,7 +383,15 @@ def main() -> None:
                 },
                 "test": test_source,
             },
-            "files": ["train.jsonl", "validation.jsonl", "test.jsonl", "all.json"],
+            "files": [
+                "train.jsonl",
+                "validation.jsonl",
+                "validation_fold_1.jsonl",
+                "validation_fold_2.jsonl",
+                "validation_fold_3.jsonl",
+                "test.jsonl",
+                "all.json",
+            ],
         },
     )
 

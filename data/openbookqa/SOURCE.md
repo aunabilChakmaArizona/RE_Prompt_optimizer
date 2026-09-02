@@ -51,7 +51,13 @@ AllenAI before redistribution if needed.
 
 ## Prompt-optimization split
 
+After removing five exact training duplicates, processing moves 400 training
+questions into validation with seed 42 and equal selection across answer labels.
+This creates 4,552 training, 900 validation, and 500 test questions. Validation
+contains the official 500 questions plus the 400-question training supplement and
+is divided into three fixed folds of 300, balanced by source and answer label.
+
 For prompt-optimization experiments, use train examples for gradient/error
-signals, dev/validation for prompt selection, and test only for final reporting.
-The standard metric is multiple-choice accuracy. The `additional` configuration
-can support separate closed-book and fact-provided prompt settings.
+signals, validation for stable prompt selection, and test only for final
+reporting. The standard metric is multiple-choice accuracy. The `additional`
+configuration can support separate closed-book and fact-provided prompt settings.

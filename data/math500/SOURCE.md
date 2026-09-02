@@ -11,9 +11,10 @@
 - URL: <https://huggingface.co/datasets/DigitalLearningGmbH/MATH-lighteval/resolve/0530c78699ea5e8eb5530600900e1f328b48acad/data/train-00000-of-00001.parquet>
 
 The raw source contains 7,500 official MATH training problems. Processing removes
-one exact duplicate question and creates a deterministic 6,999/500
+one exact duplicate question and creates a deterministic 6,599/900
 train/validation split. The split uses seed 42 and is stratified by subject and
-difficulty level. Four source solutions have nonstandard final boxes: two use
+difficulty level. Validation is divided into three fixed, similarly stratified
+folds of 300 problems for stable prompt selection. Four source solutions have nonstandard final boxes: two use
 unbraced boxes, and two empty boxes correspond to an answer of zero. These cases
 are handled explicitly by `codes/prepare_math500_training.py`.
 
