@@ -35,7 +35,7 @@ class QAEvaluator:
         batch_size: int,
         max_new_tokens: int,
         seed: int,
-        validation_std_penalty: float = 2.0,
+        validation_std_penalty: float = 1.0,
         run_started_at: float | None = None,
     ):
         """Store target generation settings shared across evaluations."""
@@ -207,17 +207,18 @@ def select_mixed_feedback(
     evaluation: dict[str, Any],
     count: int,
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    """Select feedback with at least one success and failure when available."""
+    """Select balanced feedback, giving an unmatched slot to an incorrect answer."""
     if count <= 0:
         return []
     pairs = list(zip(records, evaluation["predictions"]))
     correct = [pair for pair in pairs if pair[1]["correct"]]
     incorrect = [pair for pair in pairs if not pair[1]["correct"]]
-    selected: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    if correct:
-        selected.append(correct[0])
-    if incorrect and len(selected) < count:
-        selected.append(incorrect[0])
+    incorrect_count = (count + 1) // 2
+    correct_count = count // 2
+    selected = [
+        *incorrect[:incorrect_count],
+        *correct[:correct_count],
+    ]
     used_ids = {str(record["id"]) for record, _ in selected}
     selected.extend(
         pair

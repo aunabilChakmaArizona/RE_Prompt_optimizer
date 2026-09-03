@@ -315,6 +315,57 @@ def _sample_de_donors(
     return donor_a, donor_b, current_best_prompt
 
 
+def _generate_diverse_evoprompt_children(
+    context: QAOptimizationContext,
+    population: Sequence[str],
+    meta_prompts: Sequence[str],
+    initial_raw_outputs: Sequence[str],
+    duplicate_retries: int,
+    iteration: int,
+) -> tuple[list[str], list[list[str]], list[int]]:
+    """Parse distinct DE children and resample exact duplicates when necessary."""
+    blocked_prompts = {prompt.strip() for prompt in population}
+    children: list[str] = []
+    raw_output_attempts: list[list[str]] = []
+    retry_counts: list[int] = []
+
+    for target_index, (target_prompt, meta_prompt, initial_raw_output) in enumerate(
+        zip(population, meta_prompts, initial_raw_outputs)
+    ):
+        attempts = [initial_raw_output]
+        parsed = extract_tagged_prompts([initial_raw_output])
+        child = parsed[0] if parsed else None
+        retries = 0
+        while (
+            child is None or child.strip() in blocked_prompts
+        ) and retries < duplicate_retries:
+            retries += 1
+            log_progress(
+                context,
+                f"iteration {iteration} duplicate retry {retries}/{duplicate_retries} "
+                f"| target={target_index + 1}/{len(population)}",
+            )
+            retry_output = generate_optimizer_texts(
+                context,
+                [meta_prompt],
+                log_label="qa_evoprompt_de_duplicate_retry",
+                enable_thinking=False,
+            )[0]
+            attempts.append(retry_output)
+            parsed = extract_tagged_prompts([retry_output])
+            child = parsed[0] if parsed else None
+
+        if child is None or child.strip() in blocked_prompts:
+            child = target_prompt
+        else:
+            blocked_prompts.add(child.strip())
+        children.append(child)
+        raw_output_attempts.append(attempts)
+        retry_counts.append(retries)
+
+    return children, raw_output_attempts, retry_counts
+
+
 def _evaluate_prompt_sequence(
     context: QAOptimizationContext,
     prompts: Sequence[str],
@@ -413,10 +464,16 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
             log_label="qa_evoprompt_de_generation",
             enable_thinking=False,
         )
-        children = []
-        for target_prompt, raw_output in zip(population, raw_outputs):
-            parsed = extract_tagged_prompts([raw_output])
-            children.append(parsed[0] if parsed else target_prompt)
+        children, raw_output_attempts, duplicate_retry_counts = (
+            _generate_diverse_evoprompt_children(
+                context,
+                population,
+                de_meta_prompts,
+                raw_outputs,
+                args.duplicate_retries,
+                iteration,
+            )
+        )
         context.logger.event(
             "evoprompt_de_generation",
             iteration=iteration,
@@ -424,6 +481,8 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
             parents=de_parent_records,
             meta_prompts=de_meta_prompts,
             raw_outputs=raw_outputs,
+            raw_output_attempts=raw_output_attempts,
+            duplicate_retry_counts=duplicate_retry_counts,
             parsed_children=children,
         )
         child_scores = _evaluate_prompt_sequence(
@@ -513,6 +572,7 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
         extra_summary={
             "algorithm": "evoprompt_de",
             "iterations": args.iterations,
+            "duplicate_retries": args.duplicate_retries,
             "snapshots": snapshots,
             "best_found_at_iteration": dev_best["iteration"],
             "final_population": population,

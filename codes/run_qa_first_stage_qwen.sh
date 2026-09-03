@@ -5,7 +5,7 @@
 # Qwen reasoning.
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
-  --code openbookqa_reasoning_qwen_rpo_qwen14opt \
+  --code openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1 \
   --qa-mode reasoning \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
@@ -14,11 +14,11 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
-  --code openbookqa_reasoning_qwen_evoprompt_qwen14opt \
+  --code openbookqa_reasoning_qwen_evoprompt_qwen14opt_lambda1 \
   --qa-mode reasoning \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
@@ -27,11 +27,12 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
-  --code openbookqa_reasoning_qwen_etgpo_qwen14opt \
+  --code openbookqa_reasoning_qwen_etgpo_qwen14opt_lambda1 \
   --qa-mode reasoning \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
@@ -40,13 +41,13 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 # Qwen non-reasoning.
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
-  --code openbookqa_non_reasoning_qwen_rpo_qwen14opt \
+  --code openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1 \
   --qa-mode non_reasoning \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
@@ -55,11 +56,11 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
-  --code openbookqa_non_reasoning_qwen_evoprompt_qwen14opt \
+  --code openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1 \
   --qa-mode non_reasoning \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
@@ -68,11 +69,12 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
-  --code openbookqa_non_reasoning_qwen_etgpo_qwen14opt \
+  --code openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1 \
   --qa-mode non_reasoning \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
@@ -81,5 +83,5 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --validation-std-penalty 1.0 \
   --overwrite

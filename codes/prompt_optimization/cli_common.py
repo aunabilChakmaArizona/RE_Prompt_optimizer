@@ -153,7 +153,7 @@ def add_shared_arguments(
     parser.add_argument(
         "--validation-std-penalty",
         type=float,
-        default=2.0,
+        default=1.0,
         help="Lambda in validation mean accuracy minus lambda times fold std.",
     )
     parser.add_argument(

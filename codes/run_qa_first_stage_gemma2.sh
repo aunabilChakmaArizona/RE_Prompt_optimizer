@@ -10,7 +10,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --vllm-max-model-len 32768 \
   --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
@@ -25,5 +26,5 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --vllm-max-model-len 32768 \
   --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --validation-std-penalty 1.0 \
   --overwrite

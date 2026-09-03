@@ -234,7 +234,10 @@ def etgpo_first_taxonomy_prompt(
                 "category_name": "Short descriptive name",
                 "summary": "One-sentence error pattern",
                 "description": "Detailed self-contained description",
-                "example": "A concrete self-contained example",
+                "example": (
+                    "A brief topic-independent illustration based on the observed "
+                    "error pattern"
+                ),
                 "error_type": "Type of error",
                 "why_leads_to_wrong_answer": "How this error causes wrong answers",
             }
@@ -263,6 +266,8 @@ For each failure:
 {analysis_steps}
 
 Create issue categories that capture each type of error. Categories should be general enough to potentially apply to other traces, but specific enough to be meaningful.
+
+Identify reusable reasoning or decision errors rather than question-specific topics. Do not create categories based only on particular entities, answer choices, scientific terms, or isolated facts. Group failures that share the same underlying error even when their question topics differ.
 
 IMPORTANT: Each category must be SELF-CONTAINED and understandable by someone who has NOT seen the original problems.
 
@@ -305,7 +310,10 @@ def etgpo_update_taxonomy_prompt(
                 "category_name": "Short descriptive name for a new error",
                 "summary": "One-sentence error pattern",
                 "description": "Detailed self-contained description",
-                "example": "A concrete self-contained example",
+                "example": (
+                    "A brief topic-independent illustration based on the observed "
+                    "error pattern"
+                ),
                 "error_type": "Type of error",
                 "why_leads_to_wrong_answer": "How this error causes wrong answers",
             }
@@ -336,6 +344,8 @@ def etgpo_update_taxonomy_prompt(
 ## Your Task
 
 For every new failure, decide whether its root cause fits an existing category. Reuse that category whenever it fits. Create a new category only when the error is fundamentally different. New categories must be self-contained, generalizable, specific, and actionable.
+
+Identify reusable reasoning or decision errors rather than question-specific topics. Do not create categories based only on particular entities, answer choices, scientific terms, or isolated facts. Group failures that share the same underlying error even when their question topics differ.
 
 ## Output Format
 
@@ -397,19 +407,16 @@ I have identified the following error categories from model failures. Generate g
 Generate guidance text that:
 1. Addresses each failure category with specific, actionable advice
 2. Is written as instructions TO the model
-3. Uses concrete examples where helpful
+3. Expresses advice as a reusable reasoning or decision strategy
 4. Is prioritized by frequency
 
-Generate DETAILED guidance with examples. Each item should include:
-- Description of the error pattern
-- Actionable advice on how to avoid it
-- WRONG example showing the error
-- CORRECT example showing proper approach
+Generate SHORT, CONCISE guidance. Each item should be 1-2 sentences.
 
 ## Critical Constraints
 
 - The goal is ACCURACY, not caution. Never generate guidance that encourages the model to refuse, abstain, or say "not specified" when an answer can be reasonably provided.
-- CORRECT examples must always show the model providing a substantive answer. Never show abstention/refusal as the correct behavior.
+- Keep the guidance task-general. Do not copy question-specific entities, answer choices, scientific terms, or isolated facts from the categories.
+- Do not invent new WRONG/CORRECT question-answer examples.
 - Preserve this task behavior: {QA_TASK_DESCRIPTIONS[mode.name]}
 
 ## Output Format

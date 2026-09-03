@@ -35,7 +35,7 @@ RPO, EvoPrompt-DE, ETGPO, and LPO support vLLM. GreaTer, GreaTer-TG, and all Gra
 
 Install the separate pinned environment from `requirements_vllm.txt`. Offline vLLM uses one visible GPU per process, so the target and optimizer device arguments must match in a vLLM run.
 
-Validation uses the fixed 900-example split as three folds of 300 examples. Prompt selection uses `mean fold accuracy - lambda * population standard deviation`, with `--validation-std-penalty 2.0` by default. Setting lambda to zero gives ordinary accuracy because the three folds have equal size. A second-stage candidate is retained only if its stable validation score strictly exceeds its first-stage source prompt; otherwise, the first-stage prompt is retained. Raw accuracy, each fold accuracy, the fold mean and standard deviation, and the stable score are all saved.
+Validation uses the fixed 900-example split as three folds of 300 examples. Prompt selection uses `mean fold accuracy - lambda * population standard deviation`, with `--validation-std-penalty 1.0` by default. Setting lambda to zero gives ordinary accuracy because the three folds have equal size. A second-stage candidate is retained only if its stable validation score strictly exceeds its first-stage source prompt; otherwise, the first-stage prompt is retained. Raw accuracy, each fold accuracy, the fold mean and standard deviation, and the stable score are all saved.
 
 Optimizer-model generations default to `--optimizer-max-new-tokens 10000`, matching the relation-extraction experiment setting.
 
@@ -43,7 +43,7 @@ Generated evaluations are reseeded deterministically by mode, split, and record 
 
 Console logs show one representative prompt/output for each important model-call phase. They also report evaluation sizes, iteration or beam-region progress, current and best regular/stable scores, phase time, and total elapsed run time. Complete prompts, outputs, predictions, and traces remain available in the saved JSON and JSONL artifacts.
 
-EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. ETGPO analyzes every sampled failure, selects frequent categories to the requested coverage, and passes one identical guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes.
+EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. Its original DE meta-prompt and sampled generation are unchanged, but an exact child duplicate is resampled up to `--duplicate-retries` times to prevent population collapse. ETGPO analyzes every sampled failure, groups them by reusable reasoning or decision errors rather than question topics, selects frequent categories to the requested coverage, and passes one identical short-guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes.
 
 For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</answer>` responses, but loss is applied only to the inner gold option-label token. This prevents fixed answer tags from dominating the instruction gradient.
 
@@ -53,8 +53,8 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 
 | Method | Main defaults |
 | --- | --- |
-| RPO | 10 iterations, snapshots at 5/10, feedback sample 100, separate feedback for 3 mixed examples, population 10, parent temperature 1.0 |
-| EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000 |
+| RPO | 10 iterations, snapshots at 5/10, feedback sample 100, 3 near-balanced examples with the odd slot assigned to an incorrect answer, population 10, parent temperature 1.0 |
+| EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000, up to 3 exact-duplicate retries |
 | ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
 | LPO | 1 iteration, train sample 512, 3 incorrect feedback examples, at most 5 locations, at most 3 words/location, 5 rewrites |
 | GreaTer / TG | 1 token, train sample 3,000, gradient batch 4, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |

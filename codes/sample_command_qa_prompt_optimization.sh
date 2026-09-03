@@ -54,7 +54,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0 \
+  --validation-std-penalty 1.0 \
   --overwrite
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
@@ -67,7 +67,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --code openbookqa_reasoning_qwen_etgpo \
@@ -79,7 +80,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 # First stage: Qwen non-reasoning.
 
@@ -93,7 +94,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --code openbookqa_non_reasoning_qwen_evoprompt \
@@ -105,7 +106,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --code openbookqa_non_reasoning_qwen_etgpo \
@@ -117,7 +119,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 # First stage: Gemma reasoning.
 
@@ -131,7 +133,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --code openbookqa_reasoning_gemma_evoprompt \
@@ -143,7 +145,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --code openbookqa_reasoning_gemma_etgpo \
@@ -155,7 +158,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 # First stage: Gemma non-reasoning.
 
@@ -169,7 +172,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --code openbookqa_non_reasoning_gemma_evoprompt \
@@ -181,7 +184,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --duplicate-retries 3 \
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --code openbookqa_non_reasoning_gemma_etgpo \
@@ -193,7 +197,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 # Second stage: Qwen reasoning examples starting from the saved RPO-5 prompt.
 
@@ -208,7 +212,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --gpu-memory-utilization 0.90 \
   --initial-prompt-file outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_qwen_rpo/prompt_iteration_5.txt \
   --feedback-examples 3 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_reasoning_qwen_rpo5_greater \
@@ -220,7 +224,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_reasoning_qwen_rpo5_greater_tg \
@@ -232,7 +236,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_reasoning_qwen_rpo5_gradpo_gen \
@@ -245,7 +249,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --train-sample-size 3000 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_reasoning_qwen_rpo5_gradpo_prob \
@@ -258,7 +262,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --train-sample-size 3000 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_reasoning_qwen_rpo5_gradpo_gen_random \
@@ -271,7 +275,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --train-sample-size 3000 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 # Second stage: Gemma reasoning examples starting from the saved RPO-5 prompt.
 
@@ -286,7 +290,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --gpu-memory-utilization 0.90 \
   --initial-prompt-file outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_gemma_rpo/prompt_iteration_5.txt \
   --feedback-examples 3 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_reasoning_gemma_rpo5_greater \
@@ -298,7 +302,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_reasoning_gemma_rpo5_greater_tg \
@@ -310,7 +314,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_reasoning_gemma_rpo5_gradpo_gen \
@@ -323,7 +327,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --train-sample-size 3000 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_reasoning_gemma_rpo5_gradpo_prob \
@@ -336,7 +340,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --train-sample-size 3000 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_reasoning_gemma_rpo5_gradpo_gen_random \
@@ -349,7 +353,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --train-sample-size 3000 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --validation-std-penalty 2.0
+  --validation-std-penalty 1.0
 
 # Generate the complete matrices, including both reasoning modes and all prompt sources.
 

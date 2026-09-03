@@ -37,6 +37,12 @@ def parse_args() -> argparse.Namespace:
         default=1000,
         help="Training questions sampled to score prompts each iteration.",
     )
+    parser.add_argument(
+        "--duplicate-retries",
+        type=int,
+        default=3,
+        help="Times to resample a child that duplicates the active population.",
+    )
     args = parser.parse_args()
     if args.iterations <= 0:
         parser.error("--iterations must be positive.")
@@ -44,6 +50,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("QA EvoPrompt uses exactly five fixed population prompts.")
     if args.train_sample_size <= 0:
         parser.error("--train-sample-size must be positive.")
+    if args.duplicate_retries < 0:
+        parser.error("--duplicate-retries must be non-negative.")
     return args
 
 
