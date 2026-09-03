@@ -157,6 +157,10 @@ class ModelPool:
             return
         from agents.agent_memory import clear_model_memory
 
+        if self.backend == "vllm":
+            from agents.agent_vllm_models import shutdown_vllm_model
+
+            shutdown_vllm_model(pair[0])
         del pair
         gc.collect()
         clear_model_memory()
@@ -165,7 +169,14 @@ class ModelPool:
         """Release every loaded model and clear CUDA allocator caches."""
         from agents.agent_memory import clear_model_memory
 
+        unique_pairs = {id(pair): pair for pair in self.loaded.values()}
+        if self.backend == "vllm":
+            from agents.agent_vllm_models import shutdown_vllm_model
+
+            for model, _ in unique_pairs.values():
+                shutdown_vllm_model(model)
         self.loaded.clear()
+        unique_pairs.clear()
         gc.collect()
         clear_model_memory()
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import random
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ class QAOptimizationContext:
     model_pool: ModelPool
     evaluator: QAEvaluator
     rng: random.Random
+    started_at: float
 
 
 def add_shared_arguments(
@@ -160,6 +162,7 @@ def build_context(
     optimizer_name: str,
 ) -> QAOptimizationContext:
     """Load one QA experiment and initialize its shared runtime services."""
+    started_at = time.monotonic()
     mode = resolve_mode(args.qa_mode)
     max_new_tokens = args.target_max_new_tokens or mode.default_max_new_tokens
     if max_new_tokens <= 0:
@@ -216,6 +219,7 @@ def build_context(
         max_new_tokens=max_new_tokens,
         seed=args.seed,
         validation_std_penalty=args.validation_std_penalty,
+        run_started_at=started_at,
     )
     context = QAOptimizationContext(
         args=args,
@@ -229,6 +233,7 @@ def build_context(
         model_pool=model_pool,
         evaluator=evaluator,
         rng=rng,
+        started_at=started_at,
     )
     save_text(run_dir / "initial_prompt.txt", initial_prompt)
     save_json(

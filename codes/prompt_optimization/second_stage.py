@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, Sequence
 
 try:
@@ -31,13 +32,15 @@ from prompt_optimization.optimizer_common import (
     evaluate_candidates,
     finalize_run,
     generate_optimizer_texts,
+    log_progress,
+    scored_item_text,
 )
 from prompt_optimization.qa_task import (
     QAMode,
     feedback_example,
     sample_label_balanced_records,
 )
-from prompt_optimization.run_io import save_json
+from prompt_optimization.run_io import format_elapsed, save_json
 from prompt_optimization.sequence_gradients import (
     build_gradient_region_pool,
     collect_instruction_gradients,
@@ -122,6 +125,7 @@ def _lpo_candidate_prompts_from_outputs(
 
 def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run one reasoning-based local prompt optimization step for QA."""
+    log_progress(context, "run started | iterations=1")
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -144,6 +148,10 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         train_records,
         train_evaluation,
         args.feedback_examples,
+    )
+    log_progress(
+        context,
+        f"feedback selection completed | incorrect_examples={len(feedback_pairs)}",
     )
     feedback_texts = [
         feedback_example(record, prediction, index)
@@ -176,6 +184,10 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             start=1,
         )
     ]
+    log_progress(
+        context,
+        f"location tagging completed | selected_locations={len(locations)}",
+    )
     save_json(
         context.run_dir / "selected_spans.json",
         {
@@ -204,6 +216,10 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             rewrite_outputs,
             context.initial_prompt,
         )
+    log_progress(
+        context,
+        f"local rewriting completed | parsed_candidates={len(candidate_prompts)}",
+    )
     save_json(
         context.run_dir / "optimizer_trace.json",
         {
@@ -231,6 +247,12 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         key=lambda item: (float(item["accuracy"]), -int(item["candidate_index"])),
         reverse=True,
     )[: args.top_z]
+    if top_train:
+        log_progress(
+            context,
+            f"training preselection completed | retained={len(top_train)} | "
+            f"best_training_accuracy={100.0 * float(top_train[0]['accuracy']):.2f}%",
+        )
     dev_prompts = [item["prompt"] for item in top_train if item["prompt"] != context.initial_prompt]
     dev_scored = evaluate_candidates(
         context,
@@ -241,6 +263,12 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         iteration=1,
     )
     selected, improved = _strictly_select_against_source(source, dev_scored)
+    log_progress(
+        context,
+        f"iteration 1/1 completed | improved={improved} | "
+        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
+        f"best {scored_item_text(selected)}",
+    )
     return finalize_run(
         context,
         initial_evaluation=initial_evaluation,
@@ -296,6 +324,7 @@ def _sequential_greater_region(
 
 def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run one GreaTer sequential or top-gradient single-token refinement."""
+    log_progress(context, "run started | iterations=1")
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -309,6 +338,12 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         context.rng,
     )
     model, tokenizer = context.model_pool.ensure(TARGET_ROLE)
+    gradient_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"gradient collection started | examples={len(train_records)} | "
+        f"batch_size={args.gradient_batch_size}",
+    )
     gradient_analysis = collect_instruction_gradients(
         context.initial_prompt,
         train_records,
@@ -316,6 +351,11 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         model=model,
         tokenizer=tokenizer,
         batch_size=args.gradient_batch_size,
+    )
+    log_progress(
+        context,
+        "gradient collection completed",
+        phase_started_at=gradient_started_at,
     )
     if args.variant == "greater":
         region = _sequential_greater_region(
@@ -338,7 +378,17 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         )[0]
         region["text"] = region["region_text"]
         region["check_isalnum"] = args.check_isalnum
+    log_progress(
+        context,
+        f"region selection completed | token_index={region['peak_token_index']} | "
+        f"text={region['region_text']!r} | gradient={float(region['gradient_score']):.6f}",
+    )
     proposal_records = train_records[: min(args.proposal_example_size, len(train_records))]
+    proposal_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"token proposal started | examples={len(proposal_records)}",
+    )
     proposed_token_ids, proposal_metadata = proposal_token_candidates(
         gradient_analysis,
         int(region["peak_token_index"]),
@@ -350,6 +400,16 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         min_candidates=args.proposal_min_candidates,
         check_isalnum=args.check_isalnum,
     )
+    log_progress(
+        context,
+        f"token proposal completed | proposed_tokens={len(proposed_token_ids)}",
+        phase_started_at=proposal_started_at,
+    )
+    ranking_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"gradient candidate ranking started | candidates={len(proposed_token_ids)}",
+    )
     ranked_candidate_tokens = rank_fixed_token_candidates(
         gradient_analysis,
         int(region["peak_token_index"]),
@@ -360,6 +420,11 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         tokenizer=tokenizer,
         batch_size=args.gradient_batch_size,
         fluency_lambda=args.fluency_lambda,
+    )
+    log_progress(
+        context,
+        f"gradient candidate ranking completed | ranked={len(ranked_candidate_tokens)}",
+        phase_started_at=ranking_started_at,
     )
     candidate_tokens = ranked_candidate_tokens[: args.selection_top_mu]
     if not any(item["is_original"] for item in candidate_tokens):
@@ -400,6 +465,11 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
     candidate_prompts = unique_nonempty(candidate_prompts)
     objective_scores = []
     for candidate_index, prompt in enumerate(candidate_prompts):
+        objective_started_at = time.monotonic()
+        log_progress(
+            context,
+            f"objective candidate {candidate_index + 1}/{len(candidate_prompts)} started",
+        )
         score = score_combined_objective(
             prompt,
             train_records,
@@ -411,6 +481,20 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         )
         objective_scores.append(
             {"candidate_index": candidate_index, "prompt": prompt, **score}
+        )
+        best_objective = min(
+            objective_scores,
+            key=lambda item: (
+                float(item["combined_score"]),
+                int(item["candidate_index"]),
+            ),
+        )
+        log_progress(
+            context,
+            f"objective candidate {candidate_index + 1}/{len(candidate_prompts)} "
+            f"completed | current={float(score['combined_score']):.6f} | "
+            f"best_so_far={float(best_objective['combined_score']):.6f}",
+            phase_started_at=objective_started_at,
         )
     top_objective = sorted(
         objective_scores,
@@ -428,6 +512,12 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         iteration=1,
     )
     selected, improved = _strictly_select_against_source(source, dev_scored)
+    log_progress(
+        context,
+        f"iteration 1/1 completed | improved={improved} | "
+        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
+        f"best {scored_item_text(selected)}",
+    )
     save_json(
         context.run_dir / "gradient_analysis.json",
         tensor_free_gradient_summary(gradient_analysis),
@@ -755,8 +845,16 @@ def _beam_search_replacements(
     ]
     trace = []
     synthesis_cache: dict[tuple[tuple[int, str], ...], dict[str, Any]] = {}
-    for region in regions:
+    beam_started_at = time.monotonic()
+    for region_index, region in enumerate(regions, start=1):
+        region_started_at = time.monotonic()
         rank = int(region["region_rank"])
+        log_progress(
+            context,
+            f"beam region {region_index}/{len(regions)} started | "
+            f"region_rank={rank} | text={region['region_text']!r} | "
+            f"incoming_beam={len(beam)}",
+        )
         expansion_specs = []
         for beam_item in beam:
             for replacement in candidate_index[rank]["candidates"]:
@@ -893,6 +991,15 @@ def _beam_search_replacements(
             expansion_count=len(scored_expansions),
             retained_beam=beam,
         )
+        best_objective = float(beam[0]["combined_score"]) if beam else float("inf")
+        log_progress(
+            context,
+            f"beam region {region_index}/{len(regions)} completed | "
+            f"expansions={len(scored_expansions)} | retained={len(beam)} | "
+            f"current_best_objective={best_objective:.6f} | "
+            f"beam_elapsed={format_elapsed(time.monotonic() - beam_started_at)}",
+            phase_started_at=region_started_at,
+        )
     return beam, trace
 
 
@@ -909,6 +1016,7 @@ def _resolve_gradpo_shape(args, model_id: str) -> tuple[int, int]:
 
 def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run GradPO-Gen, GradPO-Prob, or random-region GradPO-Gen for QA."""
+    log_progress(context, "run started | iterations=1")
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -922,6 +1030,12 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         context.rng,
     )
     model, tokenizer = context.model_pool.ensure(TARGET_ROLE)
+    gradient_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"gradient collection started | examples={len(train_records)} | "
+        f"batch_size={args.gradient_batch_size}",
+    )
     gradient_analysis = collect_instruction_gradients(
         context.initial_prompt,
         train_records,
@@ -929,6 +1043,11 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         model=model,
         tokenizer=tokenizer,
         batch_size=args.gradient_batch_size,
+    )
+    log_progress(
+        context,
+        "gradient collection completed",
+        phase_started_at=gradient_started_at,
     )
     num_edit_regions, max_region_tokens = _resolve_gradpo_shape(args, args.model)
     region_pool = build_gradient_region_pool(
@@ -945,8 +1064,20 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     )
     for region in selected_regions:
         region["text"] = region["region_text"]
+    log_progress(
+        context,
+        f"region selection completed | mode={selection_mode} | "
+        f"selected={len(selected_regions)} | "
+        f"texts={[region['region_text'] for region in selected_regions]!r}",
+    )
     raw_candidate_output = None
     candidate_meta_prompt = None
+    candidate_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"region-candidate generation started | variant={args.variant} | "
+        f"regions={len(selected_regions)}",
+    )
     if args.variant in {"gen", "gen_random"}:
         marked_prompt = mark_selected_regions(
             context.initial_prompt,
@@ -982,6 +1113,17 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             max_new_tokens=args.candidate_max_new_tokens,
             generation_batch_size=args.synthesis_batch_size,
         )
+    log_progress(
+        context,
+        f"region-candidate generation completed | region_sets={len(region_candidates)}",
+        phase_started_at=candidate_started_at,
+    )
+    beam_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"beam search started | regions={len(selected_regions)} | "
+        f"beam_width={args.beam_width}",
+    )
     beam, beam_trace = _beam_search_replacements(
         context,
         selected_regions,
@@ -996,6 +1138,11 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         synthesis_max_new_tokens=args.synthesis_max_new_tokens,
         synthesis_batch_size=args.synthesis_batch_size,
     )
+    log_progress(
+        context,
+        f"beam search completed | retained={len(beam)}",
+        phase_started_at=beam_started_at,
+    )
     dev_prompts = unique_nonempty(
         [item["prompt"] for item in beam if item["prompt"] != context.initial_prompt]
     )
@@ -1008,6 +1155,12 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         iteration=1,
     )
     selected, improved = _strictly_select_against_source(source, dev_scored)
+    log_progress(
+        context,
+        f"iteration 1/1 completed | improved={improved} | "
+        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
+        f"best {scored_item_text(selected)}",
+    )
     save_json(
         context.run_dir / "gradient_analysis.json",
         tensor_free_gradient_summary(gradient_analysis),

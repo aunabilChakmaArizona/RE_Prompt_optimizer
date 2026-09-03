@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 from statistics import fmean, pstdev
+import time
 from typing import Any, Sequence
 
 from agents.agent_token_usage import summarize_token_usage
 from prompt_optimization.models import ModelPool, TARGET_ROLE, seed_everything
+from prompt_optimization.run_io import format_elapsed
 from prompt_optimization.qa_task import (
     QAMode,
     render_qa_prompt,
@@ -34,6 +36,7 @@ class QAEvaluator:
         max_new_tokens: int,
         seed: int,
         validation_std_penalty: float = 2.0,
+        run_started_at: float | None = None,
     ):
         """Store target generation settings shared across evaluations."""
         if batch_size <= 0 or max_new_tokens <= 0:
@@ -46,6 +49,7 @@ class QAEvaluator:
         self.max_new_tokens = max_new_tokens
         self.seed = seed
         self.validation_std_penalty = validation_std_penalty
+        self.run_started_at = run_started_at or time.monotonic()
 
     def evaluate(
         self,
@@ -58,6 +62,13 @@ class QAEvaluator:
         """Generate answers and return prompt-level and per-example results."""
         if not records:
             raise ValueError("Cannot evaluate an empty record subset.")
+        evaluation_started_at = time.monotonic()
+        print(
+            f"[qa:{log_label}] evaluation started | split={split_name} | "
+            f"examples={len(records)} | "
+            f"total_elapsed={format_elapsed(evaluation_started_at - self.run_started_at)}",
+            flush=True,
+        )
         rendered_prompts = [
             render_qa_prompt(instruction_prompt, record, self.mode)
             for record in records
@@ -105,6 +116,19 @@ class QAEvaluator:
                 )
             )
         metrics["token_usage"] = summarize_token_usage(token_usages)
+        score_text = f"accuracy={100.0 * float(metrics['accuracy']):.2f}%"
+        if "stable_accuracy" in metrics:
+            score_text += (
+                f" | stable={100.0 * float(metrics['stable_accuracy']):.2f}%"
+                f" | fold_std={100.0 * float(metrics['accuracy_std']):.2f}pp"
+            )
+        completed_at = time.monotonic()
+        print(
+            f"[qa:{log_label}] evaluation completed | {score_text} | "
+            f"phase_elapsed={format_elapsed(completed_at - evaluation_started_at)} | "
+            f"total_elapsed={format_elapsed(completed_at - self.run_started_at)}",
+            flush=True,
+        )
         return {
             "split": split_name,
             "record_set_id": subset_id,

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import random
+import time
 from typing import Any, Iterable, Sequence
 
 try:
@@ -14,6 +16,26 @@ except ImportError:
 
 from agents.agent_memory import clear_cuda_cache
 from prompt_optimization.qa_task import QAMode, choices_as_text, render_qa_prompt
+from prompt_optimization.run_io import format_elapsed
+
+
+def _log_batch_checkpoint(
+    label: str,
+    batch_index: int,
+    total_batches: int,
+    processed: int,
+    total_records: int,
+    started_at: float,
+) -> None:
+    """Print the first, last, and roughly ten evenly spaced batch checkpoints."""
+    interval = max(1, math.ceil(total_batches / 10))
+    if batch_index == 1 or batch_index == total_batches or batch_index % interval == 0:
+        print(
+            f"[qa:{label}] batch {batch_index}/{total_batches} | "
+            f"examples={processed}/{total_records} | "
+            f"elapsed={format_elapsed(time.monotonic() - started_at)}",
+            flush=True,
+        )
 
 
 def require_torch() -> None:
@@ -207,10 +229,15 @@ def collect_instruction_gradients(
     canonical_offsets: list[tuple[int, int]] | None = None
     total_loss = 0.0
     processed = 0
+    total_batches = math.ceil(len(records) / batch_size)
+    started_at = time.monotonic()
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
     try:
-        for chunk in batched(list(records), batch_size):
+        for batch_index, chunk in enumerate(
+            batched(list(records), batch_size),
+            start=1,
+        ):
             payload = _encode_teacher_forced_batch(
                 instruction_prompt,
                 chunk,
@@ -259,6 +286,14 @@ def collect_instruction_gradients(
                 embedding_sums += base_embeddings[row_index, positions, :].float()
             total_loss += float(loss_sum.detach().cpu())
             processed += len(chunk)
+            _log_batch_checkpoint(
+                "gradient",
+                batch_index,
+                total_batches,
+                processed,
+                len(records),
+                started_at,
+            )
             del encoded, input_ids, attention_mask, base_embeddings, input_embeddings
             del outputs, loss_sum, scaled_loss
             clear_cuda_cache()
@@ -770,6 +805,9 @@ def rank_fixed_token_candidates(
     one_hot.requires_grad_(True)
 
     model.zero_grad(set_to_none=True)
+    total_batches = math.ceil(len(records) / batch_size)
+    processed = 0
+    started_at = time.monotonic()
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
     try:
@@ -827,6 +865,15 @@ def rank_fixed_token_candidates(
                 )
                 combined_loss = combined_loss + fluency_lambda * instruction_nll
             combined_loss.backward()
+            processed += len(chunk)
+            _log_batch_checkpoint(
+                "greater-gradient-ranking",
+                chunk_index + 1,
+                total_batches,
+                processed,
+                len(records),
+                started_at,
+            )
             del encoded, input_ids, attention_mask, selected_embedding
             del base_embeddings, replacement_embeddings, replacement_mask
             del input_embeddings, outputs, task_loss, combined_loss

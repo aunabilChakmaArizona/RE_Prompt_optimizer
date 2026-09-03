@@ -93,6 +93,17 @@ def load_vllm_model_and_tokenizer(
     return model, tokenizer
 
 
+def shutdown_vllm_model(model: Any) -> None:
+    """Stop the vLLM engine process so its GPU memory is released."""
+    llm_engine = getattr(model, "llm_engine", None)
+    engine_core = getattr(llm_engine, "engine_core", None)
+    shutdown = getattr(engine_core, "shutdown", None)
+    if callable(shutdown):
+        print("[agent_vllm_models] shutting down vLLM engine")
+        shutdown()
+        print("[agent_vllm_models] vLLM engine shutdown done")
+
+
 def vllm_backend_metadata() -> dict[str, str]:
     """Describe the pinned vLLM backend used by an inference run."""
     return {

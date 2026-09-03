@@ -41,6 +41,8 @@ Optimizer-model generations default to `--optimizer-max-new-tokens 10000`, match
 
 Generated evaluations are reseeded deterministically by mode, split, and record subset, so every candidate sees the same sampling stream and repeated prompt evaluations are reproducible.
 
+Console logs show one representative prompt/output for each important model-call phase. They also report evaluation sizes, iteration or beam-region progress, current and best regular/stable scores, phase time, and total elapsed run time. Complete prompts, outputs, predictions, and traces remain available in the saved JSON and JSONL artifacts.
+
 EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. ETGPO analyzes every sampled failure, selects frequent categories to the requested coverage, and passes one identical guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes.
 
 For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</answer>` responses, but loss is applied only to the inner gold option-label token. This prevents fixed answer tags from dominating the instruction gradient.

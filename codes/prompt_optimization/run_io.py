@@ -14,6 +14,18 @@ from prompt_optimization.qa_task import REPO_ROOT, QAMode
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "outputs" / "qa_prompt_optimization"
 
 
+def format_elapsed(seconds: float) -> str:
+    """Format elapsed seconds as compact hours, minutes, and seconds."""
+    total_seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}h {minutes:02d}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes:d}m {seconds:02d}s"
+    return f"{seconds:d}s"
+
+
 def safe_name(value: str) -> str:
     """Convert a run label into a filesystem-safe name."""
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("_")

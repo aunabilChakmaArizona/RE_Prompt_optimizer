@@ -3,18 +3,48 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, Sequence
 
 from prompt_optimization.cli_common import QAOptimizationContext
 from prompt_optimization.evaluation import metric_accuracy, metric_selection_score
 from prompt_optimization.meta_prompts import extract_tagged_prompts, unique_nonempty
 from prompt_optimization.models import OPTIMIZER_ROLE
-from prompt_optimization.run_io import save_json, save_text
+from prompt_optimization.run_io import format_elapsed, save_json, save_text
 
 
 FEEDBACK_PATTERN = re.compile(
     r"<feedback\s*>(.*?)</feedback\s*>", re.IGNORECASE | re.DOTALL
 )
+
+
+def log_progress(
+    context: QAOptimizationContext,
+    message: str,
+    *,
+    phase_started_at: float | None = None,
+) -> None:
+    """Print one concise optimizer progress line with phase and total time."""
+    now = time.monotonic()
+    timing = f"total_elapsed={format_elapsed(now - context.started_at)}"
+    if phase_started_at is not None:
+        timing = (
+            f"phase_elapsed={format_elapsed(now - phase_started_at)} | {timing}"
+        )
+    print(
+        f"[qa:{context.optimizer_name}:{context.mode.name}] {message} | {timing}",
+        flush=True,
+    )
+
+
+def scored_item_text(item: dict[str, Any]) -> str:
+    """Format regular and stable scores from one evaluated prompt item."""
+    accuracy = 100.0 * float(item["accuracy"])
+    metrics = item.get("metrics", item.get("evaluation", {}).get("metrics", {}))
+    if "stable_accuracy" in metrics:
+        stable = 100.0 * float(metrics["stable_accuracy"])
+        return f"accuracy={accuracy:.2f}% stable={stable:.2f}%"
+    return f"accuracy={accuracy:.2f}%"
 
 
 def extract_feedback(text: str) -> str:
@@ -31,7 +61,12 @@ def generate_optimizer_texts(
     enable_thinking: bool = True,
 ) -> list[str]:
     """Run meta-prompts through the configured reasoning-based optimizer model."""
-    return context.model_pool.generate(
+    generation_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"{log_label} generation started | requests={len(prompts)}",
+    )
+    outputs = context.model_pool.generate(
         OPTIMIZER_ROLE,
         list(prompts),
         max_new_tokens=context.args.optimizer_max_new_tokens,
@@ -41,6 +76,12 @@ def generate_optimizer_texts(
         log_label=log_label,
         return_token_usage=False,
     )
+    log_progress(
+        context,
+        f"{log_label} generation completed | outputs={len(outputs)}",
+        phase_started_at=generation_started_at,
+    )
+    return outputs
 
 
 def generate_tagged_candidates(
@@ -72,8 +113,15 @@ def evaluate_candidates(
     iteration: int,
 ) -> list[dict[str, Any]]:
     """Evaluate candidates and store their accuracy and applicable selection score."""
+    candidate_list = unique_nonempty(candidates)
     scored: list[dict[str, Any]] = []
-    for candidate_index, prompt in enumerate(unique_nonempty(candidates)):
+    for candidate_index, prompt in enumerate(candidate_list):
+        candidate_started_at = time.monotonic()
+        log_progress(
+            context,
+            f"{phase} candidate {candidate_index + 1}/{len(candidate_list)} started "
+            f"| iteration={iteration}",
+        )
         evaluation = context.evaluator.evaluate(
             prompt,
             records,
@@ -97,6 +145,14 @@ def evaluate_candidates(
             candidate_index=candidate_index,
             prompt=prompt,
             metrics=evaluation["metrics"],
+        )
+        best_so_far = best_scored_candidate(scored)
+        log_progress(
+            context,
+            f"{phase} candidate {candidate_index + 1}/{len(candidate_list)} completed "
+            f"| iteration={iteration} | current {scored_item_text(item)} | "
+            f"best_so_far {scored_item_text(best_so_far)}",
+            phase_started_at=candidate_started_at,
         )
     return scored
 

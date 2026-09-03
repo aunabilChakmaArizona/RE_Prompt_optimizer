@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+import time
 from typing import Any, Sequence
 
 from prompt_optimization.cli_common import QAOptimizationContext
@@ -30,6 +31,8 @@ from prompt_optimization.optimizer_common import (
     finalize_run,
     generate_optimizer_texts,
     generate_tagged_candidates,
+    log_progress,
+    scored_item_text,
 )
 from prompt_optimization.qa_evoprompt_seeds import QA_EVOPROMPT_SEEDS
 from prompt_optimization.qa_task import (
@@ -79,6 +82,7 @@ def _deduplicate_population(
 
 def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run feedback-driven RPO and save iteration-5 and iteration-10 snapshots."""
+    log_progress(context, f"run started | iterations={args.iterations}")
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -101,10 +105,17 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     snapshots: dict[str, dict[str, Any]] = {}
 
     for iteration in range(1, args.iterations + 1):
+        iteration_started_at = time.monotonic()
         parent = _softmax_parent(
             population,
             args.population_sampling_temperature,
             context.rng,
+        )
+        log_progress(
+            context,
+            f"iteration {iteration}/{args.iterations} started | "
+            f"parent_node={parent['node_id']} | parent {scored_item_text(parent)} | "
+            f"best {scored_item_text(best)}",
         )
         feedback_records = sample_records(
             context.train_records,
@@ -167,6 +178,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             rewrite_raw_outputs=rewrite_outputs,
             parsed_candidates=candidates,
         )
+        child = None
         if not candidates:
             context.logger.event(
                 "rpo_generation_failed",
@@ -235,6 +247,14 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             snapshots[str(iteration)] = snapshot
             save_text(context.run_dir / f"prompt_iteration_{iteration}.txt", best["prompt"])
             save_json(context.run_dir / f"snapshot_iteration_{iteration}.json", snapshot)
+        current_text = scored_item_text(child) if child else "no valid child"
+        log_progress(
+            context,
+            f"iteration {iteration}/{args.iterations} completed | "
+            f"current {current_text} | best_node={best['node_id']} | "
+            f"best {scored_item_text(best)}",
+            phase_started_at=iteration_started_at,
+        )
 
     return finalize_run(
         context,
@@ -322,6 +342,7 @@ def _evaluate_prompt_sequence(
 
 def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run population-based EvoPrompt differential evolution for QA instructions."""
+    log_progress(context, f"run started | iterations={args.iterations}")
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -339,6 +360,12 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
     snapshots: dict[str, dict[str, Any]] = {}
 
     for iteration in range(1, args.iterations + 1):
+        iteration_started_at = time.monotonic()
+        log_progress(
+            context,
+            f"iteration {iteration}/{args.iterations} started | "
+            f"population={len(population)} | best {scored_item_text(dev_best)}",
+        )
         train_records = sample_records(
             context.train_records,
             args.train_sample_size,
@@ -464,6 +491,19 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
                 dev_best["prompt"],
             )
             save_json(context.run_dir / f"snapshot_iteration_{iteration}.json", snapshot)
+        current_dev = {
+            "accuracy": dev_accuracy,
+            "selection_score": dev_selection_score,
+            "evaluation": dev_evaluation,
+        }
+        log_progress(
+            context,
+            f"iteration {iteration}/{args.iterations} completed | "
+            f"train_best accuracy={100.0 * float(train_best['accuracy']):.2f}% | "
+            f"current_validation {scored_item_text(current_dev)} | "
+            f"best {scored_item_text(dev_best)}",
+            phase_started_at=iteration_started_at,
+        )
 
     return finalize_run(
         context,
@@ -661,6 +701,7 @@ def _etgpo_candidate_from_output(
 
 def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run ETGPO taxonomy construction and repeated guidance generation for QA."""
+    log_progress(context, "run started | iterations=1")
     initial_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         context.validation_records,
@@ -684,15 +725,26 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         if not prediction["correct"]
     ]
     context.rng.shuffle(errors)
+    log_progress(
+        context,
+        f"training-error collection completed | errors={len(errors)}/{len(train_records)}",
+    )
     taxonomy: list[dict[str, Any]] = []
     assignments: list[dict[str, Any]] = []
     processed = 0
     batch_index = 0
+    total_batches = math.ceil(len(errors) / args.error_batch_size) if errors else 0
     while processed < len(errors):
         batch = errors[processed : processed + args.error_batch_size]
         if not batch:
             break
         batch_index += 1
+        batch_started_at = time.monotonic()
+        log_progress(
+            context,
+            f"taxonomy batch {batch_index}/{total_batches} started | "
+            f"errors_in_batch={len(batch)} | processed={processed}/{len(errors)}",
+        )
         examples = [
             etgpo_failure_example(record, prediction, index, context.mode)
             for index, (record, prediction) in enumerate(batch, start=1)
@@ -739,6 +791,12 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             meta_prompt=meta_prompt,
             raw_output=raw_output,
             parsed_output=parsed,
+        )
+        log_progress(
+            context,
+            f"taxonomy batch {batch_index}/{total_batches} completed | "
+            f"processed={processed}/{len(errors)} | categories={len(taxonomy)}",
+            phase_started_at=batch_started_at,
         )
     selected_taxonomy, achieved_coverage = _select_taxonomy_categories(
         taxonomy,
@@ -798,6 +856,11 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     selected = best_scored_candidate(scored) if scored else source
     if float(selected["selection_score"]) <= float(source["selection_score"]):
         selected = source
+    log_progress(
+        context,
+        f"iteration 1/1 completed | current {scored_item_text(selected)} | "
+        f"source {scored_item_text(source)} | best {scored_item_text(selected)}",
+    )
     taxonomy_payload = {
         "total_failures": len(errors),
         "processed_failures": processed,
