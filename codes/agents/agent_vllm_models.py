@@ -61,10 +61,14 @@ def load_vllm_model_and_tokenizer(
     model_id: str,
     device: str | None = None,
     gpu_memory_utilization: float = 0.90,
+    max_model_len: int | None = None,
+    disable_image_inputs: bool = False,
 ) -> tuple[Any, Any]:
     """Load one vLLM engine and return it with its tokenizer."""
     if not 0.0 < gpu_memory_utilization <= 1.0:
         raise ValueError("gpu_memory_utilization must be greater than 0 and at most 1.")
+    if max_model_len is not None and max_model_len <= 0:
+        raise ValueError("max_model_len must be positive when provided.")
 
     selected_device = _select_visible_gpu(device)
     installed_version = _validate_vllm_version()
@@ -80,14 +84,21 @@ def load_vllm_model_and_tokenizer(
     print(f"[agent_vllm_models] vLLM version: {installed_version}")
     if selected_device is not None:
         print(f"[agent_vllm_models] CUDA_VISIBLE_DEVICES: {selected_device}")
+    if disable_image_inputs:
+        print("[agent_vllm_models] image inputs disabled for text-only inference")
 
-    model = LLM(
-        model=model_id,
-        dtype="bfloat16",
-        trust_remote_code=True,
-        tensor_parallel_size=1,
-        gpu_memory_utilization=gpu_memory_utilization,
-    )
+    model_options = {
+        "model": model_id,
+        "dtype": "bfloat16",
+        "trust_remote_code": True,
+        "tensor_parallel_size": 1,
+        "gpu_memory_utilization": gpu_memory_utilization,
+    }
+    if max_model_len is not None:
+        model_options["max_model_len"] = max_model_len
+    if disable_image_inputs:
+        model_options["limit_mm_per_prompt"] = {"image": 0}
+    model = LLM(**model_options)
     tokenizer = model.get_tokenizer()
     print(f"[agent_vllm_models] model loading done: {model_id}")
     return model, tokenizer

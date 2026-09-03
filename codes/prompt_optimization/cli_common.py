@@ -80,6 +80,17 @@ def add_shared_arguments(
         help="Fraction of selected GPU memory reserved by vLLM.",
     )
     parser.add_argument(
+        "--vllm-max-model-len",
+        type=int,
+        default=None,
+        help="Maximum vLLM context length; defaults to the model configuration.",
+    )
+    parser.add_argument(
+        "--vllm-disable-images",
+        action="store_true",
+        help="Disable image inputs and image-cache profiling for text-only inference.",
+    )
+    parser.add_argument(
         "--optimizer-device",
         default=None,
         help="Optimizer model device map; defaults to --device.",
@@ -175,6 +186,8 @@ def build_context(
         raise ValueError("--validation-std-penalty must be non-negative.")
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
         raise ValueError("--gpu-memory-utilization must be greater than 0 and at most 1.")
+    if args.vllm_max_model_len is not None and args.vllm_max_model_len <= 0:
+        raise ValueError("--vllm-max-model-len must be positive when provided.")
     if (
         args.backend == "vllm"
         and args.optimizer_model
@@ -211,6 +224,8 @@ def build_context(
         seed=args.seed,
         backend=args.backend,
         gpu_memory_utilization=args.gpu_memory_utilization,
+        vllm_max_model_len=args.vllm_max_model_len,
+        vllm_disable_images=args.vllm_disable_images,
     )
     evaluator = QAEvaluator(
         model_pool=model_pool,

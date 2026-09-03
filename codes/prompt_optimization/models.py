@@ -39,12 +39,16 @@ class ModelPool:
         seed: int,
         backend: str = "transformers",
         gpu_memory_utilization: float = 0.90,
+        vllm_max_model_len: int | None = None,
+        vllm_disable_images: bool = False,
     ):
         """Store role settings without loading a model yet."""
         if backend not in {"transformers", "vllm"}:
             raise ValueError(f"Unsupported model backend: {backend!r}")
         if not 0.0 < gpu_memory_utilization <= 1.0:
             raise ValueError("gpu_memory_utilization must be greater than 0 and at most 1.")
+        if vllm_max_model_len is not None and vllm_max_model_len <= 0:
+            raise ValueError("vllm_max_model_len must be positive when provided.")
         self.model_ids = {
             TARGET_ROLE: target_model_id,
             OPTIMIZER_ROLE: optimizer_model_id or target_model_id,
@@ -57,6 +61,8 @@ class ModelPool:
         self.seed = seed
         self.backend = backend
         self.gpu_memory_utilization = gpu_memory_utilization
+        self.vllm_max_model_len = vllm_max_model_len
+        self.vllm_disable_images = vllm_disable_images
         self.generation_call_index = 0
         self.loaded: dict[str, tuple[Any, Any]] = {}
 
@@ -83,6 +89,8 @@ class ModelPool:
                 requested_id,
                 device=self.device_maps[role],
                 gpu_memory_utilization=self.gpu_memory_utilization,
+                max_model_len=self.vllm_max_model_len,
+                disable_image_inputs=self.vllm_disable_images,
             )
         else:
             from agents.agent_models import load_model_and_tokenizer
