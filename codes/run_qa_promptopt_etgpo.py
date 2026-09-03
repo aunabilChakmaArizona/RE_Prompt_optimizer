@@ -68,6 +68,10 @@ def main() -> None:
         summary = run_etgpo(context, args)
         print(f"Saved QA ETGPO run to: {context.run_dir}")
         print(f"Validation accuracy gain: {summary['validation']['accuracy_gain']:+.4f}")
+        print(
+            "Validation stable-score gain: "
+            f"{summary['validation']['stable_accuracy_gain']:+.4f}"
+        )
     finally:
         context.model_pool.close()
 

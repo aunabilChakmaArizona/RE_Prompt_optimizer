@@ -56,7 +56,6 @@ def parse_args() -> argparse.Namespace:
         help="Fraction of selected GPU memory reserved by each vLLM engine.",
     )
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
-    parser.add_argument("--include-test", action="store_true")
     parser.add_argument("--output-file", type=Path, default=None)
     args = parser.parse_args()
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
@@ -106,8 +105,6 @@ def shared_parts(
         parts.extend(["--optimizer-model", model_config["optimizer"]])
         if args.optimizer_device:
             parts.extend(["--optimizer-device", args.optimizer_device])
-    if args.include_test:
-        parts.append("--evaluate-test")
     return parts
 
 

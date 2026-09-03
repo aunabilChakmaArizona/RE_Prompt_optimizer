@@ -12,7 +12,11 @@ except ImportError:
 
 from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1
 from prompt_optimization.cli_common import QAOptimizationContext
-from prompt_optimization.evaluation import metric_accuracy, select_mixed_feedback
+from prompt_optimization.evaluation import (
+    metric_accuracy,
+    metric_selection_score,
+    select_incorrect_feedback,
+)
 from prompt_optimization.meta_prompts import (
     QA_TASK_DESCRIPTIONS,
     extract_json_object,
@@ -59,6 +63,7 @@ def _source_scored_item(
         "candidate_index": 0,
         "prompt": context.initial_prompt,
         "accuracy": metric_accuracy(evaluation),
+        "selection_score": metric_selection_score(evaluation),
         "metrics": evaluation["metrics"],
         "evaluation": evaluation,
     }
@@ -72,7 +77,9 @@ def _strictly_select_against_source(
     if not candidates:
         return source, False
     best_candidate = best_scored_candidate(candidates)
-    improved = float(best_candidate["accuracy"]) > float(source["accuracy"])
+    improved = float(best_candidate["selection_score"]) > float(
+        source["selection_score"]
+    )
     return (best_candidate if improved else source), improved
 
 
@@ -133,7 +140,7 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         split_name="train_selection",
         log_label="qa_lpo_train_selection",
     )
-    feedback_pairs = select_mixed_feedback(
+    feedback_pairs = select_incorrect_feedback(
         train_records,
         train_evaluation,
         args.feedback_examples,

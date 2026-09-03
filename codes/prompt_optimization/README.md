@@ -35,7 +35,9 @@ RPO, EvoPrompt-DE, ETGPO, and LPO support vLLM. GreaTer, GreaTer-TG, and all Gra
 
 Install the separate pinned environment from `requirements_vllm.txt`. Offline vLLM uses one visible GPU per process, so the target and optimizer device arguments must match in a vLLM run.
 
-Validation selection uses exact option-label accuracy. A second-stage candidate is retained only if its validation accuracy strictly exceeds its first-stage source prompt. Otherwise, the first-stage prompt is retained.
+Validation uses the fixed 900-example split as three folds of 300 examples. Prompt selection uses `mean fold accuracy - lambda * population standard deviation`, with `--validation-std-penalty 2.0` by default. Setting lambda to zero gives ordinary accuracy because the three folds have equal size. A second-stage candidate is retained only if its stable validation score strictly exceeds its first-stage source prompt; otherwise, the first-stage prompt is retained. Raw accuracy, each fold accuracy, the fold mean and standard deviation, and the stable score are all saved.
+
+Optimizer-model generations default to `--optimizer-max-new-tokens 10000`, matching the relation-extraction experiment setting.
 
 Generated evaluations are reseeded deterministically by mode, split, and record subset, so every candidate sees the same sampling stream and repeated prompt evaluations are reproducible.
 
@@ -52,9 +54,9 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 | RPO | 10 iterations, snapshots at 5/10, feedback sample 100, separate feedback for 3 mixed examples, population 10, parent temperature 1.0 |
 | EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000 |
 | ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
-| LPO | 1 iteration, train sample 512, 3 mixed feedback examples, at most 5 locations, at most 3 words/location, 5 rewrites |
-| GreaTer / TG | 1 token, train sample 512, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
-| GradPO | 1 iteration, train sample 512, 5 candidates/span, beam 5 with target-model synthesis, expansion ratio 0.6, fluency weight 0.5 |
+| LPO | 1 iteration, train sample 512, 3 incorrect feedback examples, at most 5 locations, at most 3 words/location, 5 rewrites |
+| GreaTer / TG | 1 token, train sample 3,000, gradient batch 4, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
+| GradPO | 1 iteration, train sample 3,000, 5 candidates/span, beam 5 with target-model synthesis, candidate-generation limit 10,000 tokens, beam-synthesis limit 10,000 tokens, expansion ratio 0.6, fluency weight 0.5 |
 | GradPO Qwen | 5 spans, at most 2 target-model tokens/span |
 | GradPO Gemma | 3 spans, at most 3 target-model tokens/span |
 
@@ -82,7 +84,6 @@ python -u codes/generate_qa_promptopt_commands.py \
   --phase second_stage \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
-  --include-test \
   --output-file codes/qa_promptopt_second_stage_commands.sh
 ```
 
@@ -90,9 +91,21 @@ Run stage two only after all stage-one prompt files exist. The generator uses Qw
 
 ## Outputs
 
-Every run saves its config, initial and final prompts, candidate metrics, optimizer traces, validation predictions, optional test predictions, and a summary. Gradient-based stage-two runs also save their gradient, candidate, selected-region, and beam traces so the optimization process is reproducible. Post-hoc edit analysis is currently disabled.
+Every optimization run saves its config, initial and final prompts, candidate metrics, optimizer traces, validation predictions, and a summary. Optimization runners never load or evaluate the test split. Gradient-based stage-two runs also save their gradient, candidate, selected-region, and beam traces so the optimization process is reproducible. Post-hoc edit analysis is currently disabled.
 
-Identical initial test prompts are reused through a shared prompt/model/mode cache, avoiding six duplicate test evaluations for each first-stage source.
+After all prompt choices are finalized, evaluate any saved first- or second-stage prompt over five fixed test runs:
+
+```bash
+python -u codes/run_qa_final_test_evaluation.py \
+  --code openbookqa_reasoning_qwen_rpo10_final \
+  --qa-mode reasoning \
+  --model Qwen/Qwen3-4B \
+  --backend vllm \
+  --device cuda:0 \
+  --prompt-file outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_qwen_rpo/prompt_iteration_10.txt
+```
+
+The final-test runner defaults to five runs with consecutive base seeds 42–46 and reports mean accuracy with population standard deviation. Use the same seeds for every prompt being compared.
 
 After experiments finish, write the aggregate text report with:
 

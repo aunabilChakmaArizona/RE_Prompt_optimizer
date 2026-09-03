@@ -21,13 +21,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--train-sample-size",
         type=int,
-        default=512,
+        default=3000,
         help="Label-balanced training questions used for optimization.",
     )
     parser.add_argument(
         "--gradient-batch-size",
         type=int,
-        default=2,
+        default=4,
         help="Examples per batch when accumulating token gradients.",
     )
     parser.add_argument(
@@ -121,6 +121,10 @@ def main() -> None:
         summary = run_greater(context, args)
         print(f"Saved QA {args.variant} run to: {context.run_dir}")
         print(f"Validation accuracy gain: {summary['validation']['accuracy_gain']:+.4f}")
+        print(
+            "Validation stable-score gain: "
+            f"{summary['validation']['stable_accuracy_gain']:+.4f}"
+        )
     finally:
         context.model_pool.close()
 

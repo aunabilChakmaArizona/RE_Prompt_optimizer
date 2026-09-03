@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from statistics import fmean, pstdev
 from typing import Any, Sequence
 
 from agents.agent_token_usage import summarize_token_usage
@@ -32,15 +33,19 @@ class QAEvaluator:
         batch_size: int,
         max_new_tokens: int,
         seed: int,
+        validation_std_penalty: float = 2.0,
     ):
         """Store target generation settings shared across evaluations."""
         if batch_size <= 0 or max_new_tokens <= 0:
             raise ValueError("Evaluation batch size and max tokens must be positive.")
+        if validation_std_penalty < 0:
+            raise ValueError("Validation standard-deviation penalty must be non-negative.")
         self.model_pool = model_pool
         self.mode = mode
         self.batch_size = batch_size
         self.max_new_tokens = max_new_tokens
         self.seed = seed
+        self.validation_std_penalty = validation_std_penalty
 
     def evaluate(
         self,
@@ -87,8 +92,18 @@ class QAEvaluator:
                     "token_usage": dict(token_usage),
                 }
             )
+            if record.get("validation_fold") is not None:
+                prediction["validation_fold"] = record["validation_fold"]
             predictions.append(prediction)
         metrics = summarize_qa_predictions(predictions)
+        if split_name == "validation":
+            metrics.update(
+                validation_stability_metrics(
+                    records,
+                    predictions,
+                    std_penalty=self.validation_std_penalty,
+                )
+            )
         metrics["token_usage"] = summarize_token_usage(token_usages)
         return {
             "split": split_name,
@@ -103,6 +118,64 @@ class QAEvaluator:
 def metric_accuracy(evaluation: dict[str, Any]) -> float:
     """Read exact accuracy from a QA evaluation result."""
     return float(evaluation["metrics"]["accuracy"])
+
+
+def metric_selection_score(evaluation: dict[str, Any]) -> float:
+    """Read stable validation accuracy, or plain accuracy for training subsets."""
+    metrics = evaluation["metrics"]
+    return float(metrics.get("stable_accuracy", metrics["accuracy"]))
+
+
+def validation_stability_metrics(
+    records: Sequence[dict[str, Any]],
+    predictions: Sequence[dict[str, Any]],
+    *,
+    std_penalty: float,
+) -> dict[str, Any]:
+    """Calculate mean-minus-lambda-std accuracy over three fixed validation folds."""
+    if len(records) != len(predictions):
+        raise ValueError("Validation records and predictions must have equal lengths.")
+    fold_totals: dict[str, int] = {}
+    fold_correct: dict[str, int] = {}
+    for record, prediction in zip(records, predictions):
+        if record.get("validation_fold") is None:
+            raise ValueError(
+                "Every validation record must contain a validation_fold value."
+            )
+        fold = str(record["validation_fold"])
+        fold_totals[fold] = fold_totals.get(fold, 0) + 1
+        fold_correct[fold] = fold_correct.get(fold, 0) + int(
+            bool(prediction["correct"])
+        )
+    if len(fold_totals) != 3:
+        raise ValueError(
+            "Stable validation scoring requires exactly three validation folds; "
+            f"found {len(fold_totals)}."
+        )
+    if len(set(fold_totals.values())) != 1:
+        raise ValueError(
+            "Stable validation scoring requires equally sized validation folds."
+        )
+    fold_metrics = {
+        fold: {
+            "total": fold_totals[fold],
+            "correct": fold_correct[fold],
+            "accuracy": fold_correct[fold] / fold_totals[fold],
+        }
+        for fold in sorted(fold_totals, key=lambda value: int(value))
+    }
+    fold_accuracies = [item["accuracy"] for item in fold_metrics.values()]
+    accuracy_mean = fmean(fold_accuracies)
+    accuracy_std = pstdev(fold_accuracies)
+    stable_accuracy = accuracy_mean - std_penalty * accuracy_std
+    return {
+        "validation_folds": fold_metrics,
+        "accuracy_mean": accuracy_mean,
+        "accuracy_std": accuracy_std,
+        "stable_accuracy": stable_accuracy,
+        "stable_accuracy_percent": 100.0 * stable_accuracy,
+        "validation_std_penalty": std_penalty,
+    }
 
 
 def select_mixed_feedback(
@@ -129,3 +202,18 @@ def select_mixed_feedback(
         and len(selected) < count
     )
     return selected[:count]
+
+
+def select_incorrect_feedback(
+    records: Sequence[dict[str, Any]],
+    evaluation: dict[str, Any],
+    count: int,
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """Select up to the requested number of incorrect predictions."""
+    if count <= 0:
+        return []
+    return [
+        (record, prediction)
+        for record, prediction in zip(records, evaluation["predictions"])
+        if not prediction["correct"]
+    ][:count]

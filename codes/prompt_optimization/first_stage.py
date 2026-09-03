@@ -9,6 +9,7 @@ from typing import Any, Sequence
 from prompt_optimization.cli_common import QAOptimizationContext
 from prompt_optimization.evaluation import (
     metric_accuracy,
+    metric_selection_score,
     select_mixed_feedback,
 )
 from prompt_optimization.meta_prompts import (
@@ -44,10 +45,10 @@ def _softmax_parent(
     temperature: float,
     rng: random.Random,
 ) -> dict[str, Any]:
-    """Sample a population parent from validation accuracy softmax weights."""
+    """Sample a population parent from stable validation-score softmax weights."""
     if temperature <= 0:
-        return max(population, key=lambda item: float(item["accuracy"]))
-    scores = [float(item["accuracy"]) / temperature for item in population]
+        return max(population, key=lambda item: float(item["selection_score"]))
+    scores = [float(item["selection_score"]) / temperature for item in population]
     shift = max(scores)
     weights = [math.exp(score - shift) for score in scores]
     return rng.choices(list(population), weights=weights, k=1)[0]
@@ -61,11 +62,17 @@ def _deduplicate_population(
     best_by_prompt: dict[str, dict[str, Any]] = {}
     for item in population:
         current = best_by_prompt.get(item["prompt"])
-        if current is None or float(item["accuracy"]) > float(current["accuracy"]):
+        if current is None or float(item["selection_score"]) > float(
+            current["selection_score"]
+        ):
             best_by_prompt[item["prompt"]] = item
     return sorted(
         best_by_prompt.values(),
-        key=lambda item: (float(item["accuracy"]), -int(item["node_id"])),
+        key=lambda item: (
+            float(item["selection_score"]),
+            float(item["accuracy"]),
+            -int(item["node_id"]),
+        ),
         reverse=True,
     )[:maximum_size]
 
@@ -83,6 +90,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "node_id": 0,
             "prompt": context.initial_prompt,
             "accuracy": metric_accuracy(initial_evaluation),
+            "selection_score": metric_selection_score(initial_evaluation),
             "evaluation": initial_evaluation,
             "parent_node_id": None,
             "iteration": 0,
@@ -180,6 +188,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                 "node_id": next_node_id,
                 "prompt": child_score["prompt"],
                 "accuracy": child_score["accuracy"],
+                "selection_score": child_score["selection_score"],
                 "evaluation": child_score["evaluation"],
                 "parent_node_id": parent["node_id"],
                 "iteration": iteration,
@@ -191,7 +200,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                 [*population, child],
                 args.population_size,
             )
-            if float(child["accuracy"]) > float(best["accuracy"]):
+            if float(child["selection_score"]) > float(best["selection_score"]):
                 best = child
 
         context.logger.event(
@@ -203,6 +212,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                     "node_id": item["node_id"],
                     "prompt": item["prompt"],
                     "accuracy": item["accuracy"],
+                    "selection_score": item["selection_score"],
                 }
                 for item in population
             ],
@@ -322,6 +332,7 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
     dev_best = {
         "prompt": context.initial_prompt,
         "accuracy": metric_accuracy(initial_evaluation),
+        "selection_score": metric_selection_score(initial_evaluation),
         "evaluation": initial_evaluation,
         "iteration": 0,
     }
@@ -399,7 +410,9 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
         survivors = []
         survivor_scores = []
         for parent_score, child_score in zip(parent_scores, child_scores):
-            if float(child_score["accuracy"]) > float(parent_score["accuracy"]):
+            if float(child_score["selection_score"]) > float(
+                parent_score["selection_score"]
+            ):
                 survivors.append(child_score["prompt"])
                 survivor_scores.append(child_score)
             else:
@@ -414,10 +427,12 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
             log_label="qa_evoprompt_iteration_validation",
         )
         dev_accuracy = metric_accuracy(dev_evaluation)
-        if dev_accuracy > float(dev_best["accuracy"]):
+        dev_selection_score = metric_selection_score(dev_evaluation)
+        if dev_selection_score > float(dev_best["selection_score"]):
             dev_best = {
                 "prompt": train_best["prompt"],
                 "accuracy": dev_accuracy,
+                "selection_score": dev_selection_score,
                 "evaluation": dev_evaluation,
                 "iteration": iteration,
             }
@@ -427,7 +442,9 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
             train_best_prompt=train_best["prompt"],
             train_best_accuracy=train_best["accuracy"],
             validation_accuracy=dev_accuracy,
+            validation_selection_score=dev_selection_score,
             best_validation_accuracy=dev_best["accuracy"],
+            best_validation_selection_score=dev_best["selection_score"],
             population=population,
         )
         save_json(
@@ -775,10 +792,11 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     source = {
         "prompt": context.initial_prompt,
         "accuracy": metric_accuracy(initial_evaluation),
+        "selection_score": metric_selection_score(initial_evaluation),
         "evaluation": initial_evaluation,
     }
     selected = best_scored_candidate(scored) if scored else source
-    if float(selected["accuracy"]) <= float(source["accuracy"]):
+    if float(selected["selection_score"]) <= float(source["selection_score"]):
         selected = source
     taxonomy_payload = {
         "total_failures": len(errors),

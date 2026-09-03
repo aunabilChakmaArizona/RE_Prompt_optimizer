@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--train-sample-size",
         type=int,
-        default=512,
+        default=3000,
         help="Label-balanced training questions used for optimization.",
     )
     parser.add_argument(
@@ -81,13 +81,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--candidate-max-new-tokens",
         type=int,
-        default=1024,
+        default=10000,
         help="Maximum output tokens for each region-candidate request.",
     )
     parser.add_argument(
         "--synthesis-max-new-tokens",
         type=int,
-        default=1024,
+        default=10000,
         help="Maximum output tokens for each beam-synthesis request.",
     )
     parser.add_argument(
@@ -131,6 +131,10 @@ def main() -> None:
         summary = run_gradpo(context, args)
         print(f"Saved QA {optimizer_name} run to: {context.run_dir}")
         print(f"Validation accuracy gain: {summary['validation']['accuracy_gain']:+.4f}")
+        print(
+            "Validation stable-score gain: "
+            f"{summary['validation']['stable_accuracy_gain']:+.4f}"
+        )
     finally:
         context.model_pool.close()
 

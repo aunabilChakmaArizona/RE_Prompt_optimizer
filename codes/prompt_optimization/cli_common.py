@@ -11,7 +11,6 @@ from typing import Any
 from prompt_optimization.evaluation import QAEvaluator
 from prompt_optimization.models import ModelPool, seed_everything
 from prompt_optimization.qa_task import (
-    DEFAULT_TEST_PATH,
     DEFAULT_TRAIN_PATH,
     DEFAULT_VALIDATION_PATH,
     QAMode,
@@ -37,7 +36,6 @@ class QAOptimizationContext:
     mode: QAMode
     train_records: list[dict[str, Any]]
     validation_records: list[dict[str, Any]]
-    test_records: list[dict[str, Any]]
     initial_prompt: str
     run_dir: Path
     logger: RunLogger
@@ -97,12 +95,7 @@ def add_shared_arguments(
     parser.add_argument(
         "--validation-path",
         default=str(DEFAULT_VALIDATION_PATH),
-        help="Validation JSONL used to select improved prompts.",
-    )
-    parser.add_argument(
-        "--test-path",
-        default=str(DEFAULT_TEST_PATH),
-        help="Test JSONL used only when --evaluate-test is set.",
+        help="The 900-example JSONL with three folds used to select prompts.",
     )
     parser.add_argument(
         "--initial-prompt",
@@ -141,13 +134,14 @@ def add_shared_arguments(
     parser.add_argument(
         "--optimizer-max-new-tokens",
         type=int,
-        default=2048,
+        default=10000,
         help="Maximum tokens generated for each optimizer-model response.",
     )
     parser.add_argument(
-        "--evaluate-test",
-        action="store_true",
-        help="Evaluate the retained prompt on the test split after validation.",
+        "--validation-std-penalty",
+        type=float,
+        default=2.0,
+        help="Lambda in validation mean accuracy minus lambda times fold std.",
     )
     parser.add_argument(
         "--output-root",
@@ -172,6 +166,10 @@ def build_context(
         raise ValueError("--target-max-new-tokens must be positive.")
     if args.target_batch_size <= 0 or args.optimizer_batch_size <= 0:
         raise ValueError("Target and optimizer batch sizes must be positive.")
+    if args.optimizer_max_new_tokens <= 0:
+        raise ValueError("--optimizer-max-new-tokens must be positive.")
+    if args.validation_std_penalty < 0:
+        raise ValueError("--validation-std-penalty must be non-negative.")
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
         raise ValueError("--gpu-memory-utilization must be greater than 0 and at most 1.")
     if (
@@ -188,7 +186,6 @@ def build_context(
     rng = random.Random(args.seed)
     train_records = load_qa_records(args.train_path)
     validation_records = load_qa_records(args.validation_path)
-    test_records = load_qa_records(args.test_path)
     initial_prompt = load_initial_prompt(
         mode,
         args.initial_prompt,
@@ -218,6 +215,7 @@ def build_context(
         batch_size=args.target_batch_size,
         max_new_tokens=max_new_tokens,
         seed=args.seed,
+        validation_std_penalty=args.validation_std_penalty,
     )
     context = QAOptimizationContext(
         args=args,
@@ -225,7 +223,6 @@ def build_context(
         mode=mode,
         train_records=train_records,
         validation_records=validation_records,
-        test_records=test_records,
         initial_prompt=initial_prompt,
         run_dir=run_dir,
         logger=logger,
@@ -244,7 +241,6 @@ def build_context(
             "dataset_sizes": {
                 "train": len(train_records),
                 "validation": len(validation_records),
-                "test": len(test_records),
             },
         },
     )

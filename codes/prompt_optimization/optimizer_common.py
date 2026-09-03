@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
-from pathlib import Path
 from typing import Any, Sequence
 
 from prompt_optimization.cli_common import QAOptimizationContext
-from prompt_optimization.evaluation import metric_accuracy
-from prompt_optimization.evaluation import record_set_id
+from prompt_optimization.evaluation import metric_accuracy, metric_selection_score
 from prompt_optimization.meta_prompts import extract_tagged_prompts, unique_nonempty
 from prompt_optimization.models import OPTIMIZER_ROLE
-from prompt_optimization.run_io import safe_name, save_json, save_text
+from prompt_optimization.run_io import save_json, save_text
 
 
 FEEDBACK_PATTERN = re.compile(
@@ -75,7 +71,7 @@ def evaluate_candidates(
     phase: str,
     iteration: int,
 ) -> list[dict[str, Any]]:
-    """Evaluate candidate instructions and log comparable exact accuracies."""
+    """Evaluate candidates and store their accuracy and applicable selection score."""
     scored: list[dict[str, Any]] = []
     for candidate_index, prompt in enumerate(unique_nonempty(candidates)):
         evaluation = context.evaluator.evaluate(
@@ -90,6 +86,7 @@ def evaluate_candidates(
             "candidate_index": candidate_index,
             "prompt": prompt,
             "accuracy": metric_accuracy(evaluation),
+            "selection_score": metric_selection_score(evaluation),
             "metrics": evaluation["metrics"],
             "evaluation": evaluation,
         }
@@ -105,61 +102,17 @@ def evaluate_candidates(
 
 
 def best_scored_candidate(scored: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """Choose highest accuracy, resolving ties by earlier candidate order."""
+    """Choose the highest selection score, then accuracy and earlier order."""
     if not scored:
         raise ValueError("No scored candidates were supplied.")
     return max(
         scored,
-        key=lambda item: (float(item["accuracy"]), -int(item["candidate_index"])),
+        key=lambda item: (
+            float(item.get("selection_score", item["accuracy"])),
+            float(item["accuracy"]),
+            -int(item["candidate_index"]),
+        ),
     )
-
-
-def _test_cache_path(
-    context: QAOptimizationContext,
-    instruction_prompt: str,
-) -> Path:
-    """Build a shared test-evaluation cache path for one exact prompt and setup."""
-    output_root = Path(context.args.output_root).expanduser()
-    if not output_root.is_absolute():
-        output_root = output_root.resolve()
-    payload = "\n".join(
-        [
-            context.args.model,
-            context.args.backend,
-            context.mode.name,
-            str(context.evaluator.max_new_tokens),
-            str(context.args.seed),
-            record_set_id(context.test_records),
-            instruction_prompt,
-        ]
-    )
-    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    return (
-        output_root
-        / "_test_cache"
-        / safe_name(context.mode.name)
-        / safe_name(context.args.model)
-        / f"{digest}.json"
-    )
-
-
-def _evaluate_test_with_cache(
-    context: QAOptimizationContext,
-    instruction_prompt: str,
-    log_label: str,
-) -> dict[str, Any]:
-    """Reuse an exact shared test evaluation across the six refiners of one source."""
-    cache_path = _test_cache_path(context, instruction_prompt)
-    if cache_path.exists():
-        return json.loads(cache_path.read_text(encoding="utf-8"))
-    evaluation = context.evaluator.evaluate(
-        instruction_prompt,
-        context.test_records,
-        split_name="test",
-        log_label=log_label,
-    )
-    save_json(cache_path, evaluation)
-    return evaluation
 
 
 def finalize_run(
@@ -170,34 +123,13 @@ def finalize_run(
     final_evaluation: dict[str, Any],
     extra_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Save final prompts, validation results, optional test results, and summary."""
+    """Save final prompts, validation results, and the tuning-run summary."""
     save_text(context.run_dir / "final_prompt.txt", final_prompt)
     context.logger.evaluation("initial_validation", initial_evaluation)
     context.logger.evaluation("final_validation", final_evaluation)
 
-    test_payload = None
-    if context.args.evaluate_test:
-        initial_test = _evaluate_test_with_cache(
-            context,
-            context.initial_prompt,
-            log_label=f"qa_promptopt_{context.optimizer_name}_initial_test",
-        )
-        context.logger.evaluation("initial_test", initial_test)
-        if final_prompt == context.initial_prompt:
-            final_test = initial_test
-        else:
-            final_test = _evaluate_test_with_cache(
-                context,
-                final_prompt,
-                log_label=f"qa_promptopt_{context.optimizer_name}_final_test",
-            )
-            context.logger.evaluation("final_test", final_test)
-        test_payload = {
-            "initial": initial_test["metrics"],
-            "final": final_test["metrics"],
-            "accuracy_gain": metric_accuracy(final_test) - metric_accuracy(initial_test),
-        }
-
+    initial_selection_score = metric_selection_score(initial_evaluation)
+    final_selection_score = metric_selection_score(final_evaluation)
     summary = {
         "code": context.args.code,
         "optimizer": context.optimizer_name,
@@ -213,8 +145,10 @@ def finalize_run(
             "final": final_evaluation["metrics"],
             "accuracy_gain": metric_accuracy(final_evaluation)
             - metric_accuracy(initial_evaluation),
+            "stable_accuracy_gain": final_selection_score
+            - initial_selection_score,
         },
-        "test": test_payload,
+        "test": None,
         **(extra_summary or {}),
     }
     save_json(context.run_dir / "summary.json", summary)
@@ -222,5 +156,8 @@ def finalize_run(
         "run_completed",
         changed=summary["changed"],
         validation_accuracy_gain=summary["validation"]["accuracy_gain"],
+        validation_stable_accuracy_gain=summary["validation"][
+            "stable_accuracy_gain"
+        ],
     )
     return summary

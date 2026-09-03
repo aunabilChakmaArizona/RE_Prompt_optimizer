@@ -1,4 +1,4 @@
-"""Summarize QA second-stage validation and test performance."""
+"""Summarize QA second-stage stable validation performance."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def markdown_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> str
 
 
 def group_rows(summaries: Sequence[dict[str, Any]]) -> list[list[Any]]:
-    """Aggregate validation and test gains by mode, model, and method."""
+    """Aggregate raw and stable validation gains by mode, model, and method."""
     grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for summary in summaries:
         key = (
@@ -93,13 +93,26 @@ def group_rows(summaries: Sequence[dict[str, Any]]) -> list[list[Any]]:
     for (mode, model, backend, method), items in sorted(grouped.items()):
         changed = [item for item in items if item.get("changed")]
         gains = [float(item["validation"]["accuracy_gain"]) for item in items]
+        stable_gains = [
+            float(
+                item["validation"].get(
+                    "stable_accuracy_gain",
+                    item["validation"]["accuracy_gain"],
+                )
+            )
+            for item in items
+        ]
         changed_gains = [
             float(item["validation"]["accuracy_gain"]) for item in changed
         ]
-        test_gains = [
-            float(item["test"]["accuracy_gain"])
-            for item in items
-            if item.get("test") is not None
+        changed_stable_gains = [
+            float(
+                item["validation"].get(
+                    "stable_accuracy_gain",
+                    item["validation"]["accuracy_gain"],
+                )
+            )
+            for item in changed
         ]
         rows.append(
             [
@@ -108,11 +121,18 @@ def group_rows(summaries: Sequence[dict[str, Any]]) -> list[list[Any]]:
                 backend,
                 method,
                 len(items),
-                sum(gain > 0 for gain in gains),
+                sum(gain > 0 for gain in stable_gains),
                 len(changed),
                 format_value(100.0 * average(gains) if gains else None),
+                format_value(
+                    100.0 * average(stable_gains) if stable_gains else None
+                ),
                 format_value(100.0 * average(changed_gains) if changed_gains else None),
-                format_value(100.0 * average(test_gains) if test_gains else None),
+                format_value(
+                    100.0 * average(changed_stable_gains)
+                    if changed_stable_gains
+                    else None
+                ),
             ]
         )
     return rows
@@ -128,9 +148,10 @@ def build_report(summaries: Sequence[dict[str, Any]], output_root: Path) -> str:
         "Attempts",
         "Dev improved",
         "Changed",
-        "Avg dev gain all (pp)",
-        "Avg dev gain changed (pp)",
-        "Avg test gain (pp)",
+        "Avg raw dev gain all (pp)",
+        "Avg stable dev gain all (pp)",
+        "Avg raw dev gain changed (pp)",
+        "Avg stable dev gain changed (pp)",
     ]
     sections = [
         "OpenBookQA two-stage prompt-optimization statistics",
@@ -143,6 +164,8 @@ def build_report(summaries: Sequence[dict[str, Any]], output_root: Path) -> str:
         "Notes:",
         "- Every completed second-stage attempt is counted, including development failures.",
         "- A development failure retains the first-stage prompt.",
+        "- Development improvement is decided by mean fold accuracy minus lambda times population standard deviation.",
+        "- Test evaluation is intentionally run later with the separate final-test runner.",
         "- GradPO-Gen-Random changes region selection only; generation and beam search match GradPO-Gen.",
         "",
         "Aggregate results",
