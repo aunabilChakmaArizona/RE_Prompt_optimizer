@@ -51,7 +51,7 @@ QA_MODES = {
         initial_prompt=NON_REASONING_INITIAL_PROMPT,
         answer_instruction=NON_REASONING_ANSWER_INSTRUCTION,
         enable_thinking=False,
-        default_max_new_tokens=16,
+        default_max_new_tokens=10,
     ),
 }
 

@@ -393,6 +393,19 @@ def etgpo_guidance_prompt(
     total_failures: int,
 ) -> str:
     """Ask ETGPO to turn selected frequent error categories into one improved prompt."""
+    if mode.name == "non_reasoning":
+        strategy_requirement = (
+            "Expresses advice as concise, direct answer-selection rules without "
+            "asking the model to reason or explain"
+        )
+        mode_constraint = (
+            "- Do not instruct the model to think, reason, analyze, deliberate, "
+            "review, re-examine, explain, or show intermediate work. The complete "
+            "prompt must preserve direct answer-only behavior."
+        )
+    else:
+        strategy_requirement = "Expresses advice as a reusable reasoning or decision strategy"
+        mode_constraint = ""
     category_sections = []
     for index, category in enumerate(taxonomy, start=1):
         failure_count = int(category.get("trace_count", 0))
@@ -436,7 +449,7 @@ I have identified the following error categories from model failures. Generate g
 Generate guidance text that:
 1. Addresses each failure category with specific, actionable advice
 2. Is written as instructions TO the model
-3. Expresses advice as a reusable reasoning or decision strategy
+3. {strategy_requirement}
 4. Is prioritized by frequency
 
 Generate SHORT, CONCISE guidance. Each item should be 1-2 sentences.
@@ -447,6 +460,7 @@ Generate SHORT, CONCISE guidance. Each item should be 1-2 sentences.
 - Keep the guidance task-general. Do not copy question-specific entities, answer choices, scientific terms, or isolated facts from the categories.
 - Do not invent new WRONG/CORRECT question-answer examples.
 - Preserve this task behavior: {QA_TASK_DESCRIPTIONS[mode.name]}
+{mode_constraint}
 
 ## Output Format
 

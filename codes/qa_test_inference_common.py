@@ -1,4 +1,4 @@
-"""Shared inference and evaluation code for multiple-choice QA test sets."""
+"""Shared inference and evaluation code for multiple-choice and open QA tests."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -17,6 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET_PATH = REPO_ROOT / "data" / "processed" / "openbookqa" / "test.jsonl"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "outputs" / "qa_test"
 ANSWER_PATTERN = re.compile(r"<answer\s*>(.*?)</answer\s*>", re.IGNORECASE | re.DOTALL)
+DATE_MDY_PATTERN = re.compile(r"(\d+)/(\d+)/(\d+)")
+DATE_YMD_PATTERN = re.compile(r"(\d+)-(\d+)-(\d+)")
 
 REASONING_INITIAL_PROMPT = (
     "You are given a multiple-choice question and a set of answer choices. "
@@ -30,11 +33,31 @@ REASONING_ANSWER_INSTRUCTION = (
     "After you finish reasoning, output only the option label exactly once between the tags <answer> and </answer>, for example: <answer>B</answer>."
 )
 NON_REASONING_ANSWER_INSTRUCTION = (
-    "Output only the option label exactly once between the tags <answer> and </answer>, for example: <answer>B</answer>. Do not output anything else."
+    "Do not think or provide any reasoning. Just output the option label exactly once "
+    "between the tags <answer> and </answer>, for example: <answer>B</answer>. "
+    "Do not output anything else."
+)
+OPEN_QA_REASONING_INITIAL_PROMPT = (
+    "You are given a question. Think step by step carefully and provide the best answer."
+)
+OPEN_QA_NON_REASONING_INITIAL_PROMPT = (
+    "You are given a question. Provide the best answer."
+)
+OPEN_QA_REASONING_ANSWER_INSTRUCTION = (
+    "After you finish reasoning, output only the final answer between the tags "
+    "<answer> and </answer>. If there is more than one answer, separate the answers "
+    "with semicolons."
+)
+OPEN_QA_NON_REASONING_ANSWER_INSTRUCTION = (
+    "Do not think or provide any reasoning. Just output the answer between the tags "
+    "<answer> and </answer>. If there is more than one answer, separate the answers "
+    "with semicolons. Do not output anything else."
 )
 
 
-def parse_args(description: str, default_instruction: str) -> argparse.Namespace:
+def parse_args(
+    description: str,
+) -> argparse.Namespace:
     """Read command-line settings for one QA test run."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--code", required=True, help="Unique identity used as the output folder name.")
@@ -54,10 +77,19 @@ def parse_args(description: str, default_instruction: str) -> argparse.Namespace
         default=0.90,
         help="Fraction of selected GPU memory available to the vLLM engine.",
     )
-    parser.add_argument("--max_new_tokens", type=int, default=1024, help="Maximum generated tokens per question.")
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=None,
+        help="Maximum generated tokens per question; otherwise use the task and mode default.",
+    )
     parser.add_argument("--start", "--ep_start", dest="start", type=int, default=0, help="First test index.")
     parser.add_argument("--end", "--ep_end", dest="end", type=int, default=None, help="Exclusive final test index.")
-    parser.add_argument("--prompt", default=default_instruction, help="Instruction placed before the fixed answer instruction.")
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Instruction placed before the fixed answer instruction; otherwise use the task default.",
+    )
     parser.add_argument("--output_dir", default=str(DEFAULT_OUTPUT_DIR), help="Parent directory for mode-specific folders.")
     parser.add_argument("--overwrite", action="store_true", help="Replace files from an existing run with the same CODE.")
     return parser.parse_args()
@@ -108,6 +140,19 @@ def build_qa_prompt(
     )
 
 
+def build_open_qa_prompt(
+    instruction_prompt: str,
+    answer_instruction: str,
+    question: str,
+) -> str:
+    """Place an open-answer instruction, answer format, and question in order."""
+    return (
+        f"{instruction_prompt.strip()}\n\n"
+        f"{answer_instruction}\n\n"
+        f"Question:\n{question.strip()}"
+    )
+
+
 def extract_tagged_answer(response: str) -> str | None:
     """Extract the last complete answer enclosed by answer tags."""
     matches = ANSWER_PATTERN.findall(response)
@@ -133,6 +178,67 @@ def normalize_choice_label(value: str | None, valid_labels: set[str]) -> str | N
     return label
 
 
+def normalize_open_answer(value: str) -> str:
+    """Normalize one textual answer for case-insensitive entity matching."""
+    normalized = unicodedata.normalize("NFKD", value).casefold()
+    normalized = "".join(
+        character if character.isalnum() or character.isspace() else " "
+        for character in normalized
+    )
+    words = [word for word in normalized.split() if word not in {"a", "an", "the"}]
+    return " ".join(words)
+
+
+def split_open_answers(value: str | None) -> list[str]:
+    """Split a tagged response into semicolon-separated textual answers."""
+    if value is None:
+        return []
+    answers = []
+    for part in re.split(r"[;\n]+", value):
+        normalized = normalize_open_answer(part)
+        if normalized and normalized not in answers:
+            answers.append(normalized)
+    return answers
+
+
+def split_raw_open_answers(value: str | None) -> list[str]:
+    """Split a tagged response while preserving benchmark answer spelling."""
+    if value is None:
+        return []
+    answers = []
+    for part in re.split(r"[;\n]+", value):
+        answer = part.strip()
+        if answer and answer not in answers:
+            answers.append(answer)
+    return answers
+
+
+def official_webquestions_value(value: str) -> str | tuple[int, int, int]:
+    """Convert supported date strings as done by the WebQuestions evaluator."""
+    match = DATE_MDY_PATTERN.match(value)
+    if match:
+        return int(match.group(3)), int(match.group(1)), int(match.group(2))
+    match = DATE_YMD_PATTERN.match(value)
+    if match:
+        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+    return value
+
+
+def answer_set_scores(
+    gold_answers: Sequence[str | tuple[int, int, int]],
+    predicted_answers: Sequence[str | tuple[int, int, int]],
+) -> tuple[float, float, float]:
+    """Calculate recall, precision, and F1 for one answer set."""
+    if not predicted_answers:
+        return 0.0, 1.0, 0.0
+    matched_predictions = sum(answer in gold_answers for answer in predicted_answers)
+    matched_gold = sum(answer in predicted_answers for answer in gold_answers)
+    precision = matched_predictions / len(predicted_answers)
+    recall = matched_gold / len(gold_answers)
+    f1 = 2.0 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return recall, precision, f1
+
+
 def validate_answer_processing() -> None:
     """Check representative answer extraction and normalization cases."""
     labels = {"A", "B", "C", "D"}
@@ -145,13 +251,20 @@ def validate_answer_processing() -> None:
     assert normalize_choice_label("\\boxed{A}", labels) == "A"
     assert normalize_choice_label("B because it is correct", labels) is None
     assert normalize_choice_label("E", labels) is None
+    assert normalize_open_answer("The Beatles!") == "beatles"
+    assert split_open_answers("Paris; New York") == ["paris", "new york"]
+    assert official_webquestions_value("1836-02-23") == (1836, 2, 23)
 
 
-def validate_records(records: Sequence[dict[str, Any]]) -> None:
-    """Check that selected records contain valid multiple-choice questions."""
+def validate_records(records: Sequence[dict[str, Any]]) -> str:
+    """Check selected records and return their common QA task type."""
     if not records:
         raise ValueError("The selected test range is empty.")
 
+    task_types = {str(record.get("task_type", "")).strip() for record in records}
+    if len(task_types) != 1 or task_types.pop() not in {"multiple_choice_qa", "open_qa"}:
+        raise ValueError("Records must share one supported task_type.")
+    task_type = str(records[0]["task_type"])
     seen_ids = set()
     for index, record in enumerate(records):
         record_id = str(record.get("id", "")).strip()
@@ -161,10 +274,16 @@ def validate_records(records: Sequence[dict[str, Any]]) -> None:
             raise ValueError(f"Duplicate record ID in selected range: {record_id}")
         seen_ids.add(record_id)
 
-        if record.get("task_type") != "multiple_choice_qa":
-            raise ValueError(f"Record {record_id} is not a multiple_choice_qa example.")
         if not str(record.get("question", "")).strip():
             raise ValueError(f"Record {record_id} has no question.")
+
+        if task_type == "open_qa":
+            answers = record.get("answers")
+            if not isinstance(answers, list) or not any(
+                str(answer).strip() for answer in answers
+            ):
+                raise ValueError(f"Open-QA record {record_id} has no gold answers.")
+            continue
 
         choices = record.get("choices")
         if not isinstance(choices, list) or len(choices) < 2:
@@ -177,10 +296,15 @@ def validate_records(records: Sequence[dict[str, Any]]) -> None:
 
         gold_label = str(record.get("answer", "")).strip().upper()
         if gold_label not in labels:
-            raise ValueError(f"Record {record_id} has an invalid gold answer: {gold_label!r}")
+            raise ValueError(
+                f"Record {record_id} has no usable gold answer. "
+                "The official CommonsenseQA test labels are hidden; use "
+                "data/processed/commonsenseqa/local_test.jsonl for local scoring."
+            )
+    return task_type
 
 
-def score_predictions(
+def score_multiple_choice_predictions(
     records: Sequence[dict[str, Any]],
     responses: Sequence[str],
     token_usages: Sequence[TokenUsage],
@@ -240,6 +364,119 @@ def score_predictions(
         "token_usage": summarize_token_usage(token_usages),
     }
     return results, statistics
+
+
+def score_open_qa_predictions(
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    token_usages: Sequence[TokenUsage],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Calculate macro answer-set precision, recall, F1, and exact match."""
+    if len(records) != len(responses) or len(records) != len(token_usages):
+        raise ValueError("Records, responses, and token usage must have equal lengths.")
+    results = []
+    precision_total = 0.0
+    recall_total = 0.0
+    f1_total = 0.0
+    normalized_precision_total = 0.0
+    normalized_recall_total = 0.0
+    normalized_f1_total = 0.0
+    exact_match_count = 0
+    normalized_exact_match_count = 0
+    missing_tag_count = 0
+    for record, response, token_usage in zip(records, responses, token_usages):
+        extracted_answer = extract_tagged_answer(response)
+        raw_predicted_answers = split_raw_open_answers(extracted_answer)
+        raw_gold_answers = [str(answer).strip() for answer in record["answers"]]
+        official_predicted_answers = [
+            official_webquestions_value(answer) for answer in raw_predicted_answers
+        ]
+        official_gold_answers = [
+            official_webquestions_value(answer) for answer in raw_gold_answers
+        ]
+        recall, precision, f1 = answer_set_scores(
+            official_gold_answers,
+            official_predicted_answers,
+        )
+        predicted_answers = set(split_open_answers(extracted_answer))
+        gold_answers = {
+            normalize_open_answer(str(answer))
+            for answer in record["answers"]
+            if normalize_open_answer(str(answer))
+        }
+        normalized_recall, normalized_precision, normalized_f1 = answer_set_scores(
+            list(gold_answers),
+            list(predicted_answers),
+        )
+        exact_match = f1 == 1.0
+        normalized_exact_match = normalized_f1 == 1.0
+        precision_total += precision
+        recall_total += recall
+        f1_total += f1
+        normalized_precision_total += normalized_precision
+        normalized_recall_total += normalized_recall
+        normalized_f1_total += normalized_f1
+        exact_match_count += int(exact_match)
+        normalized_exact_match_count += int(normalized_exact_match)
+        missing_tag_count += int(extracted_answer is None)
+        results.append(
+            {
+                "id": record["id"],
+                "dataset": record.get("dataset"),
+                "task_type": record.get("task_type"),
+                "question": record["question"],
+                "gold_answers": record["answers"],
+                "source_url": record.get("source_url"),
+                "raw_response": response,
+                "token_usage": dict(token_usage),
+                "extracted_answer": extracted_answer,
+                "raw_predicted_answers": raw_predicted_answers,
+                "predicted_answers": sorted(predicted_answers),
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "exact_match": exact_match,
+                "normalized_precision": normalized_precision,
+                "normalized_recall": normalized_recall,
+                "normalized_f1": normalized_f1,
+                "normalized_exact_match": normalized_exact_match,
+            }
+        )
+    total = len(records)
+    statistics = {
+        "total": total,
+        "macro_precision": precision_total / total,
+        "macro_recall": recall_total / total,
+        "macro_f1": f1_total / total,
+        "macro_f1_percent": 100.0 * f1_total / total,
+        "exact_match_count": exact_match_count,
+        "exact_match_accuracy": exact_match_count / total,
+        "exact_match_accuracy_percent": 100.0 * exact_match_count / total,
+        "normalized_macro_precision": normalized_precision_total / total,
+        "normalized_macro_recall": normalized_recall_total / total,
+        "normalized_macro_f1": normalized_f1_total / total,
+        "normalized_macro_f1_percent": 100.0 * normalized_f1_total / total,
+        "normalized_exact_match_count": normalized_exact_match_count,
+        "normalized_exact_match_accuracy": normalized_exact_match_count / total,
+        "normalized_exact_match_accuracy_percent": (
+            100.0 * normalized_exact_match_count / total
+        ),
+        "missing_answer_tags": missing_tag_count,
+        "token_usage": summarize_token_usage(token_usages),
+    }
+    return results, statistics
+
+
+def score_predictions(
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    token_usages: Sequence[TokenUsage],
+    task_type: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Score model responses with the metric for the selected QA task."""
+    if task_type == "open_qa":
+        return score_open_qa_predictions(records, responses, token_usages)
+    return score_multiple_choice_predictions(records, responses, token_usages)
 
 
 def write_jsonl(path: Path, records: Sequence[dict[str, Any]]) -> None:
@@ -337,11 +574,11 @@ def run_qa_test_inference(
     default_instruction: str,
     answer_instruction: str,
     enable_thinking: bool,
+    default_max_new_tokens: int,
 ) -> None:
     """Run one reasoning or non-reasoning QA evaluation."""
     args = parse_args(
-        f"Run {mode_name.replace('_', '-')} multiple-choice QA test inference.",
-        default_instruction,
+        f"Run {mode_name.replace('_', '-')} QA test inference.",
     )
     validate_answer_processing()
 
@@ -349,8 +586,10 @@ def run_qa_test_inference(
         raise ValueError("--start must be non-negative.")
     if args.end is not None and args.end <= args.start:
         raise ValueError("--end must be greater than --start.")
-    if args.batch_size <= 0 or args.max_new_tokens <= 0:
-        raise ValueError("--batch_size and --max_new_tokens must be positive.")
+    if args.batch_size <= 0:
+        raise ValueError("--batch_size must be positive.")
+    if args.max_new_tokens is not None and args.max_new_tokens <= 0:
+        raise ValueError("--max_new_tokens must be positive when provided.")
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
         raise ValueError("--gpu_memory_utilization must be greater than 0 and at most 1.")
 
@@ -358,41 +597,72 @@ def run_qa_test_inference(
     output_dir = resolve_repo_path(args.output_dir)
     all_records = read_jsonl(dataset_path)
     records = all_records[args.start : args.end]
-    validate_records(records)
-
-    instruction_prompt = args.prompt.strip()
+    task_type = validate_records(records)
+    if task_type == "open_qa":
+        task_default_instruction = (
+            OPEN_QA_REASONING_INITIAL_PROMPT
+            if enable_thinking
+            else OPEN_QA_NON_REASONING_INITIAL_PROMPT
+        )
+        resolved_answer_instruction = (
+            OPEN_QA_REASONING_ANSWER_INSTRUCTION
+            if enable_thinking
+            else OPEN_QA_NON_REASONING_ANSWER_INSTRUCTION
+        )
+        task_default_max_new_tokens = 4096 if enable_thinking else 128
+    else:
+        task_default_instruction = default_instruction
+        resolved_answer_instruction = answer_instruction
+        task_default_max_new_tokens = default_max_new_tokens
+    args.max_new_tokens = args.max_new_tokens or task_default_max_new_tokens
+    instruction_prompt = (args.prompt or task_default_instruction).strip()
     if not instruction_prompt:
         raise ValueError("--prompt must not be empty.")
     decoding_parameters = model_default_sampling_parameters(args.model)
-    prompts = [
-        build_qa_prompt(
+    if task_type == "open_qa":
+        prompts = [
+            build_open_qa_prompt(
+                instruction_prompt,
+                resolved_answer_instruction,
+                str(record["question"]),
+            )
+            for record in records
+        ]
+        prompt_template = build_open_qa_prompt(
             instruction_prompt,
-            answer_instruction,
-            str(record["question"]),
-            record["choices"],
+            resolved_answer_instruction,
+            "{question}",
         )
-        for record in records
-    ]
+    else:
+        prompts = [
+            build_qa_prompt(
+                instruction_prompt,
+                resolved_answer_instruction,
+                str(record["question"]),
+                record["choices"],
+            )
+            for record in records
+        ]
+        template_choices = [
+            {"label": choice["label"], "text": f"{{choice_{choice['label'].lower()}}}"}
+            for choice in records[0]["choices"]
+        ]
+        prompt_template = build_qa_prompt(
+            instruction_prompt,
+            resolved_answer_instruction,
+            "{question}",
+            template_choices,
+        )
     run_dir = prepare_run_directory(output_dir, mode_name, args.code, args.overwrite)
     (run_dir / "prompt.txt").write_text(
-        build_qa_prompt(
-            instruction_prompt,
-            answer_instruction,
-            "{question}",
-            [
-                {"label": "A", "text": "{choice_a}"},
-                {"label": "B", "text": "{choice_b}"},
-                {"label": "C", "text": "{choice_c}"},
-                {"label": "D", "text": "{choice_d}"},
-            ],
-        )
-        + "\n",
+        prompt_template + "\n",
         encoding="utf-8",
     )
 
     print(f"CODE: {args.code}")
     print(f"Mode: {mode_name}")
     print(f"Dataset: {dataset_path}")
+    print(f"Task type: {task_type}")
     print(f"Examples: {len(records)} ({args.start}:{args.end})")
     print(f"Thinking enabled: {enable_thinking}")
     print(f"Backend: {args.backend}")
@@ -408,16 +678,21 @@ def run_qa_test_inference(
         enable_thinking,
     )
 
-    results, statistics = score_predictions(records, responses, token_usages)
+    results, statistics = score_predictions(
+        records,
+        responses,
+        token_usages,
+        task_type,
+    )
     summary = {
         "code": args.code,
         "mode": mode_name,
         "model": args.model,
         "dataset": str(dataset_path),
-        "task_type": "multiple_choice_qa",
+        "task_type": task_type,
         "test_range": {"start": args.start, "end": args.end},
         "instruction_prompt": instruction_prompt,
-        "answer_instruction_prompt": answer_instruction,
+        "answer_instruction_prompt": resolved_answer_instruction,
         "settings": {
             "device": args.device,
             "batch_size": args.batch_size,
@@ -441,12 +716,25 @@ def run_qa_test_inference(
     write_jsonl(run_dir / "predictions.jsonl", results)
     write_json(run_dir / "summary.json", summary)
 
-    print(
-        f"Accuracy: {statistics['correct']}/{statistics['total']} "
-        f"({statistics['accuracy_percent']:.2f}%)"
-    )
+    if task_type == "open_qa":
+        print(f"Official answer-set F1: {statistics['macro_f1_percent']:.2f}%")
+        print(
+            "Normalized answer-set F1: "
+            f"{statistics['normalized_macro_f1_percent']:.2f}%"
+        )
+        print(
+            f"Exact-set accuracy: {statistics['exact_match_count']}/"
+            f"{statistics['total']} "
+            f"({statistics['exact_match_accuracy_percent']:.2f}%)"
+        )
+    else:
+        print(
+            f"Accuracy: {statistics['correct']}/{statistics['total']} "
+            f"({statistics['accuracy_percent']:.2f}%)"
+        )
     print(f"Missing answer tags: {statistics['missing_answer_tags']}")
-    print(f"Invalid choice labels: {statistics['invalid_choice_labels']}")
+    if task_type == "multiple_choice_qa":
+        print(f"Invalid choice labels: {statistics['invalid_choice_labels']}")
     print(f"Token usage: {statistics['token_usage']}")
     print(f"Elapsed inference time: {elapsed_seconds:.2f}s")
     print(f"Saved results to: {run_dir}")

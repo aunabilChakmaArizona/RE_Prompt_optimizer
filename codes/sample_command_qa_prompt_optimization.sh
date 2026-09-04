@@ -2,6 +2,54 @@
 
 # Run from the repository root. Every Python command below is standalone.
 
+# Prepare the WebQuestions and CommonsenseQA evaluation files.
+
+conda run -n re_prompt_optimization \
+  python codes/prepare_qa_evaluation_datasets.py \
+  --dataset all
+
+# Additional Qwen evaluation datasets.
+
+CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_reasoning_test_inference.py \
+  --backend vllm \
+  --code webquestions_qwen3_4b_reasoning_vllm \
+  --dataset data/processed/webquestions/test.jsonl \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --max_new_tokens 4096 \
+  --gpu_memory_utilization 0.90 \
+  --overwrite
+
+CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_non_reasoning_test_inference.py \
+  --backend vllm \
+  --code webquestions_qwen3_4b_non_reasoning_vllm \
+  --dataset data/processed/webquestions/test.jsonl \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --max_new_tokens 128 \
+  --gpu_memory_utilization 0.90 \
+  --overwrite
+
+CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_reasoning_test_inference.py \
+  --backend vllm \
+  --code commonsenseqa_qwen3_4b_reasoning_vllm \
+  --dataset data/processed/commonsenseqa/local_test.jsonl \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --max_new_tokens 4096 \
+  --gpu_memory_utilization 0.90 \
+  --overwrite
+
+CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_non_reasoning_test_inference.py \
+  --backend vllm \
+  --code commonsenseqa_qwen3_4b_non_reasoning_vllm \
+  --dataset data/processed/commonsenseqa/local_test.jsonl \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --max_new_tokens 10 \
+  --gpu_memory_utilization 0.90 \
+  --overwrite
+
 # Base test inference: Qwen reasoning and non-reasoning.
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_reasoning_test_inference.py \
@@ -19,7 +67,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_non_reasoning_test_inference.py \
   --dataset data/processed/openbookqa/test.jsonl \
   --model Qwen/Qwen3-4B \
   --device cuda:0 \
-  --max_new_tokens 16 \
+  --max_new_tokens 10 \
   --gpu_memory_utilization 0.90
 
 # Base test inference: Gemma reasoning and non-reasoning.
@@ -39,7 +87,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_non_reasoning_test_inference.py \
   --dataset data/processed/openbookqa/test.jsonl \
   --model google/gemma-3-4b-it \
   --device cuda:0 \
-  --max_new_tokens 16 \
+  --max_new_tokens 10 \
   --gpu_memory_utilization 0.90
 
 # First stage: Qwen reasoning.
@@ -404,7 +452,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_final_test_evaluation.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --runs 5 \
-  --max-new-tokens 16 \
+  --max-new-tokens 10 \
   --prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo/prompt_iteration_10.txt
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_final_test_evaluation.py \
@@ -426,5 +474,5 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_final_test_evaluation.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --runs 5 \
-  --max-new-tokens 16 \
+  --max-new-tokens 10 \
   --prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo/prompt_iteration_10.txt

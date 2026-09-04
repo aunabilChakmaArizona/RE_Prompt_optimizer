@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
         "--max-new-tokens",
         type=int,
         default=None,
-        help="Defaults to 4096 for reasoning and 16 for non-reasoning.",
+        help="Defaults to 4096 for reasoning and 10 for non-reasoning.",
     )
     parser.add_argument(
         "--output-root",

@@ -14,6 +14,7 @@ def main() -> None:
         default_instruction=REASONING_INITIAL_PROMPT,
         answer_instruction=REASONING_ANSWER_INSTRUCTION,
         enable_thinking=True,
+        default_max_new_tokens=4096,
     )
 
 
