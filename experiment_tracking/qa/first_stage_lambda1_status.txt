@@ -1,0 +1,225 @@
+OPENBOOKQA FIRST-STAGE PROMPT OPTIMIZATION STATUS (LAMBDA = 1)
+================================================================
+
+Scope
+-----
+Dataset: OpenBookQA
+Target models: Qwen3-4B and Gemma3-4B
+Modes: reasoning and non-reasoning
+First-stage optimizers: RPO, EvoPrompt-DE, and ETGPO
+Validation: 900 questions, split into three fixed folds of 300
+Selection: stable accuracy = mean fold accuracy - 1.0 * population fold standard deviation
+Test evaluation: not run; every score below is a validation score
+
+Status rule
+-----------
+READY means that the run uses the current implementation, the selected prompt differs
+from the initial prompt, and its stable validation score is higher than the baseline.
+NOT READY means that the completed run retained the baseline or failed to improve it.
+PENDING RERUN means that historical output exists but cannot be used as a current result.
+
+Current overview
+----------------
+All 12 historical jobs completed and contain their expected summary/config/prompt files.
+Two non-reasoning ETGPO jobs are now stale because they were run before the new
+feedback-first taxonomy pipeline was implemented.
+
+Current valid jobs:                 10/12
+Valid jobs improving baseline:       7/10
+Valid jobs retaining baseline:       3/10
+Jobs pending required rerun:         2/12
+
+Current valid stage-one prompt slots: 18/20
+Valid prompt slots improved:          12/18
+Valid prompt slots unchanged:          6/18
+Pending ETGPO prompt slots:             2/20
+Distinct improved prompt texts:         9
+
+Do not claim that all first-stage runs improve. The current defensible statement is:
+"Seven of the ten methodologically current first-stage runs improve over their
+respective initial prompts on the lambda-1 stable validation score; two additional
+non-reasoning ETGPO runs are pending after the feedback-pipeline correction."
+
+
+Baseline validation scores
+--------------------------
+| Target     | Mode          | Raw accuracy | Stable accuracy |
+|------------|---------------|--------------|-----------------|
+| Qwen3-4B   | reasoning     | 90.33%       | 89.09%          |
+| Gemma3-4B  | reasoning     | 77.78%       | 77.21%          |
+| Qwen3-4B   | non-reasoning | 78.67%       | 77.95%          |
+| Gemma3-4B  | non-reasoning | 69.33%       | 68.61%          |
+
+
+Run-level results: 12 first-stage jobs
+--------------------------------------
+All gains are percentage-point changes from the corresponding baseline.
+
+| Target    | Mode          | Method        | Initial raw/stable | Selected raw/stable | Raw/stable gain | Status        |
+|-----------|---------------|---------------|--------------------|---------------------|-----------------|---------------|
+| Qwen3-4B  | reasoning     | RPO           | 90.33 / 89.09      | 90.33 / 89.09       | +0.00 / +0.00   | NOT READY     |
+| Qwen3-4B  | reasoning     | EvoPrompt-DE  | 90.33 / 89.09      | 91.33 / 89.17       | +1.00 / +0.09   | READY         |
+| Qwen3-4B  | reasoning     | ETGPO         | 90.33 / 89.09      | 90.33 / 89.09       | +0.00 / +0.00   | NOT READY     |
+| Gemma3-4B | reasoning     | RPO           | 77.78 / 77.21      | 77.78 / 77.21       | +0.00 / +0.00   | NOT READY     |
+| Gemma3-4B | reasoning     | EvoPrompt-DE  | 77.78 / 77.21      | 78.89 / 78.06       | +1.11 / +0.85   | READY         |
+| Gemma3-4B | reasoning     | ETGPO         | 77.78 / 77.21      | 79.44 / 79.13       | +1.67 / +1.92   | READY         |
+| Qwen3-4B  | non-reasoning | RPO           | 78.67 / 77.95      | 80.44 / 78.63       | +1.78 / +0.69   | READY         |
+| Qwen3-4B  | non-reasoning | EvoPrompt-DE  | 78.67 / 77.95      | 80.56 / 80.24       | +1.89 / +2.29   | READY         |
+| Qwen3-4B  | non-reasoning | ETGPO (old)   | 78.67 / 77.95      | 79.78 / 78.14       | +1.11 / +0.19   | PENDING RERUN |
+| Gemma3-4B | non-reasoning | RPO           | 69.33 / 68.61      | 71.33 / 70.09       | +2.00 / +1.47   | READY         |
+| Gemma3-4B | non-reasoning | EvoPrompt-DE  | 69.33 / 68.61      | 71.11 / 70.16       | +1.78 / +1.54   | READY         |
+| Gemma3-4B | non-reasoning | ETGPO (old)   | 69.33 / 68.61      | 69.33 / 68.61       | +0.00 / +0.00   | PENDING RERUN |
+
+The historical non-reasoning ETGPO scores are shown only to identify the old outputs.
+They must not be used in the paper, second-stage experiments, or final testing after
+the feedback-first ETGPO implementation change.
+
+
+Run directories and selected prompt files
+-----------------------------------------
+
+Qwen3-4B reasoning RPO [NOT READY]
+Run:    outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1
+Prompt: outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1/final_prompt.txt
+
+Qwen3-4B reasoning EvoPrompt-DE [READY]
+Run:    outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_qwen_evoprompt_qwen14opt_lambda1
+Prompt: outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_qwen_evoprompt_qwen14opt_lambda1/final_prompt.txt
+
+Qwen3-4B reasoning ETGPO [NOT READY]
+Run:    outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_qwen_etgpo_qwen14opt_lambda1
+Prompt: outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_qwen_etgpo_qwen14opt_lambda1/final_prompt.txt
+
+Gemma3-4B reasoning RPO [NOT READY]
+Run:    outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_gemma_rpo_gemma12opt_lambda1
+Prompt: outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_gemma_rpo_gemma12opt_lambda1/final_prompt.txt
+
+Gemma3-4B reasoning EvoPrompt-DE [READY]
+Run:    outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_gemma_evoprompt_gemma12opt_lambda1
+Prompt: outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_gemma_evoprompt_gemma12opt_lambda1/final_prompt.txt
+
+Gemma3-4B reasoning ETGPO [READY]
+Run:    outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_gemma_etgpo_gemma12opt_lambda1
+Prompt: outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_gemma_etgpo_gemma12opt_lambda1/final_prompt.txt
+
+Qwen3-4B non-reasoning RPO [READY]
+Run:    outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1
+Prompt: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1/final_prompt.txt
+
+Qwen3-4B non-reasoning EvoPrompt-DE [READY]
+Run:    outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1
+Prompt: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/final_prompt.txt
+
+Qwen3-4B non-reasoning ETGPO [PENDING RERUN]
+Historical run: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1
+New run target: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed
+New prompt:     outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed/final_prompt.txt
+
+Gemma3-4B non-reasoning RPO [READY]
+Run:    outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1
+Prompt: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/final_prompt.txt
+
+Gemma3-4B non-reasoning EvoPrompt-DE [READY]
+Run:    outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1
+Prompt: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/final_prompt.txt
+
+Gemma3-4B non-reasoning ETGPO [PENDING RERUN]
+Historical run: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1
+New run target: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed
+New prompt:     outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed/final_prompt.txt
+
+
+Second-stage source prompt slots
+--------------------------------
+Use READY paths as improved first-stage sources. Do not use NOT READY or PENDING RERUN
+paths as evidence of successful first-stage optimization.
+
+| Target    | Mode          | Source slot  | Raw | Stable | Stable gain | Status        | Saved prompt path |
+|-----------|---------------|--------------|-----|--------|-------------|---------------|-------------------|
+| Qwen3-4B  | reasoning     | RPO-5        | 90.33 | 89.09 | +0.00 | NOT READY | outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_5.txt |
+| Qwen3-4B  | reasoning     | RPO-10       | 90.33 | 89.09 | +0.00 | NOT READY | outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_10.txt |
+| Qwen3-4B  | reasoning     | EvoPrompt-5  | 91.33 | 89.17 | +0.09 | READY | outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_5.txt |
+| Qwen3-4B  | reasoning     | EvoPrompt-10 | 91.33 | 89.17 | +0.09 | READY (duplicate of EvoPrompt-5) | outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_10.txt |
+| Qwen3-4B  | reasoning     | ETGPO-1      | 90.33 | 89.09 | +0.00 | NOT READY | outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_qwen_etgpo_qwen14opt_lambda1/final_prompt.txt |
+| Gemma3-4B | reasoning     | RPO-5        | 77.78 | 77.21 | +0.00 | NOT READY | outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt |
+| Gemma3-4B | reasoning     | RPO-10       | 77.78 | 77.21 | +0.00 | NOT READY | outputs/qa_prompt_optimization/reasoning/rpo/openbookqa_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt |
+| Gemma3-4B | reasoning     | EvoPrompt-5  | 77.78 | 77.36 | +0.15 | NOT READY: prompt text equals baseline | outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt |
+| Gemma3-4B | reasoning     | EvoPrompt-10 | 78.89 | 78.06 | +0.85 | READY | outputs/qa_prompt_optimization/reasoning/evoprompt_de/openbookqa_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt |
+| Gemma3-4B | reasoning     | ETGPO-1      | 79.44 | 79.13 | +1.92 | READY | outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_gemma_etgpo_gemma12opt_lambda1/final_prompt.txt |
+| Qwen3-4B  | non-reasoning | RPO-5        | 79.89 | 78.29 | +0.35 | READY | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_5.txt |
+| Qwen3-4B  | non-reasoning | RPO-10       | 80.44 | 78.63 | +0.69 | READY | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_10.txt |
+| Qwen3-4B  | non-reasoning | EvoPrompt-5  | 80.56 | 80.24 | +2.29 | READY | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_5.txt |
+| Qwen3-4B  | non-reasoning | EvoPrompt-10 | 80.56 | 80.24 | +2.29 | READY (duplicate of EvoPrompt-5) | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_10.txt |
+| Qwen3-4B  | non-reasoning | ETGPO-1 fixed | pending | pending | pending | PENDING RERUN | outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed/final_prompt.txt |
+| Gemma3-4B | non-reasoning | RPO-5        | 71.33 | 70.09 | +1.47 | READY | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt |
+| Gemma3-4B | non-reasoning | RPO-10       | 71.33 | 70.09 | +1.47 | READY (duplicate of RPO-5) | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt |
+| Gemma3-4B | non-reasoning | EvoPrompt-5  | 70.44 | 70.03 | +1.42 | READY | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt |
+| Gemma3-4B | non-reasoning | EvoPrompt-10 | 71.11 | 70.16 | +1.54 | READY | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt |
+| Gemma3-4B | non-reasoning | ETGPO-1 fixed | pending | pending | pending | PENDING RERUN | outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed/final_prompt.txt |
+
+
+Compact best-so-far iteration histories
+---------------------------------------
+Each pair is raw accuracy / stable accuracy. I0 is the initial prompt.
+
+Qwen3-4B reasoning RPO:
+I0-I10: 90.33 / 89.09 (no accepted improvement)
+
+Gemma3-4B reasoning RPO:
+I0-I10: 77.78 / 77.21 (no accepted improvement)
+
+Qwen3-4B non-reasoning RPO:
+I0: 78.67 / 77.95
+I1-I6: 79.89 / 78.29
+I7-I10: 80.44 / 78.63
+
+Gemma3-4B non-reasoning RPO:
+I0: 69.33 / 68.61
+I1: 69.44 / 69.03
+I2: 69.67 / 69.20
+I3: 70.78 / 69.28
+I4-I10: 71.33 / 70.09
+
+Qwen3-4B reasoning EvoPrompt-DE:
+I0-I4: 90.33 / 89.09
+I5-I10: 91.33 / 89.17
+
+Gemma3-4B reasoning EvoPrompt-DE:
+I0-I4: 77.78 / 77.21
+I5-I7: 77.78 / 77.36 (same prompt text as baseline; not a genuine prompt improvement)
+I8-I10: 78.89 / 78.06
+
+Qwen3-4B non-reasoning EvoPrompt-DE:
+I0: 78.67 / 77.95
+I1-I3: 79.89 / 79.01
+I4-I10: 80.56 / 80.24
+
+Gemma3-4B non-reasoning EvoPrompt-DE:
+I0-I1: 69.33 / 68.61
+I2-I4: 70.22 / 68.88
+I5-I7: 70.44 / 70.03
+I8-I10: 71.11 / 70.16
+
+ETGPO has one iteration; its scores are shown in the run-level table.
+
+
+Immediate experiment decisions
+------------------------------
+1. Rerun Qwen and Gemma non-reasoning ETGPO with the feedback-first implementation.
+2. Retune or rerun reasoning RPO for both target models before claiming first-stage gains.
+3. Retune or rerun Qwen reasoning ETGPO if every first-stage optimizer/model setting is
+   expected to improve independently.
+4. Do not treat Gemma reasoning EvoPrompt-5 as an improved prompt: its text is exactly
+   the initial reasoning prompt, and the small score difference is evaluation variation.
+5. Use the exact READY prompt paths above for second-stage optimization and later use
+   the selected final prompts for five-run test evaluation.
+
+Active ETGPO rerun command files
+--------------------------------
+codes/run_qa_first_stage_qwen.sh
+  - openbookqa_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed
+  - openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed
+
+codes/run_qa_first_stage_gemma.sh
+  - openbookqa_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed
+  - openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed

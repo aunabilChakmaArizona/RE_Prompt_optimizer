@@ -43,7 +43,7 @@ Generated evaluations are reseeded deterministically by mode, split, and record 
 
 Console logs show one representative prompt/output for each important model-call phase. They also report evaluation sizes, iteration or beam-region progress, current and best regular/stable scores, phase time, and total elapsed run time. Complete prompts, outputs, predictions, and traces remain available in the saved JSON and JSONL artifacts.
 
-EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. Its original DE meta-prompt and sampled generation are unchanged, but an exact child duplicate is resampled up to `--duplicate-retries` times to prevent population collapse. ETGPO analyzes every sampled failure, groups them by reusable reasoning or decision errors rather than question topics, selects frequent categories to the requested coverage, and passes one identical short-guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes.
+EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. Its original DE meta-prompt and sampled generation are unchanged, but an exact child duplicate is resampled up to `--duplicate-retries` times to prevent population collapse. ETGPO analyzes every sampled failure, groups them by reusable reasoning or decision errors rather than question topics, selects frequent categories to the requested coverage, and passes one identical short-guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes. For non-reasoning QA, the target model first generates one post-hoc explanation of the most likely cause of each incorrect answer; the optimizer model then constructs the taxonomy from those explanations. These explanations are probabilistic feedback, not observed chains of thought, and are saved in `failure_feedbacks.json`.
 
 For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</answer>` responses, but loss is applied only to the inner gold option-label token. This prevents fixed answer tags from dominating the instruction gradient.
 
@@ -55,7 +55,7 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 | --- | --- |
 | RPO | 10 iterations, snapshots at 5/10, feedback sample 100, 3 near-balanced examples with the odd slot assigned to an incorrect answer, population 10, parent temperature 1.0 |
 | EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000, up to 3 exact-duplicate retries |
-| ETGPO | 1 iteration, train errors 1,000, batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
+| ETGPO | 1 iteration, train errors 1,000, non-reasoning feedback limit 10,000 tokens, taxonomy batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
 | LPO | 1 iteration, train sample 512, 3 incorrect feedback examples, at most 5 locations, at most 3 words/location, 5 rewrites |
 | GreaTer / TG | 1 token, train sample 3,000, gradient batch 4, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
 | GradPO | 1 iteration, train sample 3,000, 5 candidates/span, beam 5 with target-model synthesis, candidate-generation limit 10,000 tokens, beam-synthesis limit 10,000 tokens, expansion ratio 0.6, fluency weight 0.5 |
@@ -94,6 +94,8 @@ Run stage two only after all stage-one prompt files exist. The generator uses Qw
 ## Outputs
 
 Every optimization run saves its config, initial and final prompts, candidate metrics, optimizer traces, validation predictions, and a summary. Optimization runners never load or evaluate the test split. Gradient-based stage-two runs also save their gradient, candidate, selected-region, and beam traces so the optimization process is reproducible. Post-hoc edit analysis is currently disabled.
+
+The QA-only experiment status, validation gains, completed/failed optimization outcomes, run directories, and saved first-stage prompt paths are tracked in `experiment_tracking/qa/first_stage_lambda1_status.txt`. Its companion `experiment_tracking/qa/README.md` defines `READY`, `NOT READY`, and `PENDING RERUN`. Update that report whenever a tracked run is repeated; do not use stale or unchanged prompts as evidence of first-stage improvement.
 
 After all prompt choices are finalized, evaluate any saved first- or second-stage prompt over five fixed test runs:
 

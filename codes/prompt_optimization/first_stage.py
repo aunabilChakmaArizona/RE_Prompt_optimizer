@@ -16,6 +16,7 @@ from prompt_optimization.evaluation import (
 from prompt_optimization.meta_prompts import (
     etgpo_first_taxonomy_prompt,
     etgpo_guidance_prompt,
+    etgpo_non_reasoning_feedback_prompt,
     etgpo_update_taxonomy_prompt,
     evoprompt_de_prompt,
     extract_json_object,
@@ -24,6 +25,7 @@ from prompt_optimization.meta_prompts import (
     rpo_rewrite_prompt,
     unique_nonempty,
 )
+from prompt_optimization.models import TARGET_ROLE
 from prompt_optimization.optimizer_common import (
     best_scored_candidate,
     evaluate_candidates,
@@ -759,6 +761,95 @@ def _etgpo_candidate_from_output(
     return tagged[0] if tagged else None
 
 
+def _generate_etgpo_non_reasoning_feedback(
+    context: QAOptimizationContext,
+    errors: Sequence[tuple[dict[str, Any], dict[str, Any]]],
+    max_new_tokens: int,
+) -> list[str]:
+    """Generate one post-hoc explanation for every incorrect direct answer."""
+    if not errors:
+        save_json(
+            context.run_dir / "failure_feedbacks.json",
+            {
+                "feedback_source": "posthoc_target_model_explanation",
+                "feedback_model": context.args.model,
+                "total_failures": 0,
+                "feedbacks": [],
+            },
+        )
+        return []
+    feedback_started_at = time.monotonic()
+    failure_examples = [
+        etgpo_failure_example(record, prediction, index, context.mode)
+        for index, (record, prediction) in enumerate(errors, start=1)
+    ]
+    feedback_prompts = [
+        etgpo_non_reasoning_feedback_prompt(example)
+        for example in failure_examples
+    ]
+    log_progress(
+        context,
+        f"post-hoc feedback generation started | errors={len(errors)}",
+    )
+    raw_outputs = context.model_pool.generate(
+        TARGET_ROLE,
+        feedback_prompts,
+        max_new_tokens=max_new_tokens,
+        batch_size=context.args.target_batch_size,
+        enable_thinking=True,
+        do_sample=True,
+        log_label="qa_etgpo_failure_feedback",
+        return_token_usage=False,
+    )
+    if len(raw_outputs) != len(errors):
+        raise RuntimeError(
+            "ETGPO feedback generation returned "
+            f"{len(raw_outputs)} outputs for {len(errors)} errors."
+        )
+    feedback_texts = [extract_feedback(output) for output in raw_outputs]
+    feedback_records = []
+    for index, ((record, prediction), prompt, raw_output, feedback_text) in enumerate(
+        zip(errors, feedback_prompts, raw_outputs, feedback_texts),
+        start=1,
+    ):
+        feedback_records.append(
+            {
+                "failure_id": index,
+                "problem_id": record["id"],
+                "question": record["question"],
+                "choices": record["choices"],
+                "correct_answer": record["answer"],
+                "selected_answer": prediction.get("predicted_answer") or "INVALID",
+                "raw_model_response": prediction.get("raw_response", ""),
+                "feedback_prompt": prompt,
+                "raw_feedback_output": raw_output,
+                "feedback": feedback_text,
+            }
+        )
+    save_json(
+        context.run_dir / "failure_feedbacks.json",
+        {
+            "feedback_source": "posthoc_target_model_explanation",
+            "feedback_model": context.args.model,
+            "total_failures": len(errors),
+            "feedbacks": feedback_records,
+        },
+    )
+    context.logger.event(
+        "etgpo_failure_feedback_generation",
+        feedback_source="posthoc_target_model_explanation",
+        feedback_model=context.args.model,
+        total_failures=len(errors),
+        output_file="failure_feedbacks.json",
+    )
+    log_progress(
+        context,
+        f"post-hoc feedback generation completed | feedbacks={len(feedback_texts)}",
+        phase_started_at=feedback_started_at,
+    )
+    return feedback_texts
+
+
 def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run ETGPO taxonomy construction and repeated guidance generation for QA."""
     log_progress(context, "run started | iterations=1")
@@ -789,13 +880,28 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         context,
         f"training-error collection completed | errors={len(errors)}/{len(train_records)}",
     )
+    posthoc_feedbacks: list[str | None]
+    if context.mode.name == "non_reasoning":
+        posthoc_feedbacks = list(
+            _generate_etgpo_non_reasoning_feedback(
+                context,
+                errors,
+                args.feedback_max_new_tokens,
+            )
+        )
+    else:
+        posthoc_feedbacks = [None] * len(errors)
+    taxonomy_inputs = [
+        (record, prediction, feedback)
+        for (record, prediction), feedback in zip(errors, posthoc_feedbacks)
+    ]
     taxonomy: list[dict[str, Any]] = []
     assignments: list[dict[str, Any]] = []
     processed = 0
     batch_index = 0
     total_batches = math.ceil(len(errors) / args.error_batch_size) if errors else 0
-    while processed < len(errors):
-        batch = errors[processed : processed + args.error_batch_size]
+    while processed < len(taxonomy_inputs):
+        batch = taxonomy_inputs[processed : processed + args.error_batch_size]
         if not batch:
             break
         batch_index += 1
@@ -806,8 +912,14 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             f"errors_in_batch={len(batch)} | processed={processed}/{len(errors)}",
         )
         examples = [
-            etgpo_failure_example(record, prediction, index, context.mode)
-            for index, (record, prediction) in enumerate(batch, start=1)
+            etgpo_failure_example(
+                record,
+                prediction,
+                index,
+                context.mode,
+                posthoc_feedback=feedback,
+            )
+            for index, (record, prediction, feedback) in enumerate(batch, start=1)
         ]
         if batch_index == 1:
             meta_prompt = etgpo_first_taxonomy_prompt(examples, context.mode)
@@ -837,7 +949,7 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             taxonomy,
             assignments,
             [item for item in raw_assignments if isinstance(item, dict)],
-            batch,
+            [(record, prediction) for record, prediction, _ in batch],
             batch_index,
         )
         processed += len(batch)
@@ -922,6 +1034,11 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         f"source {scored_item_text(source)} | best {scored_item_text(selected)}",
     )
     taxonomy_payload = {
+        "analysis_source": (
+            "posthoc_target_model_feedback"
+            if context.mode.name == "non_reasoning"
+            else "observed_model_reasoning"
+        ),
         "total_failures": len(errors),
         "processed_failures": processed,
         "categories": taxonomy,
@@ -945,6 +1062,21 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "iterations": 1,
             "train_error_count": len(errors),
             "processed_error_count": processed,
+            "taxonomy_analysis_source": (
+                "posthoc_target_model_feedback"
+                if context.mode.name == "non_reasoning"
+                else "observed_model_reasoning"
+            ),
+            "feedback_generation_count": (
+                len(posthoc_feedbacks)
+                if context.mode.name == "non_reasoning"
+                else 0
+            ),
+            "failure_feedbacks_file": (
+                "failure_feedbacks.json"
+                if context.mode.name == "non_reasoning"
+                else None
+            ),
             "error_coverage": args.error_coverage,
             "achieved_error_coverage": achieved_coverage,
             "taxonomy": taxonomy,

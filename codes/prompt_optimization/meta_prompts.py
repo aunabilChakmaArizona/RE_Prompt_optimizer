@@ -224,10 +224,12 @@ def etgpo_first_taxonomy_prompt(
         analysis_steps = """1. Find the EARLIEST point in the response's reasoning where it went wrong.
 2. Explain what specifically went wrong.
 3. Explain why that error led to the wrong selected answer."""
+        reasoning_source_note = ""
     else:
-        analysis_steps = """1. Infer the earliest decision error, missing evidence, or misleading cue behind the response.
+        analysis_steps = """1. Use the post-hoc feedback to identify the earliest likely decision error, missing evidence, or misleading cue.
 2. Explain what specifically went wrong in selecting the answer.
 3. Explain why that error led to the wrong selected answer."""
+        reasoning_source_note = """Important: the reasoning field is post-hoc feedback describing the most likely cause of the incorrect direct-answer prediction, not a verbatim chain of thought from the target model. Use it as probabilistic evidence together with the question, choices, correct answer, and wrong answer."""
     schema = {
         "categories": [
             {
@@ -262,6 +264,8 @@ def etgpo_first_taxonomy_prompt(
 
 Analyze every failure and identify its root cause. Be as descriptive as possible.
 
+{reasoning_source_note}
+
 For each failure:
 {analysis_steps}
 
@@ -277,6 +281,24 @@ Return only one JSON object matching this structure:
 ```json
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 ```"""
+
+
+def etgpo_non_reasoning_feedback_prompt(error_example: str) -> str:
+    """Ask for the most likely cause of one incorrect direct-answer prediction."""
+    return f"""You are an expert feedback model for a multiple-choice question-answering task. Specifically, you are skilled at providing feedback explaining why a question-answering system arrived at an incorrect prediction.
+
+{QA_TASK_DESCRIPTIONS["non_reasoning"]}
+
+You are given one task instance containing the question, choices, ground-truth answer, the LLM's response, and its selected answer.
+
+The ground-truth answer is provided only as contextual information. The feedback model's task is to explain the most likely decision process that led to the incorrect answer, not merely to state that the prediction was wrong. Because the LLM was asked to answer directly, its response may not contain explicit reasoning. Infer the misunderstanding, missing evidence, misleading cue, or heuristic that most likely caused the error.
+
+Instance:
+```
+{error_example}
+```
+
+Please reason through the problem, but provide your final feedback only inside <feedback> and </feedback>."""
 
 
 def etgpo_update_taxonomy_prompt(
@@ -303,6 +325,11 @@ def etgpo_update_taxonomy_prompt(
         )
     trace_location = (
         "Earliest reasoning location" if mode.name == "reasoning" else "Decision error or misleading cue"
+    )
+    reasoning_source_note = (
+        ""
+        if mode.name == "reasoning"
+        else """Important: the reasoning field is post-hoc feedback describing the most likely cause of the incorrect direct-answer prediction, not a verbatim chain of thought from the target model. Use it as probabilistic evidence together with the question, choices, correct answer, and wrong answer."""
     )
     schema = {
         "new_categories": [
@@ -344,6 +371,8 @@ def etgpo_update_taxonomy_prompt(
 ## Your Task
 
 For every new failure, decide whether its root cause fits an existing category. Reuse that category whenever it fits. Create a new category only when the error is fundamentally different. New categories must be self-contained, generalizable, specific, and actionable.
+
+{reasoning_source_note}
 
 Identify reusable reasoning or decision errors rather than question-specific topics. Do not create categories based only on particular entities, answer choices, scientific terms, or isolated facts. Group failures that share the same underlying error even when their question topics differ.
 

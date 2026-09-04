@@ -237,15 +237,21 @@ def etgpo_failure_example(
     prediction: dict[str, Any],
     index: int,
     mode: QAMode,
+    posthoc_feedback: str | None = None,
 ) -> str:
     """Format one failed QA response for ETGPO taxonomy analysis."""
     predicted = prediction.get("predicted_answer") or "INVALID"
     raw_response = str(prediction.get("raw_response", "")).strip() or "EMPTY"
-    response_heading = (
-        "Model's Reasoning and Response"
-        if mode.name == "reasoning"
-        else "Model's Response"
-    )
+    if posthoc_feedback is not None:
+        response_heading = "Most Likely Reasoning Behind the Incorrect Prediction"
+        response_text = posthoc_feedback.strip() or "No feedback generated."
+    else:
+        response_heading = (
+            "Model's Reasoning and Response"
+            if mode.name == "reasoning"
+            else "Model's Response"
+        )
+        response_text = raw_response
     return "\n".join(
         [
             f"## Failure {index}",
@@ -261,7 +267,7 @@ def etgpo_failure_example(
             str(record["answer"]),
             "",
             f"### {response_heading}",
-            raw_response,
+            response_text,
             "",
             "### Model's Selected Answer",
             str(predicted),

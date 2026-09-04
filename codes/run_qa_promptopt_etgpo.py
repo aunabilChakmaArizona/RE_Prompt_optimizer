@@ -25,6 +25,12 @@ def parse_args() -> argparse.Namespace:
         help="Errors shown together when building the error taxonomy.",
     )
     parser.add_argument(
+        "--feedback-max-new-tokens",
+        type=int,
+        default=10000,
+        help="Maximum tokens for each post-hoc non-reasoning error explanation.",
+    )
+    parser.add_argument(
         "--error-coverage",
         type=float,
         default=0.7,
@@ -49,7 +55,11 @@ def parse_args() -> argparse.Namespace:
         help="Independent generations made by passing the same guidance prompt k times.",
     )
     args = parser.parse_args()
-    if args.train_sample_size <= 0 or args.error_batch_size <= 0:
+    if (
+        args.train_sample_size <= 0
+        or args.error_batch_size <= 0
+        or args.feedback_max_new_tokens <= 0
+    ):
         parser.error("ETGPO sample and batch sizes must be positive.")
     if not 0.0 < args.error_coverage <= 1.0:
         parser.error("--error-coverage must be greater than zero and at most one.")
