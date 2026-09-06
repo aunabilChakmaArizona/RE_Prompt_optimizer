@@ -1,4 +1,47 @@
-OPENBOOKQA FIRST-STAGE PROMPT OPTIMIZATION STATUS (LAMBDA = 1)
+OPENBOOKQA FIRST-STAGE PROMPT OPTIMIZATION STATUS
+=================================================
+
+Archived ETGPO update: lambda = 1 with validation = 1,500 (3 folds x 500)
+----------------------------------------------------------------------------
+These four ETGPO runs used the expanded 1,500-question validation set, but they were
+completed before optimizer-facing QA responses were separated into sanitized reasoning
+and selected-answer fields. Preserve the scores for diagnosis, but rerun all four before
+using them as results for the current implementation. They also must not be numerically
+mixed with the historical 900-question RPO and EvoPrompt-DE results recorded later.
+
+| Target    | Mode          | Method | Initial raw/stable | Selected raw/stable | Raw/stable gain | Status    |
+|-----------|---------------|--------|--------------------|---------------------|-----------------|-----------|
+| Qwen3-4B  | reasoning     | ETGPO  | 89.87 / 88.62      | 90.07 / 89.29       | +0.20 / +0.68   | IMPROVED  |
+| Gemma3-4B | reasoning     | ETGPO  | 79.00 / 78.09      | 79.00 / 78.09       | +0.00 / +0.00   | UNCHANGED |
+| Qwen3-4B  | non-reasoning | ETGPO  | 79.07 / 78.17      | 79.60 / 78.85       | +0.53 / +0.68   | IMPROVED  |
+| Gemma3-4B | non-reasoning | ETGPO  | 63.93 / 63.03      | 68.73 / 67.25       | +4.80 / +4.22   | IMPROVED  |
+
+Archived ETGPO lambda1+vs1500 completion: 4/4
+Archived ETGPO lambda1+vs1500 improvements: 3/4
+Archived ETGPO lambda1+vs1500 unchanged: 1/4 (Gemma3-4B reasoning)
+Current-method ETGPO runs pending rerun: 4/4
+
+Saved runs:
+- outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500
+- outputs/qa_prompt_optimization/reasoning/etgpo/openbookqa_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500
+- outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500
+- outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500
+
+Remaining first-stage run-level non-improvements
+------------------------------------------------
+1. Qwen3-4B reasoning RPO: historical lambda-1 run retained the initial prompt.
+   It must be rerun on validation=1,500 before making a current decision.
+2. Gemma3-4B reasoning RPO: historical lambda-1 run retained the initial prompt.
+   It must be rerun on validation=1,500 before making a current decision.
+3. Gemma3-4B reasoning ETGPO: the archived lambda1+vs1500 run retained the initial
+   prompt. All four ETGPO settings now require a consistent post-sanitization rerun.
+
+The two RPO rerun commands are stored in the usual model-specific command histories:
+- codes/run_qa_first_stage_qwen.sh
+- codes/run_qa_first_stage_gemma.sh
+
+
+HISTORICAL LAMBDA-1 RESULTS (VALIDATION = 900; 3 FOLDS x 300)
 ================================================================
 
 Scope
@@ -7,7 +50,7 @@ Dataset: OpenBookQA
 Target models: Qwen3-4B and Gemma3-4B
 Modes: reasoning and non-reasoning
 First-stage optimizers: RPO, EvoPrompt-DE, and ETGPO
-Validation: 900 questions, split into three fixed folds of 300
+Validation: 900 questions, split into three fixed folds of 300 (historical runs only)
 Selection: stable accuracy = mean fold accuracy - 1.0 * population fold standard deviation
 Test evaluation: not run; every score below is a validation score
 

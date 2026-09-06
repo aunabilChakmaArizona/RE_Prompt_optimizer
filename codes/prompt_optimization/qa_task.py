@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -209,27 +210,55 @@ def feedback_example(
     )
 
 
+def reasoning_without_tagged_answer(response: str) -> str:
+    """Remove the tagged final answer while preserving the model's reasoning text."""
+    reasoning = re.sub(
+        r"<answer\s*>.*?</answer\s*>",
+        "",
+        response,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    reasoning = re.sub(
+        r"<answer\s*>.*$",
+        "",
+        reasoning,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return re.sub(r"\n{3,}", "\n\n", reasoning).strip()
+
+
 def rpo_feedback_example(
     record: dict[str, Any],
     prediction: dict[str, Any],
     index: int,
+    mode: QAMode,
 ) -> str:
-    """Format one QA response with its full reasoning for RPO feedback."""
+    """Format RPO feedback with reasoning only when the QA mode produces it."""
     predicted = prediction.get("predicted_answer") or "INVALID"
     outcome = "correct" if prediction.get("correct") else "incorrect"
-    raw_response = str(prediction.get("raw_response", "")).strip() or "EMPTY"
-    return "\n".join(
+    lines = [
+        f"Task {index}",
+        f"Question: {record['question']}",
+        f"Choices: {choices_as_text(record)}",
+        f"Ground-Truth Answer: {record['answer']}",
+    ]
+    if mode.name == "reasoning":
+        reasoning = reasoning_without_tagged_answer(
+            str(prediction.get("raw_response", ""))
+        )
+        lines.extend(
+            [
+                "LLM Reasoning:",
+                reasoning or "No reasoning text was provided.",
+            ]
+        )
+    lines.extend(
         [
-            f"Task {index}",
-            f"Question: {record['question']}",
-            f"Choices: {choices_as_text(record)}",
-            f"Ground-Truth Answer: {record['answer']}",
             f"LLM Selected Answer: {predicted}",
             f"Outcome: {outcome}",
-            "LLM Response:",
-            raw_response,
         ]
     )
+    return "\n".join(lines)
 
 
 def etgpo_failure_example(
@@ -239,19 +268,24 @@ def etgpo_failure_example(
     mode: QAMode,
     posthoc_feedback: str | None = None,
 ) -> str:
-    """Format one failed QA response for ETGPO taxonomy analysis."""
+    """Format ETGPO failures without exposing the fixed answer format."""
     predicted = prediction.get("predicted_answer") or "INVALID"
-    raw_response = str(prediction.get("raw_response", "")).strip() or "EMPTY"
+    reasoning_section: list[str] = []
     if posthoc_feedback is not None:
-        response_heading = "Most Likely Reasoning Behind the Incorrect Prediction"
-        response_text = posthoc_feedback.strip() or "No feedback generated."
-    else:
-        response_heading = (
-            "Model's Reasoning and Response"
-            if mode.name == "reasoning"
-            else "Model's Response"
+        reasoning_section = [
+            "### Most Likely Reasoning Behind the Incorrect Prediction",
+            posthoc_feedback.strip() or "No feedback generated.",
+            "",
+        ]
+    elif mode.name == "reasoning":
+        reasoning = reasoning_without_tagged_answer(
+            str(prediction.get("raw_response", ""))
         )
-        response_text = raw_response
+        reasoning_section = [
+            "### Model's Reasoning",
+            reasoning or "No reasoning text was provided.",
+            "",
+        ]
     return "\n".join(
         [
             f"## Failure {index}",
@@ -266,9 +300,7 @@ def etgpo_failure_example(
             "### Correct Answer",
             str(record["answer"]),
             "",
-            f"### {response_heading}",
-            response_text,
-            "",
+            *reasoning_section,
             "### Model's Selected Answer",
             str(predicted),
             "",

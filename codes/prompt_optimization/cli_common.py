@@ -108,7 +108,7 @@ def add_shared_arguments(
     parser.add_argument(
         "--validation-path",
         default=str(DEFAULT_VALIDATION_PATH),
-        help="The 900-example JSONL with three folds used to select prompts.",
+        help="The 1,500-example JSONL with three folds used to select prompts.",
     )
     parser.add_argument(
         "--initial-prompt",

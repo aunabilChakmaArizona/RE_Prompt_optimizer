@@ -644,15 +644,13 @@ def _allowed_candidate_token(
     return text.isascii() and "\n" not in text and "\r" not in text
 
 
-def qa_proposal_header(record: dict[str, Any], mode: QAMode) -> str:
+def qa_proposal_header(record: dict[str, Any]) -> str:
     """Build GreaTer's instruction-generation context around one QA example."""
     return (
         "You are optimizing an instruction prompt for a multiple-choice question "
         "answering model.\n\n"
-        "The instruction will appear before a fixed answer-format instruction, the "
-        "question, and its labeled choices. The model must select the single best "
-        "option.\n\n"
-        f"Fixed answer instruction:\n{mode.answer_instruction}\n\n"
+        "The instruction should help the model select the single best option for "
+        "a question with labeled choices.\n\n"
         "Example model input:\n"
         f"Question: {record['question']}\n"
         f"Choices: {choices_as_text(record)}\n\n"
@@ -666,7 +664,6 @@ def proposal_token_candidates(
     token_index: int,
     proposal_records: Sequence[dict[str, Any]],
     *,
-    mode: QAMode,
     model,
     tokenizer,
     top_k: int,
@@ -685,7 +682,7 @@ def proposal_token_candidates(
     candidate_sets: list[list[int]] = []
     with torch.inference_mode():
         for record in proposal_records:
-            context = qa_proposal_header(record, mode) + prefix
+            context = qa_proposal_header(record) + prefix
             encoded = tokenizer(
                 context,
                 return_tensors="pt",

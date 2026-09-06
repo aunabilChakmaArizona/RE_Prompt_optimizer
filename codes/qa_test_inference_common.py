@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import string
 import time
 import unicodedata
+from collections import Counter
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -57,12 +59,17 @@ OPEN_QA_NON_REASONING_ANSWER_INSTRUCTION = (
 
 def parse_args(
     description: str,
+    default_dataset_path: str | Path = DEFAULT_DATASET_PATH,
 ) -> argparse.Namespace:
     """Read command-line settings for one QA test run."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--code", required=True, help="Unique identity used as the output folder name.")
     parser.add_argument("--model", default="Qwen/Qwen3-4B", help="Hugging Face model name or path.")
-    parser.add_argument("--dataset", default=str(DEFAULT_DATASET_PATH), help="Prepared QA JSONL test file.")
+    parser.add_argument(
+        "--dataset",
+        default=str(default_dataset_path),
+        help="Prepared QA JSONL test file.",
+    )
     parser.add_argument("--device", "--cuda", dest="device", default=None, help="Model device, such as cuda:0.")
     parser.add_argument(
         "--backend",
@@ -153,6 +160,33 @@ def build_open_qa_prompt(
     )
 
 
+def format_context_passages(context: Sequence[dict[str, Any]]) -> str:
+    """Format titled context paragraphs in their original dataset order."""
+    passages = []
+    for index, paragraph in enumerate(context, start=1):
+        title = str(paragraph["title"]).strip()
+        sentences = " ".join(
+            str(sentence).strip() for sentence in paragraph["sentences"]
+        ).strip()
+        passages.append(f"[{index}] {title}\n{sentences}")
+    return "\n\n".join(passages)
+
+
+def build_context_open_qa_prompt(
+    instruction_prompt: str,
+    answer_instruction: str,
+    context: Sequence[dict[str, Any]],
+    question: str,
+) -> str:
+    """Place an instruction, context passages, and an open question in order."""
+    return (
+        f"{instruction_prompt.strip()}\n\n"
+        f"{answer_instruction}\n\n"
+        f"Context:\n{format_context_passages(context)}\n\n"
+        f"Question:\n{question.strip()}"
+    )
+
+
 def extract_tagged_answer(response: str) -> str | None:
     """Extract the last complete answer enclosed by answer tags."""
     matches = ANSWER_PATTERN.findall(response)
@@ -239,6 +273,43 @@ def answer_set_scores(
     return recall, precision, f1
 
 
+def normalize_hotpot_answer(value: str) -> str:
+    """Normalize an answer exactly as the official HotpotQA evaluator does."""
+    lowered = value.lower()
+    without_punctuation = "".join(
+        character for character in lowered if character not in string.punctuation
+    )
+    without_articles = re.sub(r"\b(a|an|the)\b", " ", without_punctuation)
+    return " ".join(without_articles.split())
+
+
+def hotpot_answer_scores(
+    prediction: str,
+    gold_answer: str,
+) -> tuple[float, float, float, float]:
+    """Calculate official HotpotQA answer EM, precision, recall, and token F1."""
+    normalized_prediction = normalize_hotpot_answer(prediction)
+    normalized_gold = normalize_hotpot_answer(gold_answer)
+    exact_match = float(normalized_prediction == normalized_gold)
+    special_answers = {"yes", "no", "noanswer"}
+    if (
+        normalized_prediction in special_answers
+        or normalized_gold in special_answers
+    ) and normalized_prediction != normalized_gold:
+        return exact_match, 0.0, 0.0, 0.0
+
+    prediction_tokens = normalized_prediction.split()
+    gold_tokens = normalized_gold.split()
+    common = Counter(prediction_tokens) & Counter(gold_tokens)
+    matching_tokens = sum(common.values())
+    if matching_tokens == 0:
+        return exact_match, 0.0, 0.0, 0.0
+    precision = matching_tokens / len(prediction_tokens)
+    recall = matching_tokens / len(gold_tokens)
+    f1 = 2.0 * precision * recall / (precision + recall)
+    return exact_match, precision, recall, f1
+
+
 def validate_answer_processing() -> None:
     """Check representative answer extraction and normalization cases."""
     labels = {"A", "B", "C", "D"}
@@ -254,6 +325,8 @@ def validate_answer_processing() -> None:
     assert normalize_open_answer("The Beatles!") == "beatles"
     assert split_open_answers("Paris; New York") == ["paris", "new york"]
     assert official_webquestions_value("1836-02-23") == (1836, 2, 23)
+    assert normalize_hotpot_answer("The Eiffel Tower!") == "eiffel tower"
+    assert hotpot_answer_scores("the red fox", "Red fox") == (1.0, 1.0, 1.0, 1.0)
 
 
 def validate_records(records: Sequence[dict[str, Any]]) -> str:
@@ -262,7 +335,12 @@ def validate_records(records: Sequence[dict[str, Any]]) -> str:
         raise ValueError("The selected test range is empty.")
 
     task_types = {str(record.get("task_type", "")).strip() for record in records}
-    if len(task_types) != 1 or task_types.pop() not in {"multiple_choice_qa", "open_qa"}:
+    supported_task_types = {
+        "multiple_choice_qa",
+        "open_qa",
+        "hotpotqa_open_qa",
+    }
+    if len(task_types) != 1 or task_types.pop() not in supported_task_types:
         raise ValueError("Records must share one supported task_type.")
     task_type = str(records[0]["task_type"])
     seen_ids = set()
@@ -277,12 +355,26 @@ def validate_records(records: Sequence[dict[str, Any]]) -> str:
         if not str(record.get("question", "")).strip():
             raise ValueError(f"Record {record_id} has no question.")
 
-        if task_type == "open_qa":
+        if task_type in {"open_qa", "hotpotqa_open_qa"}:
             answers = record.get("answers")
             if not isinstance(answers, list) or not any(
                 str(answer).strip() for answer in answers
             ):
                 raise ValueError(f"Open-QA record {record_id} has no gold answers.")
+            if task_type == "hotpotqa_open_qa":
+                context = record.get("context")
+                if not isinstance(context, list) or not context:
+                    raise ValueError(f"HotpotQA record {record_id} has no context.")
+                for paragraph in context:
+                    if not str(paragraph.get("title", "")).strip():
+                        raise ValueError(
+                            f"HotpotQA record {record_id} has an untitled paragraph."
+                        )
+                    sentences = paragraph.get("sentences")
+                    if not isinstance(sentences, list) or not sentences:
+                        raise ValueError(
+                            f"HotpotQA record {record_id} has an empty paragraph."
+                        )
             continue
 
         choices = record.get("choices")
@@ -467,6 +559,69 @@ def score_open_qa_predictions(
     return results, statistics
 
 
+def score_hotpotqa_predictions(
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    token_usages: Sequence[TokenUsage],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Score answer text with the official HotpotQA answer EM and token F1 rules."""
+    if len(records) != len(responses) or len(records) != len(token_usages):
+        raise ValueError("Records, responses, and token usage must have equal lengths.")
+
+    results = []
+    exact_match_total = 0.0
+    precision_total = 0.0
+    recall_total = 0.0
+    f1_total = 0.0
+    missing_tag_count = 0
+    for record, response, token_usage in zip(records, responses, token_usages):
+        extracted_answer = extract_tagged_answer(response)
+        predicted_answer = extracted_answer or ""
+        gold_answer = str(record["answer"])
+        exact_match, precision, recall, f1 = hotpot_answer_scores(
+            predicted_answer,
+            gold_answer,
+        )
+        exact_match_total += exact_match
+        precision_total += precision
+        recall_total += recall
+        f1_total += f1
+        missing_tag_count += int(extracted_answer is None)
+        results.append(
+            {
+                "id": record["id"],
+                "dataset": record.get("dataset"),
+                "task_type": record.get("task_type"),
+                "question": record["question"],
+                "question_type": record.get("question_type"),
+                "level": record.get("level"),
+                "gold_answer": gold_answer,
+                "raw_response": response,
+                "token_usage": dict(token_usage),
+                "extracted_answer": extracted_answer,
+                "predicted_answer": predicted_answer,
+                "answer_exact_match": exact_match,
+                "answer_precision": precision,
+                "answer_recall": recall,
+                "answer_f1": f1,
+            }
+        )
+
+    total = len(records)
+    statistics = {
+        "total": total,
+        "answer_exact_match": exact_match_total / total,
+        "answer_exact_match_percent": 100.0 * exact_match_total / total,
+        "answer_precision": precision_total / total,
+        "answer_recall": recall_total / total,
+        "answer_f1": f1_total / total,
+        "answer_f1_percent": 100.0 * f1_total / total,
+        "missing_answer_tags": missing_tag_count,
+        "token_usage": summarize_token_usage(token_usages),
+    }
+    return results, statistics
+
+
 def score_predictions(
     records: Sequence[dict[str, Any]],
     responses: Sequence[str],
@@ -474,6 +629,8 @@ def score_predictions(
     task_type: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Score model responses with the metric for the selected QA task."""
+    if task_type == "hotpotqa_open_qa":
+        return score_hotpotqa_predictions(records, responses, token_usages)
     if task_type == "open_qa":
         return score_open_qa_predictions(records, responses, token_usages)
     return score_multiple_choice_predictions(records, responses, token_usages)
@@ -575,10 +732,12 @@ def run_qa_test_inference(
     answer_instruction: str,
     enable_thinking: bool,
     default_max_new_tokens: int,
+    default_dataset_path: str | Path = DEFAULT_DATASET_PATH,
 ) -> None:
     """Run one reasoning or non-reasoning QA evaluation."""
     args = parse_args(
         f"Run {mode_name.replace('_', '-')} QA test inference.",
+        default_dataset_path=default_dataset_path,
     )
     validate_answer_processing()
 
@@ -598,7 +757,11 @@ def run_qa_test_inference(
     all_records = read_jsonl(dataset_path)
     records = all_records[args.start : args.end]
     task_type = validate_records(records)
-    if task_type == "open_qa":
+    if task_type == "hotpotqa_open_qa":
+        task_default_instruction = default_instruction
+        resolved_answer_instruction = answer_instruction
+        task_default_max_new_tokens = default_max_new_tokens
+    elif task_type == "open_qa":
         task_default_instruction = (
             OPEN_QA_REASONING_INITIAL_PROMPT
             if enable_thinking
@@ -619,7 +782,23 @@ def run_qa_test_inference(
     if not instruction_prompt:
         raise ValueError("--prompt must not be empty.")
     decoding_parameters = model_default_sampling_parameters(args.model)
-    if task_type == "open_qa":
+    if task_type == "hotpotqa_open_qa":
+        prompts = [
+            build_context_open_qa_prompt(
+                instruction_prompt,
+                resolved_answer_instruction,
+                record["context"],
+                str(record["question"]),
+            )
+            for record in records
+        ]
+        prompt_template = build_context_open_qa_prompt(
+            instruction_prompt,
+            resolved_answer_instruction,
+            [{"title": "{title}", "sentences": ["{context_sentences}"]}],
+            "{question}",
+        )
+    elif task_type == "open_qa":
         prompts = [
             build_open_qa_prompt(
                 instruction_prompt,
@@ -716,7 +895,16 @@ def run_qa_test_inference(
     write_jsonl(run_dir / "predictions.jsonl", results)
     write_json(run_dir / "summary.json", summary)
 
-    if task_type == "open_qa":
+    if task_type == "hotpotqa_open_qa":
+        print(
+            "HotpotQA answer EM: "
+            f"{statistics['answer_exact_match_percent']:.2f}%"
+        )
+        print(
+            "HotpotQA answer F1: "
+            f"{statistics['answer_f1_percent']:.2f}%"
+        )
+    elif task_type == "open_qa":
         print(f"Official answer-set F1: {statistics['macro_f1_percent']:.2f}%")
         print(
             "Normalized answer-set F1: "

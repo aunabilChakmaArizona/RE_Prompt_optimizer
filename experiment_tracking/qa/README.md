@@ -23,12 +23,24 @@ Run completion and optimization success are deliberately tracked separately. A c
 
 ## Scoring and reporting rules
 
-- Raw score is accuracy over the 900-example validation set.
-- Stable score is mean accuracy over three fixed 300-example validation folds minus one population standard deviation.
+- New runs use accuracy over the 1,500-example validation set.
+- Their stable score is mean accuracy over three fixed 500-example validation folds minus one population standard deviation.
+- Existing tracked runs and scores created before this split update used the former 900-example validation set with three 300-example folds and must not be mixed with new results.
 - Improvement is determined by the stable score, but the prompt text must also differ from the initial prompt.
 - Scores in this folder are validation scores, not test scores.
 - Test evaluation remains disabled during prompt selection. Paper test results must come from the separate five-run final-test evaluation.
 - If iteration 5 and iteration 10 contain identical prompt text, they remain separate experimental slots but are marked as duplicates.
+
+## Current 1,500-example reruns
+
+The four archived ETGPO `lambda1+vs1500` runs are recorded at the top of
+`first_stage_lambda1_status.txt`; three improved and Gemma reasoning retained its
+initial prompt. They predate the optimizer-response sanitization change and must be
+rerun before use as current results. The two reasoning RPO cases that previously failed
+on the historical 900-example split are scheduled consistently on the new split in the usual
+model-specific histories: `codes/run_qa_first_stage_qwen.sh` and
+`codes/run_qa_first_stage_gemma.sh`. Completed commands remain commented out with
+their result notes; only the current RPO rerun is active in each file.
 
 ## Required refresh
 

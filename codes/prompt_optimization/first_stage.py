@@ -136,7 +136,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             args.feedback_examples,
         )
         feedback_example_texts = [
-            rpo_feedback_example(record, prediction, index)
+            rpo_feedback_example(record, prediction, index, context.mode)
             for index, (record, prediction) in enumerate(selected, start=1)
         ]
         feedback_meta_prompts = [

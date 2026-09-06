@@ -72,11 +72,13 @@ def rpo_feedback_prompt(
     """Ask the optimizer for feedback about one correct or incorrect QA response."""
     task_description = QA_TASK_DESCRIPTIONS[mode.name]
     if mode.name == "reasoning":
+        instance_description = """You are given one task instance containing the question, choices, ground-truth answer, the LLM's reasoning, its selected answer, and whether that answer was correct or incorrect."""
         analysis_instruction = """Analyze the reasoning in the LLM response and explain how it led to the selected answer.
 - If the answer is correct, explain which reasoning steps, evidence, or cues were useful.
 - If the answer is incorrect, explain which reasoning step, misunderstanding, missing evidence, or heuristic likely caused the error."""
     else:
-        analysis_instruction = """The LLM was asked to answer directly, so its response may not contain explicit reasoning. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
+        instance_description = """You are given one task instance containing the question, choices, ground-truth answer, the LLM's selected answer, and whether that answer was correct or incorrect. No reasoning trace is provided."""
+        analysis_instruction = """The LLM was asked to answer directly, and no explicit reasoning is provided. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
 - If the answer is correct, explain what likely supported the decision.
 - If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error."""
 
@@ -84,7 +86,7 @@ def rpo_feedback_prompt(
 
 {task_description}
 
-You are given one task instance containing the question, choices, ground-truth answer, the LLM's response, and whether its selected answer was correct or incorrect.
+{instance_description}
 
 The ground-truth answer and outcome are provided as contextual information. Your task is to explain the most likely reasoning or decision process that led to the LLM's answer, not to solve the question again.
 
@@ -123,6 +125,7 @@ Using this prompt, another LLM was tested on {len(feedback_examples)} task insta
 Carefully read the inputs, outputs, and feedback to identify problems with the current prompt.
 Your task is to generate a revised version of the prompt that helps the other LLM generalize better when using it.
 You may modify, add to, or remove any instructions or content in the current prompt to improve prediction and generalization.
+Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, question or choice placeholders, or a model-response template; these are handled separately from the prompt being optimized.
 
 Please reason through the problem, but output only the revised prompt inside <prompt> and </prompt>."""
 
@@ -289,7 +292,7 @@ def etgpo_non_reasoning_feedback_prompt(error_example: str) -> str:
 
 {QA_TASK_DESCRIPTIONS["non_reasoning"]}
 
-You are given one task instance containing the question, choices, ground-truth answer, the LLM's response, and its selected answer.
+You are given one task instance containing the question, choices, ground-truth answer, and the LLM's selected answer. No reasoning trace or raw model response is provided.
 
 The ground-truth answer is provided only as contextual information. The feedback model's task is to explain the most likely decision process that led to the incorrect answer, not merely to state that the prediction was wrong. Because the LLM was asked to answer directly, its response may not contain explicit reasoning. Infer the misunderstanding, missing evidence, misleading cue, or heuristic that most likely caused the error.
 
@@ -460,6 +463,7 @@ Generate SHORT, CONCISE guidance. Each item should be 1-2 sentences.
 - Keep the guidance task-general. Do not copy question-specific entities, answer choices, scientific terms, or isolated facts from the categories.
 - Do not invent new WRONG/CORRECT question-answer examples.
 - Preserve this task behavior: {QA_TASK_DESCRIPTIONS[mode.name]}
+- Do not add answer-format instructions, answer tags, question or choice placeholders, or a model-response template; these are handled separately from the prompt being optimized.
 {mode_constraint}
 
 ## Output Format

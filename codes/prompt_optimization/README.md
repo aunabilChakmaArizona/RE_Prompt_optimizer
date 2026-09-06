@@ -35,7 +35,7 @@ RPO, EvoPrompt-DE, ETGPO, and LPO support vLLM. GreaTer, GreaTer-TG, and all Gra
 
 Install the separate pinned environment from `requirements_vllm.txt`. Offline vLLM uses one visible GPU per process, so the target and optimizer device arguments must match in a vLLM run.
 
-Validation uses the fixed 900-example split as three folds of 300 examples. Prompt selection uses `mean fold accuracy - lambda * population standard deviation`, with `--validation-std-penalty 1.0` by default. Setting lambda to zero gives ordinary accuracy because the three folds have equal size. A second-stage candidate is retained only if its stable validation score strictly exceeds its first-stage source prompt; otherwise, the first-stage prompt is retained. Raw accuracy, each fold accuracy, the fold mean and standard deviation, and the stable score are all saved.
+Validation uses the fixed 1,500-example split as three folds of 500 examples. Prompt selection uses `mean fold accuracy - lambda * population standard deviation`, with `--validation-std-penalty 1.0` by default. Setting lambda to zero gives ordinary accuracy because the three folds have equal size. A second-stage candidate is retained only if its stable validation score strictly exceeds its first-stage source prompt; otherwise, the first-stage prompt is retained. Raw accuracy, each fold accuracy, the fold mean and standard deviation, and the stable score are all saved.
 
 Optimizer-model generations default to `--optimizer-max-new-tokens 10000`, matching the relation-extraction experiment setting.
 

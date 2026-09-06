@@ -393,7 +393,6 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         gradient_analysis,
         int(region["peak_token_index"]),
         proposal_records,
-        mode=context.mode,
         model=model,
         tokenizer=tokenizer,
         top_k=args.proposal_top_k,
