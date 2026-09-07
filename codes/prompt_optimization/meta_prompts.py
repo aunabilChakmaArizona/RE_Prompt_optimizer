@@ -21,7 +21,22 @@ QA_TASK_DESCRIPTIONS = {
 The task requires reasoning carefully and then outputting the correct option label.""",
     "non_reasoning": """A multiple-choice question contains several labeled options, with one best answer.
 The task requires directly outputting the correct option label without reasoning or explanation.""",
+    "hotpotqa_reasoning": """A context-based question may require combining information from multiple passages.
+The task requires reasoning carefully over the provided context and then outputting the correct short answer.""",
 }
+
+
+def qa_task_description(mode: QAMode) -> str:
+    """Return task wording for one dataset and reasoning mode."""
+    key = f"{mode.task_name}_{mode.name}"
+    return QA_TASK_DESCRIPTIONS.get(key, QA_TASK_DESCRIPTIONS[mode.name])
+
+
+def qa_task_label(mode: QAMode) -> str:
+    """Return the task name used in optimizer-model role instructions."""
+    if mode.task_name == "hotpotqa":
+        return "context-based open question-answering"
+    return "multiple-choice question-answering"
 
 
 def unique_nonempty(values: Sequence[str]) -> list[str]:
@@ -70,9 +85,11 @@ def rpo_feedback_prompt(
     example: str,
 ) -> str:
     """Ask the optimizer for feedback about one correct or incorrect QA response."""
-    task_description = QA_TASK_DESCRIPTIONS[mode.name]
+    task_description = qa_task_description(mode)
+    task_label = qa_task_label(mode)
     if mode.name == "reasoning":
-        instance_description = """You are given one task instance containing the question, choices, ground-truth answer, the LLM's reasoning, its selected answer, and whether that answer was correct or incorrect."""
+        input_fields = "context, question" if mode.task_name == "hotpotqa" else "question, choices"
+        instance_description = f"""You are given one task instance containing the {input_fields}, ground-truth answer, the LLM's reasoning, its selected answer, and whether that answer was correct or incorrect."""
         analysis_instruction = """Analyze the reasoning in the LLM response and explain how it led to the selected answer.
 - If the answer is correct, explain which reasoning steps, evidence, or cues were useful.
 - If the answer is incorrect, explain which reasoning step, misunderstanding, missing evidence, or heuristic likely caused the error."""
@@ -82,7 +99,7 @@ def rpo_feedback_prompt(
 - If the answer is correct, explain what likely supported the decision.
 - If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error."""
 
-    return f"""You are an expert feedback model for a multiple-choice question-answering task. You specialize in explaining why a question-answering system arrived at a particular answer, for both correct and incorrect predictions.
+    return f"""You are an expert feedback model for a {task_label} task. You specialize in explaining why a question-answering system arrived at a particular answer, for both correct and incorrect predictions.
 
 {task_description}
 
@@ -106,9 +123,10 @@ def rpo_rewrite_prompt(
     mode: QAMode,
 ) -> str:
     """Ask RPO to revise one QA instruction from separate example feedback."""
-    task_description = QA_TASK_DESCRIPTIONS[mode.name]
+    task_description = qa_task_description(mode)
+    task_label = qa_task_label(mode)
 
-    return f"""You are an expert prompt generator for a multiple-choice question-answering task. You specialize in revising and improving prompts based on feedback from previous model predictions.
+    return f"""You are an expert prompt generator for a {task_label} task. You specialize in revising and improving prompts based on feedback from previous model predictions.
 
 {task_description}
 
@@ -125,7 +143,7 @@ Using this prompt, another LLM was tested on {len(feedback_examples)} task insta
 Carefully read the inputs, outputs, and feedback to identify problems with the current prompt.
 Your task is to generate a revised version of the prompt that helps the other LLM generalize better when using it.
 You may modify, add to, or remove any instructions or content in the current prompt to improve prediction and generalization.
-Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, question or choice placeholders, or a model-response template; these are handled separately from the prompt being optimized.
+Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, input placeholders, or a model-response template; these are handled separately from the prompt being optimized.
 
 Please reason through the problem, but output only the revised prompt inside <prompt> and </prompt>."""
 
@@ -192,6 +210,37 @@ New Prompt: Focus on the question's exact requirement, use relevant knowledge to
 4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
 Basic Prompt: Answer the following multiple-choice question. Select the best answer directly without reasoning or explanation.
 Final Prompt: <prompt>Focus on exactly what the question asks, use relevant knowledge to evaluate the available choices, and select the single best-supported answer directly without explanation.</prompt>""",
+    "hotpotqa_reasoning": """Please follow the instruction step-by-step to generate a better prompt.
+1. Identify the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the context and question carefully, reason step by step, and provide the best-supported answer.
+Prompt 2: Identify what the question asks, connect relevant evidence across the passages, and verify the final answer against the context.
+2. Randomly mutate the different parts.
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts from step 2, and generate a new prompt.
+Prompt 3: Solve the question systematically, use the supplied context as evidence, and check that the answer directly addresses the question.
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: You are given context passages and a question. Think step by step carefully and provide the best answer using the context.
+
+1. Identifying the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the context and question carefully, reason step by step, and provide the best-supported answer.
+Prompt 2: Identify what the question asks, connect relevant evidence across the passages, and verify the final answer against the context.
+Different parts:
+"read the context and question carefully" vs "identify what the question asks"
+"reason step by step" vs "connect relevant evidence across the passages"
+"provide the best-supported answer" vs "verify the final answer against the context"
+
+2. Randomly mutate the different parts:
+"read the context and question carefully" -> "determine the question's exact requirement"
+"reason step by step" -> "build a connected evidence chain"
+"connect relevant evidence across the passages" -> "combine only relevant passage details"
+"verify the final answer against the context" -> "confirm that the answer is supported by the supplied passages"
+
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts in step 2 and generate a new prompt:
+Prompt 3: Solve the question systematically, use the supplied context as evidence, and check that the answer directly addresses the question.
+New Prompt: Determine the question's exact requirement, build a connected evidence chain from relevant passage details, and confirm that the answer directly addresses the question and is supported by the context.
+
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: You are given context passages and a question. Think step by step carefully and provide the best answer using the context.
+Final Prompt: <prompt>Determine exactly what the question asks, reason step by step by connecting relevant evidence across the supplied passages, and provide the best answer supported by the context.</prompt>""",
 }
 
 
@@ -203,7 +252,12 @@ def evoprompt_de_prompt(
     mode: QAMode,
 ) -> str:
     """Construct the worked-example DE prompt used to mutate one population member."""
-    return f"""{EVOPROMPT_DE_EXAMPLES[mode.name]}
+    example_key = f"{mode.task_name}_{mode.name}"
+    worked_example = EVOPROMPT_DE_EXAMPLES.get(
+        example_key,
+        EVOPROMPT_DE_EXAMPLES[mode.name],
+    )
+    return f"""{worked_example}
 
 Please follow the instruction step-by-step to generate a better prompt.
 1. Identify the different parts between Prompt 1 and Prompt 2:
@@ -226,7 +280,8 @@ def etgpo_first_taxonomy_prompt(
     if mode.name == "reasoning":
         analysis_steps = """1. Find the EARLIEST point in the response's reasoning where it went wrong.
 2. Explain what specifically went wrong.
-3. Explain why that error led to the wrong selected answer."""
+3. Explain why that error led to the wrong selected answer.
+4. If the reasoning is correct, check whether the final selected answer uses the correct concise form and matches the ground-truth answer; otherwise, classify it as a final-answer precision or formatting error."""
         reasoning_source_note = ""
     else:
         analysis_steps = """1. Use the post-hoc feedback to identify the earliest likely decision error, missing evidence, or misleading cue.
@@ -259,7 +314,7 @@ def etgpo_first_taxonomy_prompt(
             }
         ],
     }
-    return f"""You are an expert at analyzing why language models fail on multiple-choice question answering.
+    return f"""You are an expert at analyzing why language models fail on {qa_task_label(mode)}.
 
 {chr(10).join(error_examples)}
 
@@ -277,6 +332,8 @@ Create issue categories that capture each type of error. Categories should be ge
 Identify reusable reasoning or decision errors rather than question-specific topics. Do not create categories based only on particular entities, answer choices, scientific terms, or isolated facts. Group failures that share the same underlying error even when their question topics differ.
 
 IMPORTANT: Each category must be SELF-CONTAINED and understandable by someone who has NOT seen the original problems.
+
+Assign every failure to exactly one meaningful category. Do not use "None", "Correct Answer", "Uncategorized", "Unknown", or "Other" as a category.
 
 ## Output Format
 
@@ -361,7 +418,7 @@ def etgpo_update_taxonomy_prompt(
             }
         ],
     }
-    return f"""You are an expert at analyzing why language models fail on multiple-choice question answering.
+    return f"""You are an expert at analyzing why language models fail on {qa_task_label(mode)}.
 
 ## Existing Issue Categories
 
@@ -378,6 +435,10 @@ For every new failure, decide whether its root cause fits an existing category. 
 {reasoning_source_note}
 
 Identify reusable reasoning or decision errors rather than question-specific topics. Do not create categories based only on particular entities, answer choices, scientific terms, or isolated facts. Group failures that share the same underlying error even when their question topics differ.
+
+If the reasoning is correct, check whether the final selected answer uses the correct concise form and matches the ground-truth answer; otherwise, classify it as a final-answer precision or formatting error.
+
+Assign every failure to exactly one meaningful category. Reuse the closest existing category when it captures the underlying error; otherwise, create a generalizable new category. Do not use "None", "Correct Answer", "Uncategorized", "Unknown", or "Other" as a category.
 
 ## Output Format
 
@@ -441,7 +502,7 @@ def etgpo_guidance_prompt(
         "preamble": "1-2 sentence introduction",
         "full_prompt": "Complete enhanced prompt starting with base instruction",
     }
-    return f"""You are an expert at improving language model performance on multiple-choice question answering.
+    return f"""You are an expert at improving language model performance on {qa_task_label(mode)}.
 
 I have identified the following error categories from model failures. Generate guidance to help avoid these errors.
 
@@ -460,10 +521,11 @@ Generate SHORT, CONCISE guidance. Each item should be 1-2 sentences.
 ## Critical Constraints
 
 - The goal is ACCURACY, not caution. Never generate guidance that encourages the model to refuse, abstain, or say "not specified" when an answer can be reasonably provided.
-- Keep the guidance task-general. Do not copy question-specific entities, answer choices, scientific terms, or isolated facts from the categories.
+- Keep the guidance task-general. Do not copy question-specific entities, passage details, answer choices, scientific terms, or isolated facts from the categories.
 - Do not invent new WRONG/CORRECT question-answer examples.
-- Preserve this task behavior: {QA_TASK_DESCRIPTIONS[mode.name]}
-- Do not add answer-format instructions, answer tags, question or choice placeholders, or a model-response template; these are handled separately from the prompt being optimized.
+- Preserve this task behavior: {qa_task_description(mode)}
+- General guidance may ask for a concise and precise final answer, but do not add answer tags, input placeholders, or a model-response template; these are handled separately from the prompt being optimized.
+- Do not mention the taxonomy, error analysis, ground-truth answers, or evaluation metrics in the completed prompt.
 {mode_constraint}
 
 ## Output Format
@@ -489,7 +551,7 @@ def lpo_location_prompt(
 ) -> str:
     """Adapt the shared LPO location-tagging body to one QA mode."""
     qa_prompt = "\n\n".join(
-        [QA_TASK_DESCRIPTIONS[mode.name], LPO_LOCATION_TAGGING_BODY_V1]
+        [qa_task_description(mode), LPO_LOCATION_TAGGING_BODY_V1]
     )
     return (
         qa_prompt
@@ -507,7 +569,7 @@ def lpo_rewrite_prompt(
 ) -> str:
     """Adapt the shared LPO local-rewrite body to one QA mode."""
     qa_prompt = "\n\n".join(
-        [QA_TASK_DESCRIPTIONS[mode.name], LPO_LOCAL_REWRITE_BODY_V1]
+        [qa_task_description(mode), LPO_LOCAL_REWRITE_BODY_V1]
     )
     return (
         qa_prompt

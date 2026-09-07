@@ -1,4 +1,4 @@
-"""Run first-stage RPO on reasoning or non-reasoning OpenBookQA prompts."""
+"""Run first-stage RPO on a supported QA task."""
 
 from __future__ import annotations
 

@@ -74,7 +74,10 @@ class QAEvaluator:
             for record in records
         ]
         subset_id = record_set_id(records)
-        seed_material = f"{self.seed}\n{self.mode.name}\n{split_name}\n{subset_id}"
+        seed_material = (
+            f"{self.seed}\n{self.mode.task_name}\n{self.mode.name}\n"
+            f"{split_name}\n{subset_id}"
+        )
         evaluation_seed = self.seed + int(
             hashlib.sha256(seed_material.encode("utf-8")).hexdigest()[:8],
             16,
@@ -94,11 +97,12 @@ class QAEvaluator:
         )
         predictions = []
         for record, response, token_usage in zip(records, responses, token_usages):
-            prediction = score_qa_response(record, response)
+            prediction = score_qa_response(record, response, self.mode)
             prediction.update(
                 {
                     "question": record["question"],
-                    "choices": record["choices"],
+                    "choices": record.get("choices"),
+                    "context": record.get("context"),
                     "answer_text": record.get("answer_text"),
                     "token_usage": dict(token_usage),
                 }

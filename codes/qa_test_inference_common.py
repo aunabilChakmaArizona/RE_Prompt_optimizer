@@ -283,7 +283,7 @@ def normalize_hotpot_answer(value: str) -> str:
     return " ".join(without_articles.split())
 
 
-def hotpot_answer_scores(
+def hotpot_answer_scores( #todo: check if this f1 and exact match formula is correct or not
     prediction: str,
     gold_answer: str,
 ) -> tuple[float, float, float, float]:

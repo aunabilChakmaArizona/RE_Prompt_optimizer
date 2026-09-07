@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# Run from the repository root. Each active command is a standalone experiment.
-# Launch this entire file in the background from the repository root:
-# nohup bash codes/run_qa_first_stage_gemma.sh > codes/nohup_outs/run_qa_first_stage_gemma.log 2>&1 &
+# Run from the repository root. This file currently has no active command.
 
 # Previous lambda-1 runs are preserved below but commented out.
 
@@ -141,19 +139,79 @@
 #   --validation-std-penalty 1.0 \
 #   --overwrite
 
-# ACTIVE: Gemma reasoning RPO previously retained the initial prompt; rerun with
-# lambda=1 on the expanded 1,500-question validation set.
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
-  --code openbookqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500_ans_inst \
-  --qa-mode reasoning \
-  --model google/gemma-3-4b-it \
-  --optimizer-model google/gemma-3-12b-it \
-  --device cuda:0 \
-  --optimizer-device cuda:0 \
-  --backend vllm \
-  --gpu-memory-utilization 0.90 \
-  --vllm-max-model-len 32768 \
-  --vllm-disable-images \
-  --optimizer-max-new-tokens 10000 \
-  --validation-std-penalty 1.0 \
-  --overwrite
+# PREVIOUS RUN: Gemma reasoning RPO on OpenBookQA with expanded validation.
+# CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
+#   --code openbookqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500_ans_inst \
+#   --qa-mode reasoning \
+#   --model google/gemma-3-4b-it \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --optimizer-max-new-tokens 10000 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# COMPLETED HOTPOTQA RUNS: retained as history; no Gemma command is active now.
+
+# CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_rpo.py \
+#   --code hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 \
+#   --qa-task hotpotqa \
+#   --qa-mode reasoning \
+#   --train-path data/processed/hotpotqa/train.jsonl \
+#   --validation-path data/processed/hotpotqa/validation.jsonl \
+#   --model google/gemma-3-4b-it \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --target-max-new-tokens 4096 \
+#   --optimizer-max-new-tokens 10000 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_evoprompt.py \
+#   --code hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 \
+#   --qa-task hotpotqa \
+#   --qa-mode reasoning \
+#   --train-path data/processed/hotpotqa/train.jsonl \
+#   --validation-path data/processed/hotpotqa/validation.jsonl \
+#   --model google/gemma-3-4b-it \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --target-max-new-tokens 4096 \
+#   --optimizer-max-new-tokens 10000 \
+#   --duplicate-retries 3 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_etgpo.py \
+#   --code hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 \
+#   --qa-task hotpotqa \
+#   --qa-mode reasoning \
+#   --train-path data/processed/hotpotqa/train.jsonl \
+#   --validation-path data/processed/hotpotqa/validation.jsonl \
+#   --model google/gemma-3-4b-it \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --target-max-new-tokens 4096 \
+#   --optimizer-max-new-tokens 10000 \
+#   --feedback-max-new-tokens 10000 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite

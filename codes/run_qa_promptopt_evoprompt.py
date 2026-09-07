@@ -1,4 +1,4 @@
-"""Run first-stage EvoPrompt-DE on OpenBookQA instruction prompts."""
+"""Run first-stage EvoPrompt-DE on a supported QA task."""
 
 from __future__ import annotations
 

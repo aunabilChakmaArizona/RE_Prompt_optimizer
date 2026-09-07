@@ -2,7 +2,7 @@
 
 # Run from the repository root. Each active command is a standalone experiment.
 # Launch this entire file in the background from the repository root:
-# nohup bash codes/run_qa_first_stage_qwen.sh > codes/nohup_outs/run_qa_first_stage_qwen.log 2>&1 &
+# nohup bash codes/run_qa_first_stage_qwen.sh > codes/nohup_outs/qa_hotpot_etgpo_taxonomy_fixed_qwen.log 2>&1 &
 
 # Previous lambda-1 runs are preserved below but commented out.
 
@@ -125,20 +125,91 @@
 #   --validation-std-penalty 1.0 \
 #   --overwrite
 
-# ACTIVE: Qwen reasoning RPO previously retained the initial prompt; rerun with
-# lambda=1 on the expanded 1,500-question validation set.
-CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_rpo.py \
-  --code openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500 \
+# PREVIOUS RUN: Qwen reasoning RPO on OpenBookQA with expanded validation.
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_rpo.py \
+#   --code openbookqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500 \
+#   --qa-mode reasoning \
+#   --model Qwen/Qwen3-4B \
+#   --optimizer-model Qwen/Qwen3-14B \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --optimizer-max-new-tokens 10000 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# COMPLETED HOTPOTQA RUNS: retained as history; only the corrected ETGPO rerun below is active.
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_rpo.py \
+#   --code hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500 \
+#   --qa-task hotpotqa \
+#   --qa-mode reasoning \
+#   --train-path data/processed/hotpotqa/train.jsonl \
+#   --validation-path data/processed/hotpotqa/validation.jsonl \
+#   --model Qwen/Qwen3-4B \
+#   --optimizer-model Qwen/Qwen3-14B \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --target-max-new-tokens 4096 \
+#   --optimizer-max-new-tokens 10000 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_evoprompt.py \
+#   --code hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500 \
+#   --qa-task hotpotqa \
+#   --qa-mode reasoning \
+#   --train-path data/processed/hotpotqa/train.jsonl \
+#   --validation-path data/processed/hotpotqa/validation.jsonl \
+#   --model Qwen/Qwen3-4B \
+#   --optimizer-model Qwen/Qwen3-14B \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --target-max-new-tokens 4096 \
+#   --optimizer-max-new-tokens 10000 \
+#   --duplicate-retries 3 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_etgpo.py \
+#   --code hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500 \
+#   --qa-task hotpotqa \
+#   --qa-mode reasoning \
+#   --train-path data/processed/hotpotqa/train.jsonl \
+#   --validation-path data/processed/hotpotqa/validation.jsonl \
+#   --model Qwen/Qwen3-4B \
+#   --optimizer-model Qwen/Qwen3-14B \
+#   --device cuda:0 \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --target-max-new-tokens 4096 \
+#   --optimizer-max-new-tokens 10000 \
+#   --feedback-max-new-tokens 10000 \
+#   --validation-std-penalty 1.0 \
+#   --overwrite
+
+# ACTIVE: corrected taxonomy assignment and final-answer precision handling.
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_etgpo.py \
+  --code hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500_taxonomy_fixed \
+  --qa-task hotpotqa \
   --qa-mode reasoning \
+  --train-path data/processed/hotpotqa/train.jsonl \
+  --validation-path data/processed/hotpotqa/validation.jsonl \
   --model Qwen/Qwen3-4B \
   --optimizer-model Qwen/Qwen3-14B \
   --device cuda:0 \
   --optimizer-device cuda:0 \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
+  --target-max-new-tokens 4096 \
   --optimizer-max-new-tokens 10000 \
+  --feedback-max-new-tokens 10000 \
+  --taxonomy-retries 2 \
   --validation-std-penalty 1.0 \
   --overwrite
-
-
-  

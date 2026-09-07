@@ -76,4 +76,38 @@ QA_EVOPROMPT_SEEDS = {
             ),
         },
     ],
+    "hotpotqa_reasoning": [
+        {
+            "label": "human_1",
+            "prompt": (
+                "Read the provided context and question carefully. Think through the "
+                "evidence and give the best-supported answer."
+            ),
+        },
+        {
+            "label": "human_2",
+            "prompt": (
+                "You are given several context passages and a question. First determine "
+                "exactly what the question asks, then find and connect the relevant "
+                "details across the passages. Reason carefully and provide a concise "
+                "answer that is directly supported by the context."
+            ),
+        },
+        {
+            "label": "automatic_1",
+            "prompt": (
+                "Use the supplied passages to answer the question. Combine relevant "
+                "evidence when needed and return the most accurate answer."
+            ),
+        },
+        {
+            "label": "automatic_2",
+            "prompt": (
+                "Carefully analyze the question and the provided passages. Locate the "
+                "necessary evidence, resolve references between passages, and connect "
+                "the facts in a logical sequence. Check that the final answer directly "
+                "addresses the question and is supported by the context."
+            ),
+        },
+    ],
 }

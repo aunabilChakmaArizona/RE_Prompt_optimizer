@@ -14,6 +14,8 @@ from prompt_optimization.models import ModelPool, seed_everything
 from prompt_optimization.qa_task import (
     DEFAULT_TRAIN_PATH,
     DEFAULT_VALIDATION_PATH,
+    HOTPOTQA_TRAIN_PATH,
+    HOTPOTQA_VALIDATION_PATH,
     QAMode,
     load_qa_records,
     resolve_mode,
@@ -54,10 +56,16 @@ def add_shared_arguments(
     """Add dataset, model, prompt, decoding, and output arguments."""
     parser.add_argument("--code", required=True, help="Unique identity for this run.")
     parser.add_argument(
+        "--qa-task",
+        choices=("openbookqa", "hotpotqa"),
+        default="openbookqa",
+        help="QA task; OpenBookQA remains the backward-compatible default.",
+    )
+    parser.add_argument(
         "--qa-mode",
         choices=("reasoning", "non_reasoning"),
         required=True,
-        help="Whether the target model reasons before returning the option label.",
+        help="Whether the target model reasons before returning its answer.",
     )
     parser.add_argument("--model", required=True, help="Target Qwen3 or Gemma3 model.")
     parser.add_argument(
@@ -174,7 +182,7 @@ def build_context(
 ) -> QAOptimizationContext:
     """Load one QA experiment and initialize its shared runtime services."""
     started_at = time.monotonic()
-    mode = resolve_mode(args.qa_mode)
+    mode = resolve_mode(args.qa_mode, args.qa_task)
     max_new_tokens = args.target_max_new_tokens or mode.default_max_new_tokens
     if max_new_tokens <= 0:
         raise ValueError("--target-max-new-tokens must be positive.")
@@ -200,8 +208,15 @@ def build_context(
         )
     seed_everything(args.seed)
     rng = random.Random(args.seed)
-    train_records = load_qa_records(args.train_path)
-    validation_records = load_qa_records(args.validation_path)
+    train_path = args.train_path
+    validation_path = args.validation_path
+    if args.qa_task == "hotpotqa":
+        if train_path == str(DEFAULT_TRAIN_PATH):
+            train_path = str(HOTPOTQA_TRAIN_PATH)
+        if validation_path == str(DEFAULT_VALIDATION_PATH):
+            validation_path = str(HOTPOTQA_VALIDATION_PATH)
+    train_records = load_qa_records(train_path, args.qa_task)
+    validation_records = load_qa_records(validation_path, args.qa_task)
     initial_prompt = load_initial_prompt(
         mode,
         args.initial_prompt,
@@ -255,6 +270,8 @@ def build_context(
         run_dir / "config.json",
         {
             **vars(args),
+            "resolved_train_path": train_path,
+            "resolved_validation_path": validation_path,
             "optimizer_name": optimizer_name,
             "qa_mode_config": asdict(mode),
             "resolved_target_max_new_tokens": max_new_tokens,
@@ -267,6 +284,7 @@ def build_context(
     logger.event(
         "run_started",
         optimizer=optimizer_name,
+        qa_task=args.qa_task,
         qa_mode=args.qa_mode,
         backend=args.backend,
         initial_prompt=initial_prompt,

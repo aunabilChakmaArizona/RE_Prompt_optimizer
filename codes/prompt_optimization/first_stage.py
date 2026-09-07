@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 import time
 from typing import Any, Sequence
 
@@ -43,6 +44,17 @@ from prompt_optimization.qa_task import (
     sample_records,
 )
 from prompt_optimization.run_io import save_json, save_text
+
+
+_PROHIBITED_ETGPO_CATEGORIES = {
+    "none",
+    "none correct answer",
+    "correct answer",
+    "uncategorized",
+    "uncategorized model error",
+    "unknown",
+    "other",
+}
 
 
 def _softmax_parent(
@@ -277,7 +289,11 @@ def _build_evoprompt_population(
     population_size: int,
 ) -> list[str]:
     """Load the fixed five-prompt EvoPrompt population for one QA mode."""
-    fixed_seeds = QA_EVOPROMPT_SEEDS[context.mode.name]
+    seed_key = f"{context.mode.task_name}_{context.mode.name}"
+    fixed_seeds = QA_EVOPROMPT_SEEDS.get(
+        seed_key,
+        QA_EVOPROMPT_SEEDS[context.mode.name],
+    )
     population_records = [
         {"label": "source_prompt", "prompt": context.initial_prompt},
         *fixed_seeds,
@@ -582,6 +598,16 @@ def run_evoprompt_de(context: QAOptimizationContext, args) -> dict[str, Any]:
     )
 
 
+def _normalized_taxonomy_category(value: Any) -> str:
+    """Normalize an ETGPO category name for validation and matching."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).split())
+
+
+def _is_prohibited_taxonomy_category(value: Any) -> bool:
+    """Return whether an ETGPO category name is an uninformative fallback."""
+    return _normalized_taxonomy_category(value) in _PROHIBITED_ETGPO_CATEGORIES
+
+
 def _add_taxonomy_categories(
     taxonomy: Sequence[dict[str, Any]],
     additions: Sequence[dict[str, Any]],
@@ -603,7 +629,7 @@ def _add_taxonomy_categories(
         name = str(
             addition.get("category_name", addition.get("name", ""))
         ).strip()
-        if not name:
+        if not name or _is_prohibited_taxonomy_category(name):
             continue
         key = name.casefold()
         if key not in by_name:
@@ -635,6 +661,72 @@ def _resolve_failure_number(value: Any, batch_size: int) -> int | None:
     return number if 1 <= number <= batch_size else None
 
 
+def _taxonomy_response_errors(
+    parsed: dict[str, Any],
+    taxonomy: Sequence[dict[str, Any]],
+    category_key: str,
+    batch_size: int,
+) -> list[str]:
+    """Describe missing or invalid assignments in one ETGPO taxonomy response."""
+    errors: list[str] = []
+    additions = parsed.get(category_key, [])
+    if not isinstance(additions, list):
+        additions = []
+        errors.append(f'"{category_key}" must be a list')
+    valid_additions = [item for item in additions if isinstance(item, dict)]
+    known_names = {
+        _normalized_taxonomy_category(category.get("category_name", ""))
+        for category in [*taxonomy, *valid_additions]
+        if category.get("category_name")
+        and not _is_prohibited_taxonomy_category(category.get("category_name"))
+    }
+    assignments = parsed.get("failure_assignments", [])
+    if not isinstance(assignments, list):
+        assignments = []
+        errors.append('"failure_assignments" must be a list')
+
+    counts = {failure_id: 0 for failure_id in range(1, batch_size + 1)}
+    for assignment in assignments:
+        if not isinstance(assignment, dict):
+            errors.append("every failure assignment must be a JSON object")
+            continue
+        failure_id = _resolve_failure_number(assignment.get("failure_id"), batch_size)
+        if failure_id is None:
+            errors.append(f"invalid failure_id: {assignment.get('failure_id')!r}")
+            continue
+        counts[failure_id] += 1
+        category_name = str(assignment.get("category_name", "")).strip()
+        if not category_name or _is_prohibited_taxonomy_category(category_name):
+            errors.append(
+                f"failure {failure_id} has a missing or prohibited category"
+            )
+        elif _normalized_taxonomy_category(category_name) not in known_names:
+            errors.append(
+                f"failure {failure_id} refers to undeclared category {category_name!r}"
+            )
+    for failure_id, count in counts.items():
+        if count == 0:
+            errors.append(f"failure {failure_id} is missing an assignment")
+        elif count > 1:
+            errors.append(f"failure {failure_id} has {count} assignments")
+    return errors
+
+
+def _taxonomy_retry_prompt(meta_prompt: str, errors: Sequence[str]) -> str:
+    """Append concise correction instructions for an invalid taxonomy response."""
+    error_lines = "\n".join(f"- {error}" for error in errors)
+    return f"""{meta_prompt}
+
+## Correction Required
+
+The previous response was incomplete or invalid:
+{error_lines}
+
+Return the complete JSON object again. Assign every listed failure exactly once to
+a meaningful existing or newly declared generalizable category. Do not use "None",
+"Correct Answer", "Uncategorized", "Unknown", or "Other"."""
+
+
 def _record_taxonomy_assignments(
     taxonomy: Sequence[dict[str, Any]],
     prior_assignments: Sequence[dict[str, Any]],
@@ -657,29 +749,19 @@ def _record_taxonomy_assignments(
             assignment_by_failure[failure_number] = assignment
 
     for failure_number, (record, _) in enumerate(batch, start=1):
-        raw_assignment = assignment_by_failure.get(failure_number, {})
+        raw_assignment = assignment_by_failure.get(failure_number)
+        if raw_assignment is None:
+            continue
         category_name = str(raw_assignment.get("category_name", "")).strip()
-        if not category_name:
-            category_name = "Uncategorized model error"
-        updated_taxonomy = _add_taxonomy_categories(
-            updated_taxonomy,
-            [
-                {
-                    "category_name": category_name,
-                    "summary": "A failure that the taxonomy response did not classify.",
-                    "description": (
-                        "The model selected an incorrect answer, but the taxonomy "
-                        "response did not provide a usable category assignment."
-                    ),
-                    "error_type": "unclassified error",
-                }
-            ],
-        )
+        if not category_name or _is_prohibited_taxonomy_category(category_name):
+            continue
         category_by_name = {
-            str(category["category_name"]).strip().casefold(): category
+            _normalized_taxonomy_category(category["category_name"]): category
             for category in updated_taxonomy
         }
-        category = category_by_name[category_name.casefold()]
+        category = category_by_name.get(_normalized_taxonomy_category(category_name))
+        if category is None:
+            continue
         canonical_name = str(category["category_name"])
         problem_id = str(record["id"])
         category["trace_count"] = int(category.get("trace_count", 0)) + 1
@@ -709,7 +791,11 @@ def _select_taxonomy_categories(
 ) -> tuple[list[dict[str, Any]], float]:
     """Select frequent categories until the requested failure coverage is reached."""
     ranked = sorted(
-        taxonomy,
+        [
+            category
+            for category in taxonomy
+            if int(category.get("trace_count", 0)) > 0
+        ],
         key=lambda category: (
             -int(category.get("trace_count", 0)),
             str(category.get("category_name", "")).casefold(),
@@ -897,6 +983,7 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     ]
     taxonomy: list[dict[str, Any]] = []
     assignments: list[dict[str, Any]] = []
+    unresolved_failures: list[dict[str, Any]] = []
     processed = 0
     batch_index = 0
     total_batches = math.ceil(len(errors) / args.error_batch_size) if errors else 0
@@ -929,13 +1016,61 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                 examples,
                 context.mode,
             )
-        raw_output = generate_optimizer_texts(
-            context,
-            [meta_prompt],
-            log_label="qa_etgpo_taxonomy",
-        )[0]
-        parsed = extract_json_object(raw_output) or {}
         category_key = "categories" if batch_index == 1 else "new_categories"
+        taxonomy_attempts: list[dict[str, Any]] = []
+        attempt_prompt = meta_prompt
+        raw_output = ""
+        parsed: dict[str, Any] = {}
+        validation_errors: list[str] = []
+        for attempt in range(args.taxonomy_retries + 1):
+            raw_output = generate_optimizer_texts(
+                context,
+                [attempt_prompt],
+                log_label=(
+                    "qa_etgpo_taxonomy"
+                    if attempt == 0
+                    else f"qa_etgpo_taxonomy_retry_{attempt}"
+                ),
+            )[0]
+            parsed_output = extract_json_object(raw_output)
+            parsed = parsed_output if isinstance(parsed_output, dict) else {}
+            validation_errors = _taxonomy_response_errors(
+                parsed,
+                taxonomy,
+                category_key,
+                len(batch),
+            )
+            taxonomy_attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "prompt": attempt_prompt,
+                    "raw_output": raw_output,
+                    "parsed_output": parsed,
+                    "validation_errors": validation_errors,
+                }
+            )
+            if not validation_errors:
+                break
+            if attempt < args.taxonomy_retries:
+                attempt_prompt = _taxonomy_retry_prompt(meta_prompt, validation_errors)
+
+        if validation_errors:
+            best_attempt = min(
+                taxonomy_attempts,
+                key=lambda item: (
+                    len(item["validation_errors"]),
+                    -len(item["parsed_output"].get("failure_assignments", []))
+                    if isinstance(
+                        item["parsed_output"].get("failure_assignments", []),
+                        list,
+                    )
+                    else 0,
+                ),
+            )
+            raw_output = best_attempt["raw_output"]
+            parsed = best_attempt["parsed_output"]
+            validation_errors = best_attempt["validation_errors"]
+
         categories = parsed.get(category_key, [])
         if isinstance(categories, list):
             taxonomy = _add_taxonomy_categories(
@@ -945,6 +1080,8 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         raw_assignments = parsed.get("failure_assignments", [])
         if not isinstance(raw_assignments, list):
             raw_assignments = []
+        previous_assignment_count = len(assignments)
+        previous_unresolved_count = len(unresolved_failures)
         taxonomy, assignments = _record_taxonomy_assignments(
             taxonomy,
             assignments,
@@ -952,6 +1089,20 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             [(record, prediction) for record, prediction, _ in batch],
             batch_index,
         )
+        recorded_failure_ids = {
+            int(assignment["failure_id"])
+            for assignment in assignments[previous_assignment_count:]
+        }
+        for failure_id, (record, _, _) in enumerate(batch, start=1):
+            if failure_id not in recorded_failure_ids:
+                unresolved_failures.append(
+                    {
+                        "batch_index": batch_index,
+                        "failure_id": failure_id,
+                        "problem_id": str(record["id"]),
+                        "validation_errors": validation_errors,
+                    }
+                )
         processed += len(batch)
         context.logger.event(
             "etgpo_taxonomy_batch",
@@ -959,15 +1110,18 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             processed_errors=processed,
             total_errors=len(errors),
             taxonomy=taxonomy,
-            assignments=assignments[-len(batch) :],
+            assignments=assignments[previous_assignment_count:],
             meta_prompt=meta_prompt,
             raw_output=raw_output,
             parsed_output=parsed,
+            attempts=taxonomy_attempts,
+            unresolved_failures=unresolved_failures[previous_unresolved_count:],
         )
         log_progress(
             context,
             f"taxonomy batch {batch_index}/{total_batches} completed | "
-            f"processed={processed}/{len(errors)} | categories={len(taxonomy)}",
+            f"processed={processed}/{len(errors)} | classified={len(assignments)} | "
+            f"unresolved={len(unresolved_failures)} | categories={len(taxonomy)}",
             phase_started_at=batch_started_at,
         )
     selected_taxonomy, achieved_coverage = _select_taxonomy_categories(
@@ -1041,6 +1195,9 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         ),
         "total_failures": len(errors),
         "processed_failures": processed,
+        "classified_failures": len(assignments),
+        "unresolved_failure_count": len(unresolved_failures),
+        "unresolved_failures": unresolved_failures,
         "categories": taxonomy,
         "assignments": assignments,
         "selection": {
@@ -1062,6 +1219,9 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "iterations": 1,
             "train_error_count": len(errors),
             "processed_error_count": processed,
+            "classified_error_count": len(assignments),
+            "unresolved_error_count": len(unresolved_failures),
+            "taxonomy_retries": args.taxonomy_retries,
             "taxonomy_analysis_source": (
                 "posthoc_target_model_feedback"
                 if context.mode.name == "non_reasoning"

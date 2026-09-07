@@ -1,4 +1,4 @@
-"""Run one first-stage ETGPO taxonomy-guided OpenBookQA refinement."""
+"""Run one first-stage ETGPO taxonomy-guided refinement on a supported QA task."""
 
 from __future__ import annotations
 
@@ -54,6 +54,12 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="Independent generations made by passing the same guidance prompt k times.",
     )
+    parser.add_argument(
+        "--taxonomy-retries",
+        type=int,
+        default=2,
+        help="Retries for incomplete or invalid taxonomy assignments.",
+    )
     args = parser.parse_args()
     if (
         args.train_sample_size <= 0
@@ -67,6 +73,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("ETGPO category-selection limits must be positive.")
     if args.num_candidates <= 0:
         parser.error("--num-candidates must be positive.")
+    if args.taxonomy_retries < 0:
+        parser.error("--taxonomy-retries cannot be negative.")
     return args
 
 
