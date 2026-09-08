@@ -26,7 +26,7 @@ from prompt_optimization.meta_prompts import (
     rpo_rewrite_prompt,
     unique_nonempty,
 )
-from prompt_optimization.models import TARGET_ROLE
+from prompt_optimization.models import OPTIMIZER_ROLE, TARGET_ROLE
 from prompt_optimization.optimizer_common import (
     best_scored_candidate,
     evaluate_candidates,
@@ -55,6 +55,8 @@ _PROHIBITED_ETGPO_CATEGORIES = {
     "unknown",
     "other",
 }
+
+MIN_EVOPROMPT_CANDIDATE_TOKENS = 5
 
 
 def _softmax_parent(
@@ -333,6 +335,22 @@ def _sample_de_donors(
     return donor_a, donor_b, current_best_prompt
 
 
+def _parse_final_evoprompt_child(
+    raw_output: str,
+    tokenizer: Any,
+) -> tuple[str | None, list[str], int, str | None]:
+    """Select EvoPrompt's last tagged prompt and reject trivial fragments."""
+    tagged_prompts = extract_tagged_prompts([raw_output])
+    if not tagged_prompts:
+        return None, [], 0, "missing_prompt_tags"
+
+    candidate = tagged_prompts[-1].strip()
+    token_count = len(tokenizer.encode(candidate, add_special_tokens=False))
+    if token_count < MIN_EVOPROMPT_CANDIDATE_TOKENS:
+        return None, tagged_prompts, token_count, "too_few_tokens"
+    return candidate, tagged_prompts, token_count, None
+
+
 def _generate_diverse_evoprompt_children(
     context: QAOptimizationContext,
     population: Sequence[str],
@@ -346,22 +364,37 @@ def _generate_diverse_evoprompt_children(
     children: list[str] = []
     raw_output_attempts: list[list[str]] = []
     retry_counts: list[int] = []
+    _, optimizer_tokenizer = context.model_pool.ensure(OPTIMIZER_ROLE)
 
     for target_index, (target_prompt, meta_prompt, initial_raw_output) in enumerate(
         zip(population, meta_prompts, initial_raw_outputs)
     ):
         attempts = [initial_raw_output]
-        parsed = extract_tagged_prompts([initial_raw_output])
-        child = parsed[0] if parsed else None
+        child, parsed, token_count, rejection_reason = _parse_final_evoprompt_child(
+            initial_raw_output,
+            optimizer_tokenizer,
+        )
+        context.logger.event(
+            "evoprompt_de_output_parsed",
+            iteration=iteration,
+            target_index=target_index,
+            attempt=0,
+            tagged_prompts=parsed,
+            selected_prompt=child,
+            selected_token_count=token_count,
+            rejection_reason=rejection_reason,
+        )
         retries = 0
         while (
             child is None or child.strip() in blocked_prompts
         ) and retries < duplicate_retries:
             retries += 1
+            retry_reason = rejection_reason or "duplicate_prompt"
             log_progress(
                 context,
-                f"iteration {iteration} duplicate retry {retries}/{duplicate_retries} "
-                f"| target={target_index + 1}/{len(population)}",
+                f"iteration {iteration} candidate retry {retries}/{duplicate_retries} "
+                f"| target={target_index + 1}/{len(population)} "
+                f"| reason={retry_reason}",
             )
             retry_output = generate_optimizer_texts(
                 context,
@@ -370,8 +403,22 @@ def _generate_diverse_evoprompt_children(
                 enable_thinking=False,
             )[0]
             attempts.append(retry_output)
-            parsed = extract_tagged_prompts([retry_output])
-            child = parsed[0] if parsed else None
+            child, parsed, token_count, rejection_reason = (
+                _parse_final_evoprompt_child(
+                    retry_output,
+                    optimizer_tokenizer,
+                )
+            )
+            context.logger.event(
+                "evoprompt_de_output_parsed",
+                iteration=iteration,
+                target_index=target_index,
+                attempt=retries,
+                tagged_prompts=parsed,
+                selected_prompt=child,
+                selected_token_count=token_count,
+                rejection_reason=rejection_reason,
+            )
 
         if child is None or child.strip() in blocked_prompts:
             child = target_prompt
