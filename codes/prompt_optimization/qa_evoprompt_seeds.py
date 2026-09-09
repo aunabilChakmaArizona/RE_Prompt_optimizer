@@ -110,4 +110,30 @@ QA_EVOPROMPT_SEEDS = {
             ),
         },
     ],
+    "math500_reasoning": [
+        {
+            "label": "human_1",
+            "prompt": (
+                "Solve this in the simplest way you can and give the final result clearly."
+            ),
+        },
+        {
+            "label": "human_2",
+            "prompt": (
+                "Read the problem carefully and reason through it one step at a time. Keep the solution simple, check the important calculations, and don’t overthink much by unnecessary details. Give the final answer clearly at the end."
+            ),
+        },
+        {
+            "label": "automatic_1",
+            "prompt": (
+                "Reason through the problem before answering. Keep the explanation concise and state the final answer clearly."
+            ),
+        },
+        {
+            "label": "automatic_2",
+            "prompt": (
+                "First identify the type of mathematical reasoning required by the problem, such as arithmetic, algebra, geometry, probability, or number reasoning. Then derive the answer carefully from the information provided, showing enough intermediate reasoning to make the solution reliable. Avoid unnecessary detours or overly complicated methods. End with the exact final answer requested."
+            ),
+        },
+    ],
 }

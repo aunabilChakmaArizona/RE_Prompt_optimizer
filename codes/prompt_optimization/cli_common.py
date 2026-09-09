@@ -16,6 +16,8 @@ from prompt_optimization.qa_task import (
     DEFAULT_VALIDATION_PATH,
     HOTPOTQA_TRAIN_PATH,
     HOTPOTQA_VALIDATION_PATH,
+    MATH500_TRAIN_PATH,
+    MATH500_VALIDATION_PATH,
     QAMode,
     load_qa_records,
     resolve_mode,
@@ -28,6 +30,9 @@ from prompt_optimization.run_io import (
     save_json,
     save_text,
 )
+
+
+DEFAULT_MATH_OUTPUT_ROOT = DEFAULT_OUTPUT_ROOT.parent / "math_prompt_optimization"
 
 
 @dataclass
@@ -57,9 +62,9 @@ def add_shared_arguments(
     parser.add_argument("--code", required=True, help="Unique identity for this run.")
     parser.add_argument(
         "--qa-task",
-        choices=("openbookqa", "hotpotqa"),
+        choices=("openbookqa", "hotpotqa", "math500"),
         default="openbookqa",
-        help="QA task; OpenBookQA remains the backward-compatible default.",
+        help="Task; OpenBookQA remains the backward-compatible default.",
     )
     parser.add_argument(
         "--qa-mode",
@@ -144,7 +149,7 @@ def add_shared_arguments(
         "--target-max-new-tokens",
         type=int,
         default=None,
-        help="Defaults to 4096 for reasoning and 10 for non-reasoning.",
+        help="Defaults to 8192 for math, 4096 for other reasoning, and 10 otherwise.", #aunabil: should we keep max reasoning tokens to 4096 , because that can happen is that most of the time the LLM is hallucinating, as a results a PO can be instruct no too think too or overthink. This creates more space to improve
     )
     parser.add_argument(
         "--optimizer-batch-size",
@@ -157,6 +162,12 @@ def add_shared_arguments(
         type=int,
         default=10000,
         help="Maximum tokens generated for each optimizer-model response.",
+    )
+    parser.add_argument(
+        "--optimizer-feedback-max-tokens",
+        type=int,
+        default=2000, 
+        help="Maximum tokens retained from one math reasoning trace in feedback.", #aunabil: if the reasoning itself is longer by the target model, will this 2000tokens enough for optimizer?
     )
     parser.add_argument(
         "--validation-std-penalty",
@@ -188,8 +199,8 @@ def build_context(
         raise ValueError("--target-max-new-tokens must be positive.")
     if args.target_batch_size <= 0 or args.optimizer_batch_size <= 0:
         raise ValueError("Target and optimizer batch sizes must be positive.")
-    if args.optimizer_max_new_tokens <= 0:
-        raise ValueError("--optimizer-max-new-tokens must be positive.")
+    if args.optimizer_max_new_tokens <= 0 or args.optimizer_feedback_max_tokens <= 0:
+        raise ValueError("Optimizer token limits must be positive.")
     if args.validation_std_penalty < 0:
         raise ValueError("--validation-std-penalty must be non-negative.")
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
@@ -210,11 +221,21 @@ def build_context(
     rng = random.Random(args.seed)
     train_path = args.train_path
     validation_path = args.validation_path
+    math_grading = None
     if args.qa_task == "hotpotqa":
         if train_path == str(DEFAULT_TRAIN_PATH):
             train_path = str(HOTPOTQA_TRAIN_PATH)
         if validation_path == str(DEFAULT_VALIDATION_PATH):
             validation_path = str(HOTPOTQA_VALIDATION_PATH)
+    elif args.qa_task == "math500":
+        if train_path == str(DEFAULT_TRAIN_PATH):
+            train_path = str(MATH500_TRAIN_PATH)
+        if validation_path == str(DEFAULT_VALIDATION_PATH):
+            validation_path = str(MATH500_VALIDATION_PATH)
+        from math_grading.graders import grader_metadata, validate_grading_dependencies
+
+        validate_grading_dependencies()
+        math_grading = grader_metadata()
     train_records = load_qa_records(train_path, args.qa_task)
     validation_records = load_qa_records(validation_path, args.qa_task)
     initial_prompt = load_initial_prompt(
@@ -222,8 +243,11 @@ def build_context(
         args.initial_prompt,
         args.initial_prompt_file,
     )
+    output_root = args.output_root
+    if args.qa_task == "math500" and output_root == str(DEFAULT_OUTPUT_ROOT):
+        output_root = str(DEFAULT_MATH_OUTPUT_ROOT)
     run_dir = create_run_directory(
-        args.output_root,
+        output_root,
         optimizer_name,
         args.qa_mode,
         args.code,
@@ -272,6 +296,7 @@ def build_context(
             **vars(args),
             "resolved_train_path": train_path,
             "resolved_validation_path": validation_path,
+            "resolved_output_root": output_root,
             "optimizer_name": optimizer_name,
             "qa_mode_config": asdict(mode),
             "resolved_target_max_new_tokens": max_new_tokens,
@@ -279,6 +304,7 @@ def build_context(
                 "train": len(train_records),
                 "validation": len(validation_records),
             },
+            "math_graders": math_grading,
         },
     )
     logger.event(

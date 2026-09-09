@@ -149,8 +149,18 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             feedback_evaluation,
             args.feedback_examples,
         )
+        optimizer_tokenizer = None
+        if context.mode.task_name == "math500": #aunabil: why only for math
+            _, optimizer_tokenizer = context.model_pool.ensure(OPTIMIZER_ROLE)
         feedback_example_texts = [
-            rpo_feedback_example(record, prediction, index, context.mode)
+            rpo_feedback_example(
+                record,
+                prediction,
+                index,
+                context.mode,
+                optimizer_tokenizer=optimizer_tokenizer,
+                reasoning_max_tokens=args.optimizer_feedback_max_tokens,
+            )
             for index, (record, prediction) in enumerate(selected, start=1)
         ]
         feedback_meta_prompts = [
@@ -1033,6 +1043,9 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     unresolved_failures: list[dict[str, Any]] = []
     processed = 0
     batch_index = 0
+    optimizer_tokenizer = None
+    if errors and context.mode.task_name == "math500":
+        _, optimizer_tokenizer = context.model_pool.ensure(OPTIMIZER_ROLE)
     total_batches = math.ceil(len(errors) / args.error_batch_size) if errors else 0
     while processed < len(taxonomy_inputs):
         batch = taxonomy_inputs[processed : processed + args.error_batch_size]
@@ -1052,6 +1065,8 @@ def run_etgpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                 index,
                 context.mode,
                 posthoc_feedback=feedback,
+                optimizer_tokenizer=optimizer_tokenizer,
+                reasoning_max_tokens=args.optimizer_feedback_max_tokens,
             )
             for index, (record, prediction, feedback) in enumerate(batch, start=1)
         ]

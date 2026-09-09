@@ -104,6 +104,9 @@ class QAEvaluator:
                     "choices": record.get("choices"),
                     "context": record.get("context"),
                     "answer_text": record.get("answer_text"),
+                    "subject": record.get("subject"),
+                    "level": record.get("level"),
+                    "source_id": record.get("source_id"),
                     "token_usage": dict(token_usage),
                 }
             )

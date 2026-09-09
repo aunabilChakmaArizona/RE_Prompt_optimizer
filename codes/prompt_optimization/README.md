@@ -1,6 +1,6 @@
-# OpenBookQA prompt optimization
+# QA and math prompt optimization
 
-This package implements the QA-only expansion of the two-stage prompt-optimization experiments. It does not modify the existing relation-extraction runners.
+This package implements the QA and MATH expansion of the two-stage prompt-optimization experiments. It does not modify the existing relation-extraction runners.
 
 ## Experiment matrix
 
@@ -25,7 +25,15 @@ This gives 12 first-stage jobs, 20 first-stage prompt snapshots, and 120 second-
 
 Only the leading instruction is editable. The answer-format instruction, question, and choices are always static. OpenBookQA's `fact` field is not shown to the target model or optimizer model.
 
-Reasoning mode enables model thinking and defaults to 4,096 generated tokens. Non-reasoning mode disables thinking and defaults to 16 generated tokens. Both modes use the fixed Qwen3 or Gemma3 sampling settings already used by the project.
+Reasoning mode enables model thinking and defaults to 4,096 generated tokens. Non-reasoning mode disables thinking and defaults to 10 generated tokens. Both modes use the fixed Qwen3 or Gemma3 sampling settings already used by the project.
+
+## Fixed MATH protocol
+
+MATH uses the same first-stage implementations through `--qa-task math500` and supports reasoning mode only. The editable instruction is followed by the same fixed answer instruction used by `run_math_test_inference.py`; the optimizer never edits or sees that answer-format instruction. Target generations default to 8,192 tokens.
+
+Answers are extracted from the last `<answer>...</answer>` block, with the last balanced `\boxed{...}` expression as fallback. Prompt selection uses the vendored OpenAI PRM800K grader as its `correct` signal. Simple normalization and `math-verify==0.9.0` are run and saved as diagnostics. The 1,500-example validation set has three fixed folds of 500, and prompt selection uses the same mean-minus-standard-deviation stable score with lambda 1. Test evaluation remains disabled during optimization.
+
+Long MATH reasoning traces shown to RPO or ETGPO are compacted to at most 2,000 optimizer-model tokens by retaining their beginning and end. This keeps optimizer meta-prompts within the model context while preserving the setup and final derivation.
 
 ## Inference backends
 
@@ -110,6 +118,15 @@ python -u codes/run_qa_final_test_evaluation.py \
 ```
 
 The final-test runner defaults to five runs with consecutive base seeds 42–46 and reports mean accuracy with population standard deviation. Use the same seeds for every prompt being compared.
+
+Run the three first-stage MATH optimizers for both target-model families with:
+
+```bash
+nohup bash codes/run_math_first_stage_qwen.sh > codes/nohup_outs/math_first_stage_qwen.log 2>&1 &
+nohup bash codes/run_math_first_stage_gemma.sh > codes/nohup_outs/math_first_stage_gemma.log 2>&1 &
+```
+
+The scripts use the prepared `5,999/1,500/500` train/validation/test files, Qwen3-14B or Gemma3-12B as the corresponding optimizer, vLLM, lambda 1, and `outputs/math_prompt_optimization`. They do not evaluate the 500-problem test set.
 
 After experiments finish, write the aggregate text report with:
 

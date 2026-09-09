@@ -189,6 +189,7 @@ def finalize_run(
     summary = {
         "code": context.args.code,
         "optimizer": context.optimizer_name,
+        "task": context.mode.task_name,
         "qa_mode": context.mode.name,
         "backend": context.args.backend,
         "model": context.args.model,

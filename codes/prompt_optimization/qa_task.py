@@ -9,6 +9,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from math_grading.graders import grade_math_answer
+from math_inference_common import (
+    ANSWER_INSTRUCTION_PROMPT as MATH_ANSWER_INSTRUCTION_PROMPT,
+    DEFAULT_INSTRUCTION_PROMPT as MATH_INITIAL_PROMPT,
+    build_math_prompt,
+    extract_math_answer,
+    extract_tagged_answer as extract_math_tagged_answer,
+    validate_math_records,
+)
 from qa_test_inference_common import (
     NON_REASONING_ANSWER_INSTRUCTION,
     NON_REASONING_INITIAL_PROMPT,
@@ -35,6 +44,11 @@ HOTPOTQA_TRAIN_PATH = REPO_ROOT / "data" / "processed" / "hotpotqa" / "train.jso
 HOTPOTQA_VALIDATION_PATH = (
     REPO_ROOT / "data" / "processed" / "hotpotqa" / "validation.jsonl"
 )
+MATH500_TRAIN_PATH = REPO_ROOT / "data" / "processed" / "math500" / "train.jsonl"
+MATH500_VALIDATION_PATH = (
+    REPO_ROOT / "data" / "processed" / "math500" / "validation.jsonl"
+)
+MATH_OPTIMIZER_REASONING_MAX_TOKENS = 2_000
 
 HOTPOTQA_REASONING_INITIAL_PROMPT = (
     "You are given context passages and a question that may require combining "
@@ -88,6 +102,17 @@ HOTPOTQA_MODES = {
     ),
 }
 
+MATH500_MODES = {
+    "reasoning": QAMode(
+        name="reasoning",
+        task_name="math500",
+        initial_prompt=MATH_INITIAL_PROMPT,
+        answer_instruction=MATH_ANSWER_INSTRUCTION_PROMPT,
+        enable_thinking=True,
+        default_max_new_tokens=8192,
+    ),
+}
+
 # Preserve the original public name for code that assumes OpenBookQA.
 QA_MODES = OPENBOOKQA_MODES
 
@@ -97,6 +122,7 @@ def resolve_mode(mode_name: str, task_name: str = "openbookqa") -> QAMode:
     task_modes = {
         "openbookqa": OPENBOOKQA_MODES,
         "hotpotqa": HOTPOTQA_MODES,
+        "math500": MATH500_MODES,
     }
     try:
         return task_modes[task_name][mode_name]
@@ -122,10 +148,14 @@ def load_qa_records(
     path = resolve_repo_path(path_value)
     with path.open(encoding="utf-8") as stream:
         records = [json.loads(line) for line in stream if line.strip()]
-    task_type = validate_records(records)
+    if expected_task == "math500":
+        task_type = validate_math_records(records)
+    else:
+        task_type = validate_records(records)
     expected_type = {
         "openbookqa": "multiple_choice_qa",
         "hotpotqa": "hotpotqa_open_qa",
+        "math500": "math_symbolic_answer",
     }.get(expected_task)
     if expected_type is not None and task_type != expected_type:
         raise ValueError(
@@ -143,6 +173,8 @@ def render_qa_prompt(
     instruction_prompt = instruction_prompt.strip()
     if not instruction_prompt:
         raise ValueError("The instruction prompt must not be empty.")
+    if mode.task_name == "math500":
+        return build_math_prompt(instruction_prompt, str(record["question"]))
     if mode.task_name == "hotpotqa":
         return build_context_open_qa_prompt(
             instruction_prompt,
@@ -164,6 +196,29 @@ def score_qa_response(
     mode: QAMode,
 ) -> dict[str, Any]:
     """Extract and score one tagged answer for the selected QA task."""
+    if mode.task_name == "math500":
+        tagged_answer = extract_math_tagged_answer(response)
+        extracted, extraction_source = extract_math_answer(response)
+        gold = str(record["answer"])
+        grades = grade_math_answer(extracted, gold, str(record["task_type"]))
+        return {
+            "id": record["id"],
+            "gold_answer": gold,
+            "predicted_answer": extracted,
+            "extracted_answer": extracted,
+            "answer_extraction_source": extraction_source,
+            "normalized_prediction": grades["normalized_prediction"],
+            "normalized_gold_answer": grades["normalized_gold_answer"],
+            "correct": bool(grades["openai_correct"]),
+            "simple_correct": bool(grades["simple_correct"]),
+            "openai_correct": bool(grades["openai_correct"]),
+            "math_verify_correct": bool(grades["math_verify_correct"]),
+            "openai_error": grades["openai_error"],
+            "math_verify_error": grades["math_verify_error"],
+            "missing_answer_tag": tagged_answer is None,
+            "invalid_choice_label": False,
+            "raw_response": response,
+        }
     extracted = extract_tagged_answer(response)
     if mode.task_name == "hotpotqa":
         prediction = extracted or ""
@@ -219,6 +274,32 @@ def summarize_qa_predictions(predictions: Sequence[dict[str, Any]]) -> dict[str,
             bool(item["invalid_choice_label"]) for item in predictions
         ),
     }
+    if "openai_correct" in predictions[0]:
+        simple_correct = sum(bool(item["simple_correct"]) for item in predictions)
+        math_verify_correct = sum(
+            bool(item["math_verify_correct"]) for item in predictions
+        )
+        extraction_counts = {"answer_tag": 0, "boxed_fallback": 0, "missing": 0}
+        for item in predictions:
+            extraction_counts[item["answer_extraction_source"]] += 1
+        metrics.update(
+            {
+                "primary_grader": "openai_prm800k",
+                "simple_correct": simple_correct,
+                "simple_accuracy": simple_correct / total,
+                "openai_correct": correct,
+                "openai_accuracy": correct / total,
+                "math_verify_correct": math_verify_correct,
+                "math_verify_accuracy": math_verify_correct / total,
+                "answer_extraction": extraction_counts,
+                "grading_errors": {
+                    "openai": sum(item["openai_error"] is not None for item in predictions),
+                    "math_verify": sum(
+                        item["math_verify_error"] is not None for item in predictions
+                    ),
+                },
+            }
+        )
     if "answer_f1" in predictions[0]:
         metrics.update(
             {
@@ -306,6 +387,16 @@ def feedback_example(
     """Describe one prediction without exposing the dataset science fact."""
     predicted = prediction.get("predicted_answer") or "INVALID"
     outcome = "correct" if prediction.get("correct") else "incorrect"
+    if record.get("task_type") == "math_symbolic_answer": #aunabil: what is this type? where you get form. is the math500 only this task type or we have multiple
+        return "\n".join(
+            [
+                f"Example {index}",
+                f"Question: {record['question']}",
+                f"Gold answer: {record['answer']}",
+                f"Predicted answer: {predicted}",
+                f"Outcome: {outcome}",
+            ]
+        )
     if record.get("task_type") == "hotpotqa_open_qa":
         return "\n".join(
             [
@@ -346,11 +437,35 @@ def reasoning_without_tagged_answer(response: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", reasoning).strip()
 
 
+def compact_math_reasoning( #aunabil:remember we are compacting math long reasoning for feedback
+    response: str,
+    tokenizer: Any | None = None,
+    max_tokens: int = MATH_OPTIMIZER_REASONING_MAX_TOKENS,
+) -> str:
+    """Remove the tagged answer and retain both ends of a long math trace."""
+    reasoning = reasoning_without_tagged_answer(response)
+    if tokenizer is None:
+        return reasoning
+    token_ids = tokenizer.encode(reasoning, add_special_tokens=False)
+    if len(token_ids) <= max_tokens:
+        return reasoning
+    half = max_tokens // 2
+    beginning = tokenizer.decode(token_ids[:half], skip_special_tokens=True)
+    ending = tokenizer.decode(token_ids[-half:], skip_special_tokens=True)
+    return (
+        f"{beginning.rstrip()}\n\n"
+        "[... middle of long reasoning omitted ...]\n\n"
+        f"{ending.lstrip()}"
+    )
+
+
 def rpo_feedback_example(
     record: dict[str, Any],
     prediction: dict[str, Any],
     index: int,
     mode: QAMode,
+    optimizer_tokenizer: Any | None = None,
+    reasoning_max_tokens: int = MATH_OPTIMIZER_REASONING_MAX_TOKENS,
 ) -> str:
     """Format RPO feedback with reasoning only when the QA mode produces it."""
     predicted = prediction.get("predicted_answer") or "INVALID"
@@ -364,6 +479,13 @@ def rpo_feedback_example(
                 f"Ground-Truth Answer: {record['answer']}",
             ]
         )
+    elif mode.task_name == "math500":
+        lines.extend(
+            [
+                f"Question: {record['question']}",
+                f"Ground-Truth Answer: {record['answer']}",
+            ]
+        )
     else:
         lines.extend(
             [
@@ -373,8 +495,15 @@ def rpo_feedback_example(
             ]
         )
     if mode.name == "reasoning":
-        reasoning = reasoning_without_tagged_answer(
-            str(prediction.get("raw_response", ""))
+        raw_response = str(prediction.get("raw_response", ""))
+        reasoning = (
+            compact_math_reasoning( #aunabil: we are compacting this - remember
+                raw_response,
+                optimizer_tokenizer,
+                reasoning_max_tokens,
+            )
+            if mode.task_name == "math500"
+            else reasoning_without_tagged_answer(raw_response)
         )
         lines.extend(
             [
@@ -397,6 +526,8 @@ def etgpo_failure_example(
     index: int,
     mode: QAMode,
     posthoc_feedback: str | None = None,
+    optimizer_tokenizer: Any | None = None,
+    reasoning_max_tokens: int = MATH_OPTIMIZER_REASONING_MAX_TOKENS,
 ) -> str:
     """Format ETGPO failures without exposing the fixed answer format."""
     predicted = prediction.get("predicted_answer") or "INVALID"
@@ -408,8 +539,15 @@ def etgpo_failure_example(
             "",
         ]
     elif mode.name == "reasoning":
-        reasoning = reasoning_without_tagged_answer(
-            str(prediction.get("raw_response", ""))
+        raw_response = str(prediction.get("raw_response", ""))
+        reasoning = (
+            compact_math_reasoning(
+                raw_response,
+                optimizer_tokenizer,
+                reasoning_max_tokens,
+            )
+            if mode.task_name == "math500"
+            else reasoning_without_tagged_answer(raw_response)
         )
         reasoning_section = [
             "### Model's Reasoning",
@@ -424,7 +562,7 @@ def etgpo_failure_example(
             "",
             *task_input,
         ]
-    else:
+    elif mode.task_name != "math500":
         task_input.extend(["### Choices", choices_as_text(record), ""])
     return "\n".join(
         [

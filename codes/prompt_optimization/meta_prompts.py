@@ -23,6 +23,8 @@ The task requires reasoning carefully and then outputting the correct option lab
 The task requires directly outputting the correct option label without reasoning or explanation.""",
     "hotpotqa_reasoning": """A context-based question may require combining information from multiple passages.
 The task requires reasoning carefully over the provided context and then outputting the correct short answer.""",
+    "math500_reasoning": """A mathematical problem may require numerical, algebraic, geometric, combinatorial, or symbolic reasoning.
+The task requires deriving the solution carefully and then outputting an exact final answer.""",
 }
 
 
@@ -36,6 +38,8 @@ def qa_task_label(mode: QAMode) -> str:
     """Return the task name used in optimizer-model role instructions."""
     if mode.task_name == "hotpotqa":
         return "context-based open question-answering"
+    if mode.task_name == "math500":
+        return "mathematical problem-solving"
     return "multiple-choice question-answering"
 
 
@@ -88,7 +92,12 @@ def rpo_feedback_prompt(
     task_description = qa_task_description(mode)
     task_label = qa_task_label(mode)
     if mode.name == "reasoning":
-        input_fields = "context, question" if mode.task_name == "hotpotqa" else "question, choices"
+        if mode.task_name == "hotpotqa":
+            input_fields = "context and question"
+        elif mode.task_name == "math500":
+            input_fields = "question"
+        else:
+            input_fields = "question and choices"
         instance_description = f"""You are given one task instance containing the {input_fields}, ground-truth answer, the LLM's reasoning, its selected answer, and whether that answer was correct or incorrect."""
         analysis_instruction = """Analyze the reasoning in the LLM response and explain how it led to the selected answer.
 - If the answer is correct, explain which reasoning steps, evidence, or cues were useful.
@@ -241,6 +250,37 @@ New Prompt: Determine the question's exact requirement, build a connected eviden
 4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
 Basic Prompt: You are given context passages and a question. Think step by step carefully and provide the best answer using the context.
 Final Prompt: <prompt>Determine exactly what the question asks, reason step by step by connecting relevant evidence across the supplied passages, and provide the best answer supported by the context.</prompt>""",
+    "math500_reasoning": """Please follow the instruction step-by-step to generate a better prompt.
+1. Identify the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the mathematical problem carefully, reason step by step, and derive the exact answer.
+Prompt 2: Identify the relevant quantities and constraints, choose a suitable method, and verify the result.
+2. Randomly mutate the different parts.
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts from step 2, and generate a new prompt.
+Prompt 3: Solve the problem systematically, keep symbolic work exact, and check that the final result satisfies the original conditions.
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: Solve the following math problem. Think step by step carefully before answering.
+
+1. Identifying the different parts between Prompt 1 and Prompt 2:
+Prompt 1: Read the mathematical problem carefully, reason step by step, and derive the exact answer.
+Prompt 2: Identify the relevant quantities and constraints, choose a suitable method, and verify the result.
+Different parts:
+"read the mathematical problem carefully" vs "identify the relevant quantities and constraints"
+"reason step by step" vs "choose a suitable method"
+"derive the exact answer" vs "verify the result"
+
+2. Randomly mutate the different parts:
+"read the mathematical problem carefully" -> "translate every condition into a precise mathematical statement"
+"reason step by step" -> "organize the derivation into connected steps"
+"choose a suitable method" -> "select an efficient mathematical strategy"
+"verify the result" -> "substitute the result back into the original conditions"
+
+3. Combine the different parts with Prompt 3, selectively replace it with the different parts in step 2 and generate a new prompt:
+Prompt 3: Solve the problem systematically, keep symbolic work exact, and check that the final result satisfies the original conditions.
+New Prompt: Translate every condition precisely, select an efficient mathematical strategy, organize the exact derivation into connected steps, and substitute the result back into the original conditions.
+
+4. Crossover the prompt in step 3 with the following basic prompt and generate a final prompt bracketed with <prompt> and </prompt>:
+Basic Prompt: Solve the following math problem. Think step by step carefully before answering.
+Final Prompt: <prompt>Translate the problem conditions precisely, choose an appropriate mathematical strategy, derive the result step by step using exact symbolic work, and verify it against the original conditions before answering.</prompt>""",
 }
 
 
@@ -277,7 +317,13 @@ def etgpo_first_taxonomy_prompt(
     mode: QAMode,
 ) -> str:
     """Ask ETGPO to create issue categories from its first batch of QA failures."""
-    if mode.name == "reasoning":
+    if mode.task_name == "math500":
+        analysis_steps = """1. Find the EARLIEST point in the response's reasoning where it went wrong.
+2. Explain the mathematical error, missing condition, or invalid inference.
+3. Explain why that error led to the wrong final answer.
+4. If the reasoning is correct, check whether the final answer is mathematically equivalent to the ground-truth answer and expressed precisely; otherwise, classify it as a final-answer precision or formatting error."""
+        reasoning_source_note = ""
+    elif mode.name == "reasoning":
         analysis_steps = """1. Find the EARLIEST point in the response's reasoning where it went wrong.
 2. Explain what specifically went wrong.
 3. Explain why that error led to the wrong selected answer.
@@ -418,6 +464,15 @@ def etgpo_update_taxonomy_prompt(
             }
         ],
     }
+    final_answer_check = (
+        "If the reasoning is correct, check whether the final answer is mathematically "
+        "equivalent to the ground-truth answer and expressed precisely; otherwise, "
+        "classify it as a final-answer precision or formatting error." #aunabil: i already saw a similar instruction else where for math
+        if mode.task_name == "math500"
+        else "If the reasoning is correct, check whether the final selected answer uses "
+        "the correct concise form and matches the ground-truth answer; otherwise, "
+        "classify it as a final-answer precision or formatting error."
+    )
     return f"""You are an expert at analyzing why language models fail on {qa_task_label(mode)}.
 
 ## Existing Issue Categories
@@ -436,7 +491,7 @@ For every new failure, decide whether its root cause fits an existing category. 
 
 Identify reusable reasoning or decision errors rather than question-specific topics. Do not create categories based only on particular entities, answer choices, scientific terms, or isolated facts. Group failures that share the same underlying error even when their question topics differ.
 
-If the reasoning is correct, check whether the final selected answer uses the correct concise form and matches the ground-truth answer; otherwise, classify it as a final-answer precision or formatting error.
+{final_answer_check}
 
 Assign every failure to exactly one meaningful category. Reuse the closest existing category when it captures the underlying error; otherwise, create a generalizable new category. Do not use "None", "Correct Answer", "Uncategorized", "Unknown", or "Other" as a category.
 

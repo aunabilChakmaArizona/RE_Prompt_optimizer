@@ -26,20 +26,19 @@ from math_grading.graders import (
     normalize_symbolic_answer,
     validate_grading_dependencies,
 )
+from math_inference_common import (
+    ANSWER_INSTRUCTION_PROMPT,
+    DEFAULT_INSTRUCTION_PROMPT,
+    build_math_prompt,
+    extract_last_boxed_answer,
+    extract_math_answer,
+    extract_tagged_answer,
+    validate_math_records,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET_PATH = REPO_ROOT / "data/processed/aime/test.jsonl"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "outputs/math_test"
-
-DEFAULT_INSTRUCTION_PROMPT = (
-    "Solve the following math problem. Think step by step carefully before answering."
-)
-ANSWER_INSTRUCTION_PROMPT = (
-    "After you finish reasoning, output the final answer exactly once between the tags <answer> and </answer>. " 
-    "Put only the final answer inside the tags, using LaTeX notation when needed."
-)
-ANSWER_PATTERN = re.compile(r"<answer\s*>(.*?)</answer\s*>", re.IGNORECASE | re.DOTALL)
-
 
 def parse_args() -> argparse.Namespace:
     """Read command-line settings for one math test run."""
@@ -61,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         default=0.90,
         help="Fraction of selected GPU memory available to the vLLM engine.",
     )
-    parser.add_argument("--max_new_tokens", type=int, default=4096, help="Maximum generated tokens per problem.")
+    parser.add_argument("--max_new_tokens", type=int, default=8192, help="Maximum generated tokens per problem.")
     parser.add_argument("--start", "--ep_start", dest="start", type=int, default=0, help="First test index.")
     parser.add_argument("--end", "--ep_end", dest="end", type=int, default=None, help="Exclusive final test index.")
     parser.add_argument("--prompt", default=DEFAULT_INSTRUCTION_PROMPT, help="Instruction placed before the fixed answer instruction.")
@@ -93,55 +92,6 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in stream if line.strip()]
 
 
-def build_math_prompt(instruction_prompt: str, question: str) -> str:
-    """Place the instruction, fixed answer instruction, and question in order."""
-    return (
-        f"{instruction_prompt.strip()}\n\n"
-        f"{ANSWER_INSTRUCTION_PROMPT}\n\n"
-        f"Question:\n{question.strip()}"
-    )
-
-
-def extract_tagged_answer(response: str) -> str | None:
-    """Extract the last complete answer enclosed by answer tags."""
-    matches = ANSWER_PATTERN.findall(response)
-    if not matches:
-        return None
-    return matches[-1].strip()
-
-
-def extract_last_boxed_answer(response: str) -> str | None:
-    """Extract the content of the last balanced LaTeX boxed expression."""
-    box_starts = list(re.finditer(r"\\boxed\s*\{", response))
-    for box_start in reversed(box_starts):
-        opening_brace = response.find("{", box_start.start())
-        depth = 0
-        for index in range(opening_brace, len(response)):
-            character = response[index]
-            if character == "{":
-                depth += 1
-            elif character == "}":
-                depth -= 1
-                if depth == 0:
-                    answer = response[opening_brace + 1 : index].strip()
-                    if answer:
-                        return answer
-                    break
-    return None
-
-
-def extract_math_answer(response: str) -> tuple[str | None, str]:
-    """Use an answer tag first and the last boxed answer as a fallback."""
-    tagged_answer = extract_tagged_answer(response)
-    if tagged_answer:
-        return tagged_answer, "answer_tag"
-
-    boxed_answer = extract_last_boxed_answer(response)
-    if boxed_answer:
-        return boxed_answer, "boxed_fallback"
-    return None, "missing"
-
-
 def validate_answer_processing() -> None:
     """Check representative extraction and simple-normalization cases."""
     assert extract_tagged_answer("work <answer>0042</answer>") == "0042"
@@ -160,27 +110,6 @@ def validate_answer_processing() -> None:
     assert normalize_symbolic_answer("$\\boxed{\\dfrac{14}{3}}$") == "\\frac{14}{3}"
     assert normalize_symbolic_answer("\\left( 3, 4 \\right)") == "(3,4)"
     assert normalize_symbolic_answer("\\text{Evelyn}") == "evelyn"
-
-
-def validate_records(records: Sequence[dict[str, Any]]) -> str:
-    """Check selected records and return their shared mathematical task type."""
-    if not records:
-        raise ValueError("The selected test range is empty.")
-
-    task_types = {str(record.get("task_type", "")).strip() for record in records}
-    if len(task_types) != 1 or "" in task_types:
-        raise ValueError("All selected records must have one non-empty task_type.")
-    task_type = next(iter(task_types))
-
-    for record in records:
-        if not str(record.get("question", "")).strip():
-            raise ValueError(f"Record {record.get('id', '<unknown>')} has no question.")
-        answer = str(record.get("answer", "")).strip()
-        if not answer:
-            raise ValueError(f"Record {record.get('id', '<unknown>')} has no answer.")
-        if task_type == "math_short_answer" and normalize_numeric_answer(answer) is None:
-            raise ValueError(f"Record {record.get('id', '<unknown>')} has an invalid numeric answer.")
-    return task_type
 
 
 def update_group_statistics(group: dict[str, Any], grades: dict[str, Any]) -> None:
@@ -432,7 +361,7 @@ def main() -> None:
     output_dir = resolve_repo_path(args.output_dir)
     all_records = read_jsonl(dataset_path)
     records = all_records[args.start : args.end]
-    task_type = validate_records(records)
+    task_type = validate_math_records(records)
 
     instruction_prompt = args.prompt.strip()
     if not instruction_prompt:
