@@ -7,6 +7,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+try:
+    import torch
+    import torch.nn.functional as functional
+except ImportError:
+    torch = None
+    functional = None
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "codes"))
@@ -25,8 +32,29 @@ from prompt_optimization.qa_task import (
     resolve_mode,
     rpo_feedback_example,
     score_qa_response,
+    select_validation_fold_subset,
     summarize_qa_predictions,
 )
+from prompt_optimization.second_stage import (
+    _balance_gradient_pairs,
+    _gradpo_synthesis_prompt,
+)
+from prompt_optimization.sequence_gradients import (
+    _label_loss_from_logits,
+    qa_proposal_header,
+    render_teacher_forced_qa,
+)
+
+
+class _PlainChatTokenizer:
+    """Render chat messages without changing their text for alignment tests."""
+
+    def apply_chat_template(self, messages, **_kwargs):
+        """Join one user and assistant message into a predictable transcript."""
+        return "\n".join(
+            f"{message['role'].upper()}: {message['content']}"
+            for message in messages
+        )
 
 
 class MathPromptOptimizationTests(unittest.TestCase):
@@ -143,6 +171,174 @@ class MathPromptOptimizationTests(unittest.TestCase):
             },
             {500},
         )
+
+    def test_validation_can_reuse_three_fixed_300_example_prefixes(self) -> None:
+        """Select 300 records per existing fold without creating another file."""
+        records = load_qa_records(
+            REPO_ROOT / "data" / "processed" / "math500" / "validation.jsonl",
+            "math500",
+        )
+
+        selected = select_validation_fold_subset(records, 300)
+
+        self.assertEqual(len(selected), 900)
+        self.assertEqual(
+            {
+                sum(
+                    int(record["validation_fold"]) == fold for record in selected
+                )
+                for fold in range(1, 4)
+            },
+            {300},
+        )
+
+    def test_reasoning_conditioned_target_preserves_exact_math_answer(self) -> None:
+        """Condition on reasoning but calculate loss only over exact answer text."""
+        record = {**self.record, "answer": r"\frac{1}{2}"}
+
+        rendered = render_teacher_forced_qa(
+            "Solve this exactly.",
+            record,
+            self.mode,
+            _PlainChatTokenizer(),
+            reasoning_trace="First derive an equivalent fraction.",
+        )
+
+        target = rendered["text"][rendered["label_start"] : rendered["label_end"]]
+        self.assertEqual(target, r"\frac{1}{2}")
+        self.assertNotEqual(target, r"\FRAC{1}{2}")
+        self.assertTrue(rendered["reasoning_conditioned"])
+        self.assertIn("First derive an equivalent fraction.", rendered["text"])
+
+    def test_reasoning_target_replaces_existing_answer_with_gold(self) -> None:
+        """Remove a predicted answer before teacher-forcing the gold answer."""
+        rendered = render_teacher_forced_qa(
+            "Solve this exactly.",
+            self.record,
+            self.mode,
+            _PlainChatTokenizer(),
+            reasoning_trace="Derivation. <answer>2</answer>",
+        )
+
+        self.assertNotIn("<answer>2</answer>", rendered["text"])
+        self.assertEqual(rendered["text"].count("<answer>1</answer>"), 1)
+        self.assertEqual(rendered["answer_target_mode"], "replaced_existing_answer")
+
+    def test_reasoning_target_appends_fallback_when_answer_is_missing(self) -> None:
+        """Append GreaTer's extractor only when the trace has no answer block."""
+        rendered = render_teacher_forced_qa(
+            "Solve this exactly.",
+            self.record,
+            self.mode,
+            _PlainChatTokenizer(),
+            reasoning_trace="An unfinished derivation.",
+        )
+
+        self.assertIn(
+            "Therefore, the final answer is <answer>1</answer>",
+            rendered["text"],
+        )
+        self.assertEqual(
+            rendered["answer_target_mode"],
+            "appended_missing_answer_fallback",
+        )
+
+    def test_gradient_subset_balances_correct_and_incorrect_results(self) -> None:
+        """Use two outcome buckets without requiring answer-label buckets."""
+        import random
+
+        records = [{"id": f"record-{index}"} for index in range(6)]
+        predictions = [
+            {"correct": value}
+            for value in (True, True, True, True, False, False)
+        ]
+
+        selected, counts = _balance_gradient_pairs(
+            records,
+            predictions,
+            random.Random(42),
+            4,
+        )
+
+        self.assertEqual(counts["available_correct"], 4)
+        self.assertEqual(counts["available_incorrect"], 2)
+        self.assertEqual(counts["selected_correct"], 2)
+        self.assertEqual(counts["selected_incorrect"], 2)
+        self.assertEqual(sum(pair[1]["correct"] for pair in selected), 2)
+        self.assertEqual(len(selected), 4)
+
+    def test_gradient_subset_uses_available_balanced_outcomes(self) -> None:
+        """Use the largest balanced subset when one outcome bucket is undersized."""
+        import random
+
+        records = [{"id": f"record-{index}"} for index in range(4)]
+        predictions = [
+            {"correct": value}
+            for value in (True, True, True, False)
+        ]
+
+        selected, counts = _balance_gradient_pairs(
+            records,
+            predictions,
+            random.Random(42),
+            4,
+        )
+
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(counts["selected_correct"], 1)
+        self.assertEqual(counts["selected_incorrect"], 1)
+        self.assertEqual(counts["shortfall"], 2)
+
+    def test_gradpo_synthesis_uses_math_task_description(self) -> None:
+        """Describe Math rather than multiple-choice QA during beam synthesis."""
+        prompt = _gradpo_synthesis_prompt(
+            "Solve carefully.",
+            [
+                {
+                    "region_rank": 1,
+                    "region_text": "carefully",
+                    "start_char": 6,
+                    "end_char": 15,
+                }
+            ],
+            {1: "step by step"},
+            self.mode,
+        )
+
+        self.assertIn("mathematical problem-solving", prompt)
+        self.assertIn("exact final answer", prompt)
+        self.assertNotIn("multiple-choice", prompt)
+
+    def test_greater_proposal_uses_math_task_description(self) -> None:
+        """Keep GreaTer's token proposal context task-correct for Math."""
+        prompt = qa_proposal_header(self.record, self.mode)
+
+        self.assertIn("mathematical problem-solving", prompt)
+        self.assertIn("exact final answer", prompt)
+        self.assertIn(self.record["question"], prompt)
+        self.assertNotIn("multiple-choice", prompt)
+        self.assertNotIn("Choices:", prompt)
+
+    @unittest.skipIf(torch is None, "PyTorch is not installed in this test environment.")
+    def test_answer_loss_weights_problems_not_answer_token_counts(self) -> None:
+        """Give short and long symbolic answers equal problem-level weight."""
+        logits = torch.zeros((2, 5, 3), dtype=torch.float32)
+        input_ids = torch.zeros((2, 5), dtype=torch.long)
+        input_ids[0, 1] = 0
+        input_ids[1, 1:4] = 1
+        logits[0, 0] = torch.tensor([4.0, 0.0, 0.0])
+        logits[1, 0:3] = torch.tensor([4.0, 0.0, 0.0])
+
+        loss = _label_loss_from_logits(
+            logits,
+            input_ids,
+            [[1], [1, 2, 3]],
+            reduction="mean",
+        )
+        short_loss = functional.cross_entropy(logits[0, 0:1], input_ids[0, 1:2])
+        long_loss = functional.cross_entropy(logits[1, 0:3], input_ids[1, 1:4])
+
+        self.assertTrue(torch.allclose(loss, (short_loss + long_loss) / 2))
 
 
 if __name__ == "__main__":

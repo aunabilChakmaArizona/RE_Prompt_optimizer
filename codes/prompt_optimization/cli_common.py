@@ -21,6 +21,7 @@ from prompt_optimization.qa_task import (
     QAMode,
     load_qa_records,
     resolve_mode,
+    select_validation_fold_subset,
 )
 from prompt_optimization.run_io import (
     DEFAULT_OUTPUT_ROOT,
@@ -124,6 +125,15 @@ def add_shared_arguments(
         help="The 1,500-example JSONL with three folds used to select prompts.",
     )
     parser.add_argument(
+        "--validation-fold-size",
+        type=int,
+        default=None,
+        help=(
+            "Use only the first N records from each of the three existing "
+            "validation folds; by default use every record."
+        ),
+    )
+    parser.add_argument(
         "--initial-prompt",
         default=None,
         help="Starting instruction text; otherwise use the mode's default prompt.",
@@ -203,6 +213,8 @@ def build_context(
         raise ValueError("Optimizer token limits must be positive.")
     if args.validation_std_penalty < 0:
         raise ValueError("--validation-std-penalty must be non-negative.")
+    if args.validation_fold_size is not None and args.validation_fold_size <= 0:
+        raise ValueError("--validation-fold-size must be positive when provided.")
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
         raise ValueError("--gpu-memory-utilization must be greater than 0 and at most 1.")
     if args.vllm_max_model_len is not None and args.vllm_max_model_len <= 0:
@@ -237,7 +249,11 @@ def build_context(
         validate_grading_dependencies()
         math_grading = grader_metadata()
     train_records = load_qa_records(train_path, args.qa_task)
-    validation_records = load_qa_records(validation_path, args.qa_task)
+    all_validation_records = load_qa_records(validation_path, args.qa_task)
+    validation_records = select_validation_fold_subset(
+        all_validation_records,
+        args.validation_fold_size,
+    )
     initial_prompt = load_initial_prompt(
         mode,
         args.initial_prompt,
@@ -303,6 +319,7 @@ def build_context(
             "dataset_sizes": {
                 "train": len(train_records),
                 "validation": len(validation_records),
+                "validation_available": len(all_validation_records),
             },
             "math_graders": math_grading,
         },

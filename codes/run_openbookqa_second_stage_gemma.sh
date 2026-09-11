@@ -1,0 +1,867 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# OpenBookQA non-reasoning: five source prompts x six refiners.
+# Test evaluation remains disabled; selection uses 3 x 500 validation.
+# nohup bash codes/run_openbookqa_second_stage_gemma.sh > codes/nohup_outs/openbookqa_second_stage_gemma.log 2>&1 &
+
+# [[ -f outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt'; exit 1; }
+# [[ -f outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt'; exit 1; }
+# [[ -f outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt'; exit 1; }
+# [[ -f outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt'; exit 1; }
+# [[ -f outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt'; exit 1; }
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+#   --code openbookqa_non_reasoning_gemma_rpo5_lpo_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --optimizer-max-new-tokens 10000 \
+#   --train-sample-size 512 \
+#   --feedback-examples 3 \
+#   --max-locations 5 \
+#   --max-words-per-location 3 \
+#   --num-candidates 5 \
+#   --top-z 5
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code openbookqa_non_reasoning_gemma_rpo5_greater_lambda1_vs1500 \
+  --qa-task openbookqa \
+  --qa-mode non_reasoning \
+  --train-path data/processed/openbookqa/train.jsonl \
+  --validation-path data/processed/openbookqa/validation.jsonl \
+  --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt \
+  --model google/gemma-3-4b-it \
+  --device cuda:0 \
+  --target-max-new-tokens 10 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/qa_prompt_optimization \
+  --overwrite \
+  --backend transformers \
+  --variant greater \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code openbookqa_non_reasoning_gemma_rpo5_greater_tg_lambda1_vs1500 \
+  --qa-task openbookqa \
+  --qa-mode non_reasoning \
+  --train-path data/processed/openbookqa/train.jsonl \
+  --validation-path data/processed/openbookqa/validation.jsonl \
+  --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt \
+  --model google/gemma-3-4b-it \
+  --device cuda:0 \
+  --target-max-new-tokens 10 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/qa_prompt_optimization \
+  --overwrite \
+  --backend transformers \
+  --variant greater_tg \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code openbookqa_non_reasoning_gemma_rpo5_gradpo_gen_lambda1_vs1500 \
+  --qa-task openbookqa \
+  --qa-mode non_reasoning \
+  --train-path data/processed/openbookqa/train.jsonl \
+  --validation-path data/processed/openbookqa/validation.jsonl \
+  --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt \
+  --model google/gemma-3-4b-it \
+  --device cuda:0 \
+  --target-max-new-tokens 10 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/qa_prompt_optimization \
+  --overwrite \
+  --backend transformers \
+  --variant gen \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 3 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code openbookqa_non_reasoning_gemma_rpo5_gradpo_prob_lambda1_vs1500 \
+  --qa-task openbookqa \
+  --qa-mode non_reasoning \
+  --train-path data/processed/openbookqa/train.jsonl \
+  --validation-path data/processed/openbookqa/validation.jsonl \
+  --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt \
+  --model google/gemma-3-4b-it \
+  --device cuda:0 \
+  --target-max-new-tokens 10 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/qa_prompt_optimization \
+  --overwrite \
+  --backend transformers \
+  --variant prob \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 3 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code openbookqa_non_reasoning_gemma_rpo5_gradpo_gen_random_lambda1_vs1500 \
+  --qa-task openbookqa \
+  --qa-mode non_reasoning \
+  --train-path data/processed/openbookqa/train.jsonl \
+  --validation-path data/processed/openbookqa/validation.jsonl \
+  --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt \
+  --model google/gemma-3-4b-it \
+  --device cuda:0 \
+  --target-max-new-tokens 10 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/qa_prompt_optimization \
+  --overwrite \
+  --backend transformers \
+  --variant gen_random \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 3 \
+  --max-region-tokens 3 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+#   --code openbookqa_non_reasoning_gemma_rpo10_lpo_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --optimizer-max-new-tokens 10000 \
+#   --train-sample-size 512 \
+#   --feedback-examples 3 \
+#   --max-locations 5 \
+#   --max-words-per-location 3 \
+#   --num-candidates 5 \
+#   --top-z 5
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_rpo10_greater_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_rpo10_greater_tg_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater_tg \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_rpo10_gradpo_gen_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_rpo10_gradpo_prob_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant prob \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_rpo10_gradpo_gen_random_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen_random \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt5_lpo_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --optimizer-max-new-tokens 10000 \
+#   --train-sample-size 512 \
+#   --feedback-examples 3 \
+#   --max-locations 5 \
+#   --max-words-per-location 3 \
+#   --num-candidates 5 \
+#   --top-z 5
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt5_greater_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt5_greater_tg_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater_tg \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt5_gradpo_gen_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt5_gradpo_prob_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant prob \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt5_gradpo_gen_random_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen_random \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt10_lpo_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --optimizer-max-new-tokens 10000 \
+#   --train-sample-size 512 \
+#   --feedback-examples 3 \
+#   --max-locations 5 \
+#   --max-words-per-location 3 \
+#   --num-candidates 5 \
+#   --top-z 5
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt10_greater_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt10_greater_tg_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater_tg \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt10_gradpo_gen_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt10_gradpo_prob_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant prob \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_evoprompt10_gradpo_gen_random_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen_random \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+#   --code openbookqa_non_reasoning_gemma_etgpo1_lpo_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --optimizer-model google/gemma-3-12b-it \
+#   --optimizer-device cuda:0 \
+#   --backend vllm \
+#   --gpu-memory-utilization 0.90 \
+#   --vllm-max-model-len 32768 \
+#   --vllm-disable-images \
+#   --optimizer-max-new-tokens 10000 \
+#   --train-sample-size 512 \
+#   --feedback-examples 3 \
+#   --max-locations 5 \
+#   --max-words-per-location 3 \
+#   --num-candidates 5 \
+#   --top-z 5
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_etgpo1_greater_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+#   --code openbookqa_non_reasoning_gemma_etgpo1_greater_tg_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant greater_tg \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 4 \
+#   --selection-batch-size 8 \
+#   --proposal-top-k 25 \
+#   --proposal-example-size 50 \
+#   --proposal-min-candidates 10 \
+#   --selection-top-mu 10 \
+#   --top-u 5 \
+#   --fluency-lambda 0.2 \
+#   --region-expansion-threshold 0.6
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_etgpo1_gradpo_gen_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_etgpo1_gradpo_prob_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant prob \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4
+
+# CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+#   --code openbookqa_non_reasoning_gemma_etgpo1_gradpo_gen_random_lambda1_vs1500 \
+#   --qa-task openbookqa \
+#   --qa-mode non_reasoning \
+#   --train-path data/processed/openbookqa/train.jsonl \
+#   --validation-path data/processed/openbookqa/validation.jsonl \
+#   --initial-prompt-file outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt \
+#   --model google/gemma-3-4b-it \
+#   --device cuda:0 \
+#   --target-max-new-tokens 10 \
+#   --validation-std-penalty 1.0 \
+#   --output-root outputs/qa_prompt_optimization \
+#   --overwrite \
+#   --backend transformers \
+#   --variant gen_random \
+#   --train-sample-size 600 \
+#   --gradient-sample-size 200 \
+#   --gradient-batch-size 2 \
+#   --selection-batch-size 4 \
+#   --num-edit-regions 3 \
+#   --max-region-tokens 3 \
+#   --region-expansion-threshold 0.6 \
+#   --num-region-candidates 5 \
+#   --beam-width 5 \
+#   --beam-replacement-mode llm_synthesis \
+#   --fluency-lambda 0.5 \
+#   --candidate-max-new-tokens 10000 \
+#   --synthesis-max-new-tokens 10000 \
+#   --synthesis-batch-size 4

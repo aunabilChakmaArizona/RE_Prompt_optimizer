@@ -1,0 +1,47 @@
+SECOND-STAGE GRADIENT SAMPLING CONFIGURATION
+============================================
+
+Purpose
+-------
+Use a sufficiently large random training pool to obtain a fixed,
+correctness-balanced gradient subset for GreaTer, GreaTer-TG, GradPO-Gen,
+GradPO-Prob, and GradPO-Gen-Random.
+
+The initial pool sizes were increased by 200 over the first estimates. The
+final gradient subset remains 200 examples total: 100 correct and 100
+incorrect.
+
+| Task       | Qwen initial pool | Gemma initial pool | Final gradient subset |
+|------------|------------------:|-------------------:|----------------------:|
+| OpenBookQA |               800 |                600 | 200 (100 + 100)       |
+| HotpotQA   |               700 |                500 | 200 (100 + 100)       |
+| Math       |             1,200 |                600 | 200 (100 + 100)       |
+
+Sampling procedure
+------------------
+1. Randomly select the configured initial pool from the training split.
+2. Run the current source prompt on every example in that pool.
+3. Separate the outputs into correct and incorrect result buckets.
+4. Randomly select exactly 100 correct and 100 incorrect examples.
+5. Compute prompt-token gradients over those same 200 examples.
+
+OpenBookQA uses only the two correctness buckets. It is not divided into
+correct/incorrect buckets separately for A, B, C, and D, because the smallest
+of eight resulting buckets could make the usable gradient subset unnecessarily
+small.
+
+Fair-comparison requirements
+----------------------------
+- Keep the final gradient subset fixed at 200 across tasks and models.
+- Use the same source prompt, random seed, initial pool, and selected 200
+  examples when comparing GradPO-Gen with GradPO-Gen-Random.
+- Save the pool counts, selected counts, and selected record IDs for every run.
+- If either result bucket contains fewer than 100 examples, log the available
+  counts and use the largest possible equal-sized correct/incorrect subset.
+
+Implementation note
+-------------------
+The shared gradient code creates a random initial pool and targets the final
+size through `--gradient-sample-size 200`. It normally selects 100 examples per
+bucket. If one bucket is too small, it logs a warning and uses the largest
+available equal-sized subset instead of stopping the run.

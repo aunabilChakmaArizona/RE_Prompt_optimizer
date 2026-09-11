@@ -31,7 +31,7 @@ Reasoning mode enables model thinking and defaults to 4,096 generated tokens. No
 
 MATH uses the same first-stage implementations through `--qa-task math500` and supports reasoning mode only. The editable instruction is followed by the same fixed answer instruction used by `run_math_test_inference.py`; the optimizer never edits or sees that answer-format instruction. Target generations default to 8,192 tokens.
 
-Answers are extracted from the last `<answer>...</answer>` block, with the last balanced `\boxed{...}` expression as fallback. Prompt selection uses the vendored OpenAI PRM800K grader as its `correct` signal. Simple normalization and `math-verify==0.9.0` are run and saved as diagnostics. The 1,500-example validation set has three fixed folds of 500, and prompt selection uses the same mean-minus-standard-deviation stable score with lambda 1. Test evaluation remains disabled during optimization.
+Answers are extracted from the last `<answer>...</answer>` block, with the last balanced `\boxed{...}` expression as fallback. Prompt selection uses the vendored OpenAI PRM800K grader as its `correct` signal. Simple normalization and `math-verify==0.9.0` are run and saved as diagnostics. The 1,500-example validation set has three fixed folds of 500, and prompt selection uses the same mean-minus-standard-deviation stable score with lambda 1. Passing `--validation-fold-size 300` deterministically keeps the first 300 records from each existing fold (900 total) without reshuffling or creating another split. Test evaluation remains disabled during optimization.
 
 Long MATH reasoning traces shown to RPO or ETGPO are compacted to at most 2,000 optimizer-model tokens by retaining their beginning and end. This keeps optimizer meta-prompts within the model context while preserving the setup and final derivation.
 
@@ -53,7 +53,24 @@ Console logs show one representative prompt/output for each important model-call
 
 EvoPrompt-DE starts from the source instruction plus four fixed provisional seeds in `qa_evoprompt_seeds.py`; replace the clearly labeled placeholders with the final curated seeds before the full experiment. Its original DE meta-prompt and sampled generation are unchanged, but an exact child duplicate is resampled up to `--duplicate-retries` times to prevent population collapse. ETGPO analyzes every sampled failure, groups them by reusable reasoning or decision errors rather than question topics, selects frequent categories to the requested coverage, and passes one identical short-guidance meta-prompt to the optimizer independently `--num-candidates` times in both QA modes. For non-reasoning QA, the target model first generates one post-hoc explanation of the most likely cause of each incorrect answer; the optimizer model then constructs the taxonomy from those explanations. These explanations are probabilistic feedback, not observed chains of thought, and are saved in `failure_feedbacks.json`.
 
-For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</answer>` responses, but loss is applied only to the inner gold option-label token. This prevents fixed answer tags from dominating the instruction gradient.
+For reasoning tasks, GreaTer and GradPO first generate a deterministic solution trace from the current source prompt. If the response contains an `<answer>...</answer>` block, its last predicted answer is replaced with the gold answer; the fixed GreaTer-style extractor is appended only when no complete answer block exists. Loss is applied only to the exact gold-answer tokens. LaTeX answers retain their original case, and answer-token loss is averaged within each problem before averaging across problems, so longer symbolic answers do not receive extra weight. The same source-prompt traces are reused during local candidate scoring; full validation regenerates each candidate's answers.
+
+## Gradient sampling protocol
+
+The task/model pool sizes and fixed 200-example correctness-balanced gradient
+subset are recorded in
+`experiment_tracking/second_stage/gradient_sampling_configuration.txt`.
+The initial pools are 800/600 for OpenBookQA, 700/500 for HotpotQA, and
+1,200/600 for Math, listed as Qwen/Gemma. After deterministic source-prompt
+inference, gradient methods target 100 correct and 100 incorrect results. If a
+bucket contains fewer than 100, the run logs a warning and uses the largest
+available equal-sized subset. OpenBookQA uses these two outcome buckets rather
+than eight separate answer-label/outcome buckets. GradPO-Gen and
+GradPO-Gen-Random must reuse the same sampled record IDs for a controlled
+comparison.
+
+LPO does not calculate gradients and samples its training-feedback pool
+uniformly at random without answer-label balancing.
 
 `GradPO-Gen-Random` matches the rebuttal control: it uses the same target-model candidate generation and beam search as GradPO-Gen, but randomly samples from the common gradient-derived editable-region pool instead of taking the highest-gradient regions.
 
@@ -65,8 +82,8 @@ For GreaTer and GradPO, gradients are computed from teacher-forced `<answer>X</a
 | EvoPrompt-DE | 10 iterations, snapshots at 5/10, fixed population 5, train fitness sample 1,000, up to 3 exact-duplicate retries |
 | ETGPO | 1 iteration, train errors 1,000, non-reasoning feedback limit 10,000 tokens, taxonomy batch 6, coverage 0.7, minimum 2 problems/category, at most 5 categories, 5 independent guidance generations |
 | LPO | 1 iteration, train sample 512, 3 incorrect feedback examples, at most 5 locations, at most 3 words/location, 5 rewrites |
-| GreaTer / TG | 1 token, train sample 3,000, gradient batch 4, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
-| GradPO | 1 iteration, train sample 3,000, 5 candidates/span, beam 5 with target-model synthesis, candidate-generation limit 10,000 tokens, beam-synthesis limit 10,000 tokens, expansion ratio 0.6, fluency weight 0.5 |
+| GreaTer / TG | 1 token, default initial pool 3,000, fixed balanced gradient subset 200, gradient batch 4, proposal examples 50, top-k 25, minimum proposals 10, gradient top-mu 10, dev top-z 5, fluency weight 0.2 |
+| GradPO | 1 iteration, default initial pool 3,000, fixed balanced gradient subset 200, 5 candidates/span, beam 5 with target-model synthesis, candidate-generation limit 10,000 tokens, beam-synthesis limit 10,000 tokens, expansion ratio 0.6, fluency weight 0.5 |
 | GradPO Qwen | 5 spans, at most 2 target-model tokens/span |
 | GradPO Gemma | 3 spans, at most 3 target-model tokens/span |
 
@@ -103,7 +120,24 @@ Run stage two only after all stage-one prompt files exist. The generator uses Qw
 
 Every optimization run saves its config, initial and final prompts, candidate metrics, optimizer traces, validation predictions, and a summary. Optimization runners never load or evaluate the test split. Gradient-based stage-two runs also save their gradient, candidate, selected-region, and beam traces so the optimization process is reproducible. Post-hoc edit analysis is currently disabled.
 
-The QA-only experiment status, validation gains, completed/failed optimization outcomes, run directories, and saved first-stage prompt paths are tracked in `experiment_tracking/qa/first_stage_lambda1_status.txt`. Its companion `experiment_tracking/qa/README.md` defines `READY`, `NOT READY`, and `PENDING RERUN`. Update that report whenever a tracked run is repeated; do not use stale or unchanged prompts as evidence of first-stage improvement.
+The historical OpenBookQA-only status is retained in
+`experiment_tracking/qa/first_stage_lambda1_status.txt`. The canonical
+cross-dataset first-stage results, directories, source-prompt scores, and full
+prompt texts are now generated under `experiment_tracking/first_stage/` with:
+
+```bash
+python -u codes/report_first_stage_results.py
+```
+
+Rerun this command whenever a tracked first-stage experiment finishes. The
+reporter uses explicit canonical CODE values so stale, aborted, and superseded
+runs are not included. Do not treat a score change obtained with unchanged
+prompt text as a genuine prompt improvement.
+
+The central index for persistent reports, analyses, paper notes, and processing
+documentation is `experiment_tracking/README.md`. Add each new persistent note
+or aggregate report there; do not index individual run artifacts or third-party
+baseline files.
 
 After all prompt choices are finalized, evaluate any saved first- or second-stage prompt over five fixed test runs:
 
@@ -119,6 +153,27 @@ python -u codes/run_qa_final_test_evaluation.py \
 
 The final-test runner defaults to five runs with consecutive base seeds 42–46 and reports mean accuracy with population standard deviation. Use the same seeds for every prompt being compared.
 
+Generate the 60 OpenBookQA non-reasoning second-stage attempts (30 per model) with:
+
+```bash
+python -u codes/generate_openbookqa_second_stage_commands.py
+```
+
+This writes `codes/run_openbookqa_second_stage_qwen.sh` and
+`codes/run_openbookqa_second_stage_gemma.sh`. Each script uses RPO-5, RPO-10,
+EvoPrompt-5, EvoPrompt-10, and the corrected ETGPO-1 prompt as its five sources,
+then runs LPO, GreaTer, GreaTer-TG, GradPO-Gen, GradPO-Prob, and
+GradPO-Gen-Random. Selection uses the full 1,500-example validation split and
+lambda 1; test evaluation is not run.
+
+```bash
+nohup bash codes/run_openbookqa_second_stage_qwen.sh \
+  > codes/nohup_outs/openbookqa_second_stage_qwen.log 2>&1 &
+
+nohup bash codes/run_openbookqa_second_stage_gemma.sh \
+  > codes/nohup_outs/openbookqa_second_stage_gemma.log 2>&1 &
+```
+
 Run the three first-stage MATH optimizers for both target-model families with:
 
 ```bash
@@ -126,7 +181,23 @@ nohup bash codes/run_math_first_stage_qwen.sh > codes/nohup_outs/math_first_stag
 nohup bash codes/run_math_first_stage_gemma.sh > codes/nohup_outs/math_first_stage_gemma.log 2>&1 &
 ```
 
-The scripts use the prepared `5,999/1,500/500` train/validation/test files, Qwen3-14B or Gemma3-12B as the corresponding optimizer, vLLM, lambda 1, and `outputs/math_prompt_optimization`. They do not evaluate the 500-problem test set.
+The scripts use the prepared `5,999/1,500/500` train/validation/test files, Qwen3-14B or Gemma3-12B as the corresponding optimizer, vLLM, lambda 1, and `outputs/math_prompt_optimization`. The Qwen commands use deterministic 3 x 300 validation-fold prefixes; the current Gemma commands use all 3 x 500 records. They do not evaluate the 500-problem test set.
+
+After all five source prompts exist for each model, generate the 60 MATH second-stage attempts (30 per model):
+
+```bash
+python -u codes/generate_math_second_stage_commands.py
+```
+
+This writes `codes/run_math_second_stage_qwen.sh` and `codes/run_math_second_stage_gemma.sh`. Each script checks for RPO-5, RPO-10, EvoPrompt-5, EvoPrompt-10, and ETGPO-1 before starting. LPO uses vLLM; GreaTer, GreaTer-TG, GradPO-Gen, GradPO-Prob, and GradPO-Gen-Random use Transformers because they require gradients or direct logits. Run the generated scripts only after the lightweight gradient smoke checks and the first-stage source checks pass.
+
+Before the full matrix, select an unused GPU in `codes/run_math_second_stage_smoke.sh` and run:
+
+```bash
+bash codes/run_math_second_stage_smoke.sh
+```
+
+The smoke script uses only two training examples and one example from each validation fold. It exercises reasoning-conditioned answer gradients, GreaTer ranking, GradPO synthesis, memory allocation, and required artifact creation. Its scores are diagnostics only and must not be reported as experimental results.
 
 After experiments finish, write the aggregate text report with:
 

@@ -1,4 +1,4 @@
-"""Generated-answer evaluation shared by all OpenBookQA optimizers."""
+"""Generated-answer evaluation shared by QA and Math optimizers."""
 
 from __future__ import annotations
 

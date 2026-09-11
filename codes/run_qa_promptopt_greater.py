@@ -1,4 +1,4 @@
-"""Run GreaTer or top-gradient GreaTer-TG on an OpenBookQA prompt."""
+"""Run GreaTer or top-gradient GreaTer-TG on a QA or Math prompt."""
 
 from __future__ import annotations
 
@@ -21,14 +21,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--train-sample-size",
         type=int,
-        default=3000,
-        help="Label-balanced training questions used for optimization.",
+        default=3000, #aunabil2nd: for reasoning we shuold make this smaller believe, it will take a lot of time for this large set to generate reasoning; please look for every 1st or 2nd stage methods on reasoning modes for this kind of train size and see if its is too much or not
+        help=(
+            "Initial random training pool; gradients use an equal number of its "
+            "correct and incorrect results."
+        ),
     )
     parser.add_argument(
         "--gradient-batch-size",
         type=int,
         default=4,
         help="Examples per batch when accumulating token gradients.",
+    )
+    parser.add_argument(
+        "--gradient-sample-size",
+        type=int,
+        default=200,
+        help="Final even-sized subset split equally between correct and incorrect results.",
     )
     parser.add_argument(
         "--selection-batch-size",
@@ -97,6 +106,7 @@ def parse_args() -> argparse.Namespace:
         parser.error("GreaTer requires --backend transformers to compute gradients.")
     if min(
         args.train_sample_size,
+        args.gradient_sample_size,
         args.gradient_batch_size,
         args.selection_batch_size,
         args.proposal_top_k,
@@ -106,6 +116,8 @@ def parse_args() -> argparse.Namespace:
         args.top_u,
     ) <= 0:
         parser.error("GreaTer sample, batch, and candidate counts must be positive.")
+    if args.gradient_sample_size % 2 != 0:
+        parser.error("--gradient-sample-size must be even.")
     if args.start_position < 0 or args.fluency_lambda < 0:
         parser.error("GreaTer position and fluency weight must be non-negative.")
     if not 0.0 <= args.region_expansion_threshold <= 1.0:

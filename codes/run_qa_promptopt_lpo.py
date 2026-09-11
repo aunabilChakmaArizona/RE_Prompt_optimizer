@@ -1,4 +1,4 @@
-"""Run one second-stage LPO refinement on an OpenBookQA prompt."""
+"""Run one second-stage LPO refinement on a QA or Math prompt."""
 
 from __future__ import annotations
 

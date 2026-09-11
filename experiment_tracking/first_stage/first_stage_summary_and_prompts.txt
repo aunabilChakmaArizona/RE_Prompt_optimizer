@@ -1,0 +1,394 @@
+FIRST-STAGE STABLE-SCORE SUMMARY AND PROMPTS
+============================================
+
+Generated: 2026-09-10T16:50:32-07:00
+Scores are percentages. Gains are calculated within each canonical run.
+Different validation sizes are retained and shown rather than mixed.
+
+STABLE-SCORE SUMMARY
+--------------------
+
+| Dataset | Mode | Model | Method | N | Initial stable | Final stable | Stable gain | Status | CODE | Saved directory |
+|---|---|---|---|---:|---:|---:|---:|---|---|---|
+| OpenBookQA | non-reasoning | Qwen3-4B | RPO | 900 | 77.95 | 78.63 | +0.69 | IMPROVED | openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1 | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1 |
+| OpenBookQA | non-reasoning | Qwen3-4B | EvoPrompt-DE | 900 | 77.95 | 80.24 | +2.29 | IMPROVED | openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1 | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1 |
+| OpenBookQA | non-reasoning | Qwen3-4B | ETGPO | 1500 | 78.17 | 78.85 | +0.68 | IMPROVED | openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500 | outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500 |
+| OpenBookQA | non-reasoning | Gemma3-4B | RPO | 900 | 68.61 | 70.09 | +1.47 | IMPROVED | openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1 | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1 |
+| OpenBookQA | non-reasoning | Gemma3-4B | EvoPrompt-DE | 900 | 68.61 | 70.16 | +1.54 | IMPROVED | openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1 | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1 |
+| OpenBookQA | non-reasoning | Gemma3-4B | ETGPO | 1500 | 63.03 | 67.25 | +4.22 | IMPROVED | openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500 | outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500 |
+| HotpotQA | reasoning | Qwen3-4B | RPO | 1500 | 72.34 | 75.48 | +3.14 | IMPROVED | hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500 |
+| HotpotQA | reasoning | Qwen3-4B | EvoPrompt-DE | 1500 | 72.40 | 73.10 | +0.70 | SCORE_GAIN; PROMPT UNCHANGED | hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed | outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed |
+| HotpotQA | reasoning | Qwen3-4B | ETGPO | 1500 | 72.34 | 73.18 | +0.83 | IMPROVED | hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500_taxonomy_fixed | outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500_taxonomy_fixed |
+| HotpotQA | reasoning | Gemma3-4B | RPO | 1500 | 41.57 | 47.44 | +5.87 | IMPROVED | hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 |
+| HotpotQA | reasoning | Gemma3-4B | EvoPrompt-DE | 1500 | 41.83 | 51.37 | +9.53 | IMPROVED | hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 |
+| HotpotQA | reasoning | Gemma3-4B | ETGPO | 1500 | 41.83 | 43.46 | +1.63 | IMPROVED | hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 |
+| MATH-500 | reasoning | Qwen3-4B | RPO | 900 | 87.36 | 87.36 | +0.00 | UNCHANGED | math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900 | outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900 |
+| MATH-500 | reasoning | Qwen3-4B | EvoPrompt-DE | — | — | — | — | PENDING | math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900 | outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900 |
+| MATH-500 | reasoning | Qwen3-4B | ETGPO | — | — | — | — | PENDING | math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900 | outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900 |
+| MATH-500 | reasoning | Gemma3-4B | RPO | 1500 | 61.26 | 67.24 | +5.98 | IMPROVED | math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 | outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 |
+| MATH-500 | reasoning | Gemma3-4B | EvoPrompt-DE | 1500 | 60.50 | 68.07 | +7.57 | IMPROVED | math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 | outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 |
+| MATH-500 | reasoning | Gemma3-4B | ETGPO | 1500 | 62.21 | 67.90 | +5.69 | IMPROVED | math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 | outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 |
+
+INITIAL AND RETAINED PROMPTS
+----------------------------
+
+OPENBOOKQA
+~~~~~~~~~~
+
+Initial prompt(s):
+[1] You are given a multiple-choice question and a set of answer choices. Select the best answer.
+
+Qwen3-4B
+^^^^^^^^
+
+RPO-5
+CODE: openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_5.txt
+Stable score: 78.29
+Stable gain: +0.35
+Audit: OK
+Prompt:
+You are given a multiple-choice question that may include metaphorical, symbolic, or context-dependent language. Analyze the scenario carefully, considering both literal and figurative interpretations, as well as relevant scientific or contextual knowledge. Select the answer choice that best aligns with the described situation.
+
+RPO-10
+CODE: openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_10.txt
+Stable score: 78.63
+Stable gain: +0.69
+Audit: OK
+Prompt:
+You are given a multiple-choice question and a set of answer choices. Select the best answer by considering relevant ecological, geographical, or scientific principles. Prioritize options that reflect the underlying concept or broader implications rather than immediate or superficial associations.
+
+EvoPrompt-DE-5
+CODE: openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_5.txt
+Stable score: 80.24
+Stable gain: +2.29
+Audit: OK
+Prompt:
+Review the question and choices, then select the option that best answers the question. Read the multiple-choice question and all of the answer choices carefully. Make sure you understand what is being asked, then select the answer that best fits the question. Keep it straightforward and do not overthink. Give only the answer without explaining your reasoning.
+
+EvoPrompt-DE-10
+CODE: openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_10.txt
+Stable score: 80.24
+Stable gain: +2.29
+Audit: duplicate of EvoPrompt-DE-5
+Prompt:
+Review the question and choices, then select the option that best answers the question. Read the multiple-choice question and all of the answer choices carefully. Make sure you understand what is being asked, then select the answer that best fits the question. Keep it straightforward and do not overthink. Give only the answer without explaining your reasoning.
+
+ETGPO-1
+CODE: openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500
+Directory: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500/final_prompt.txt
+Stable score: 78.85
+Stable gain: +0.68
+Audit: OK
+Prompt:
+You are given a multiple-choice question and a set of answer choices. Select the best answer. Follow these rules to improve accuracy in multiple-choice questions by addressing common errors. Interpret phrases based on context, not literal definitions. Choose answers that align with implied or figurative meanings. Select answers that directly link features to their functional outcomes, not superficial associations. Account for spatial perspectives; choose answers reflecting the observer's viewpoint, not assumptions of shared perspective. Identify trick questions by selecting answers that are contextually irrelevant or absurd, even if they sound plausible. Assume standard biological knowledge for animal behavior; avoid answers contradicting common capabilities.
+
+Gemma3-4B
+^^^^^^^^^
+
+RPO-5
+CODE: openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_5.txt
+Stable score: 70.09
+Stable gain: +1.47
+Audit: OK
+Prompt:
+You are an expert at answering multiple-choice questions. Your goal is to select the single best answer from the choices provided. Read the question carefully and determine what information is being requested. Consider each answer choice, evaluating it for accuracy, relevance, and completeness in response to the question. Think about the relationships between the concepts presented in the question and the answer choices. Choose the answer that most directly and logically answers the question, even if other choices contain related words or ideas. If the question asks for a specific type of answer (e.g., a definition, a process, a cause, an effect), focus on providing that type of answer. Output *only* the letter corresponding to the best answer (A, B, C, or D). Do not include any additional text or explanation.
+
+RPO-10
+CODE: openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt
+Stable score: 70.09
+Stable gain: +1.47
+Audit: duplicate of RPO-5
+Prompt:
+You are an expert at answering multiple-choice questions. Your goal is to select the single best answer from the choices provided. Read the question carefully and determine what information is being requested. Consider each answer choice, evaluating it for accuracy, relevance, and completeness in response to the question. Think about the relationships between the concepts presented in the question and the answer choices. Choose the answer that most directly and logically answers the question, even if other choices contain related words or ideas. If the question asks for a specific type of answer (e.g., a definition, a process, a cause, an effect), focus on providing that type of answer. Output *only* the letter corresponding to the best answer (A, B, C, or D). Do not include any additional text or explanation.
+
+EvoPrompt-DE-5
+CODE: openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_5.txt
+Stable score: 70.03
+Stable gain: +1.42
+Audit: OK
+Prompt:
+Thoroughly examine the question and each available choice, considering the question's intent. Carefully review the important details and select the most directly relevant answer. Provide only the letter of the selected answer without any explanation.
+
+EvoPrompt-DE-10
+CODE: openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1
+Directory: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_gemma_evoprompt_gemma12opt_lambda1/prompt_iteration_10.txt
+Stable score: 70.16
+Stable gain: +1.54
+Audit: OK
+Prompt:
+Read the multiple-choice question and quickly analyze the options, noting keywords and potential traps.  Carefully review the important details and select the choice exhibiting the closest alignment with the question's core premise. Provide the letter corresponding to the best answer. No elaboration necessary.
+
+ETGPO-1
+CODE: openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500
+Directory: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500
+Prompt file: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_gemma_etgpo_gemma12opt_lambda1_fixed_vs1500/final_prompt.txt
+Stable score: 67.25
+Stable gain: +4.22
+Audit: OK
+Prompt:
+You are given a multiple-choice question and a set of answer choices. Select the best answer.
+
+To improve accuracy, the following rules apply to answer selection. Apply these rules consistently throughout the question answering process.
+Focus on the question's complete meaning, not just isolated words; select the answer that aligns with the broader context and intended relationships.
+Consider underlying intentions and broader implications when evaluating answers; prioritize choices reflecting the intended purpose or subtle relationships described.
+Ensure attributes accurately reflect the scenario; choose the answer that consistently applies the correct characteristics to the described entities.
+
+HOTPOTQA
+~~~~~~~~
+
+Initial prompt(s):
+[1] You are given context passages and a question that may require combining information from multiple passages. Think step by step carefully and provide the best answer using the context.
+
+Qwen3-4B
+^^^^^^^^
+
+RPO-5
+CODE: hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500/prompt_iteration_5.txt
+Stable score: 73.66
+Stable gain: +1.32
+Audit: OK
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Think step by step carefully, cross-reference all relevant details in the context, and provide the **most precise and concise answer possible**. Ensure your answer **exactly matches the format and wording** used in the context, including full names, specific terms, and any required brevity (e.g., short phrases or single terms). Avoid adding explanations or extra information beyond what is explicitly stated or implied in the context.
+
+RPO-10
+CODE: hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500/prompt_iteration_10.txt
+Stable score: 75.48
+Stable gain: +3.14
+Audit: OK
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Think step by step, cross-reference all relevant details in the context, and provide the **most precise and concise answer possible**. Pay special attention to **explicitly stated outcomes** (e.g., completed actions vs. attempted plans) and **terminology consistency** (e.g., "New York City" vs. "New York"). Avoid assumptions or inferences not directly supported by the text. Ensure your answer **exactly matches the format and wording** used in the context, including full names, specific terms, and any required brevity (e.g., short phrases or single terms). Focus on **critical details** that distinguish between similar events or entities (e.g., final buyers vs. initial parties involved in a transaction). Do not include explanations or extra information beyond what is explicitly stated or implied in the context. **Pay close attention to question phrasing (e.g., "type of," "location of," "where") and ensure your answer aligns with the exact terminology and hierarchical relationships (e.g., "Radio City Music Hall" is part of "Rockefeller Center") described in the context.**
+
+EvoPrompt-DE-5
+CODE: hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed
+Directory: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed
+Prompt file: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed/prompt_iteration_5.txt
+Stable score: 72.83
+Stable gain: +0.43
+Audit: same as initial prompt
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Think step by step carefully and provide the best answer using the context.
+
+EvoPrompt-DE-10
+CODE: hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed
+Directory: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed
+Prompt file: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_parser_fixed/prompt_iteration_10.txt
+Stable score: 73.10
+Stable gain: +0.70
+Audit: same as initial prompt; duplicate of EvoPrompt-DE-5
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Think step by step carefully and provide the best answer using the context.
+
+ETGPO-1
+CODE: hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500_taxonomy_fixed
+Directory: outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500_taxonomy_fixed
+Prompt file: outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_qwen_etgpo_qwen14opt_lambda1_vs1500_taxonomy_fixed/final_prompt.txt
+Stable score: 73.18
+Stable gain: +0.83
+Audit: OK
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Think step by step carefully and provide the best answer using the context. Prioritize accuracy by rigorously aligning answers to question requirements and context details. Focus on precise formatting, intent parsing, and thorough context review. Match the answer's format exactly as required by the question, including numerical expressions, hyphenated terms, or specific phrasing. Identify the question's core intent and required entities first, then align your answer strictly to the specified criteria or relationships. Scan all context passages for explicit details, cross-check connections between entities, and avoid relying on unstated assumptions.
+
+Gemma3-4B
+^^^^^^^^^
+
+RPO-5
+CODE: hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500/prompt_iteration_5.txt
+Stable score: 42.03
+Stable gain: +0.46
+Audit: OK
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Carefully read and understand the entire question, including any constraints or exclusions. Before answering, think step by step. First, identify the key information needed to answer the question. Then, search the provided passages to find relevant details. Explain your reasoning process clearly, referencing the specific passages that support your conclusions. Finally, synthesize the information and provide a concise and accurate answer that fully addresses the question's requirements.
+
+RPO-10
+CODE: hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt
+Stable score: 47.44
+Stable gain: +5.87
+Audit: OK
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. First, carefully analyze the question to understand what specific information is being requested. Then, thoroughly examine each passage to identify relevant details and their relationships to the question. Explicitly explain your reasoning process, outlining how you synthesize information from the passages to arrive at the best possible answer. Consider all aspects of the context and address any potential ambiguities in the question or passages.
+
+EvoPrompt-DE-5
+CODE: hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_5.txt
+Stable score: 44.58
+Stable gain: +2.75
+Audit: OK
+Prompt:
+Read the provided context and question carefully. Think through the evidence and give the best-supported answer.
+
+EvoPrompt-DE-10
+CODE: hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt
+Stable score: 51.37
+Stable gain: +9.53
+Audit: OK
+Prompt:
+You are given several context passages and a question. Identify the core issue posed by the question, and determine the key elements of the question’s inquiry. Engage in deliberate and methodical reasoning. Carefully evaluate the strengths of the supporting evidence, synthesize crucial information across all passages, and construct a response that is both accurate and comprehensively supported, firmly grounded in the provided context, and addresses the question’s underlying reasoning.
+
+ETGPO-1
+CODE: hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500
+Directory: outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500
+Prompt file: outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500/final_prompt.txt
+Stable score: 43.46
+Stable gain: +1.63
+Audit: OK
+Prompt:
+You are given context passages and a question that may require combining information from multiple passages. Think step by step carefully and provide the best answer using the context. To improve your accuracy, here are strategies for addressing common reasoning challenges. Apply these steps systematically before formulating your final answer.
+
+{
+  "guidance_items": [
+    {
+      "category_name": "Failure to Synthesize Information Across Multiple Sentences",
+      "guidance_text": "Before answering, identify all sentences relevant to the question and actively look for relationships between the information they contain; prioritize answers built by connecting multiple pieces of related information."
+    },
+    {
+      "category_name": "Uncategorized model error",
+      "guidance_text": "Carefully re-examine the question and the entire context to ensure all relevant information has been considered; focus on establishing a clear and logical chain of reasoning leading to the answer."
+    }
+  ]
+}
+
+MATH-500
+~~~~~~~~
+
+Initial prompt(s):
+[1] Solve the following math problem. Think step by step carefully before answering.
+
+Qwen3-4B
+^^^^^^^^
+
+RPO-5
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
+Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
+Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt
+Stable score: 87.36
+Stable gain: +0.00
+Audit: same as initial prompt
+Prompt:
+Solve the following math problem. Think step by step carefully before answering.
+
+RPO-10
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
+Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
+Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt
+Stable score: 87.36
+Stable gain: +0.00
+Audit: same as initial prompt; duplicate of RPO-5
+Prompt:
+Solve the following math problem. Think step by step carefully before answering.
+
+EvoPrompt-DE-5
+CODE: math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
+Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt
+Stable score: —
+Stable gain: —
+Audit: MISSING
+Prompt:
+PENDING
+
+EvoPrompt-DE-10
+CODE: math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
+Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt
+Stable score: —
+Stable gain: —
+Audit: MISSING
+Prompt:
+PENDING
+
+ETGPO-1
+CODE: math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900
+Directory: outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900
+Prompt file: outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt
+Stable score: —
+Stable gain: —
+Audit: MISSING
+Prompt:
+PENDING
+
+Gemma3-4B
+^^^^^^^^^
+
+RPO-5
+CODE: math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500/prompt_iteration_5.txt
+Stable score: 66.34
+Stable gain: +5.08
+Audit: OK
+Prompt:
+Solve the following math problem. Break down the solution into small, manageable steps. Explicitly state any formulas or principles you use at each step. When dealing with functions, clearly indicate the domain or range being considered. For geometric problems, include diagrams or sketches to support your reasoning. When solving for rotations, be mindful of positive and negative angles and equivalent rotations. **At each step, carefully double-check your calculations to ensure accuracy, paying close attention to signs and order of operations. Explicitly state the result of each calculation before proceeding to the next step.**
+
+RPO-10
+CODE: math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt
+Stable score: 67.24
+Stable gain: +5.98
+Audit: OK
+Prompt:
+Solve the following math problem. Break down the solution into small, manageable steps. Explicitly state any formulas or principles you use at each step. When dealing with functions, clearly indicate the domain or range being considered. For geometric problems, include diagrams or sketches to support your reasoning. When solving for rotations, be mindful of positive and negative angles and equivalent rotations. **At each step, carefully double-check your calculations and algebraic manipulations to ensure accuracy, paying close attention to signs, order of operations, and variable substitutions. Explicitly state the result of each calculation before proceeding to the next step. Focus on identifying underlying mathematical structures and general patterns; avoid getting bogged down in specific numerical details unless they are critical for establishing those patterns. If the problem involves multiple cases or possibilities, analyze each case systematically and explain why certain cases are valid or invalid. When comparing equations or expressions, ensure you account for all possible transformations and relationships. Before finalizing your answer, carefully review all steps and ensure your solution is consistent with the problem statement.**
+
+EvoPrompt-DE-5
+CODE: math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_5.txt
+Stable score: 68.07
+Stable gain: +7.57
+Audit: OK
+Prompt:
+Solve the following math problem. Prioritize a direct approach and efficient calculations. First, identify the type of mathematical reasoning required. Break down the problem into smaller, manageable components. Establish a clear plan before starting calculations. Then, derive the answer carefully, clearly articulating each step with logical justification, maintaining clarity and accuracy throughout. Avoid unnecessary detours or overly complicated methods. Focus on a streamlined and understandable process and state the final result with appropriate units, providing a well-structured solution.
+
+EvoPrompt-DE-10
+CODE: math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt
+Stable score: 68.07
+Stable gain: +7.57
+Audit: duplicate of EvoPrompt-DE-5
+Prompt:
+Solve the following math problem. Prioritize a direct approach and efficient calculations. First, identify the type of mathematical reasoning required. Break down the problem into smaller, manageable components. Establish a clear plan before starting calculations. Then, derive the answer carefully, clearly articulating each step with logical justification, maintaining clarity and accuracy throughout. Avoid unnecessary detours or overly complicated methods. Focus on a streamlined and understandable process and state the final result with appropriate units, providing a well-structured solution.
+
+ETGPO-1
+CODE: math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500
+Directory: outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500
+Prompt file: outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500/final_prompt.txt
+Stable score: 67.90
+Stable gain: +5.69
+Audit: OK
+Prompt:
+Solve the following math problem. Think step by step carefully before answering.
+
+To improve problem-solving accuracy, apply the following strategies throughout your reasoning process and final answer generation. Maintain a focus on precise calculations and accurate representation of problem constraints.
+
+After completing your reasoning, meticulously review your final calculation and ensure the answer is presented in the correct format and units as requested by the problem.
+Carefully examine the mathematical relationships in combinatorial problems; avoid assuming constant ratios between counts without rigorous justification, as combinatorial structures can change dramatically with scale.
+When encountering problems involving alternating actions, ensure you always begin with the first unfulfilled condition (e.g., the first closed locker) to accurately simulate the process.
+

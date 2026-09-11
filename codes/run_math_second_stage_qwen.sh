@@ -1,0 +1,866 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run only after all five first-stage source prompts below exist.
+# nohup bash codes/run_math_second_stage_qwen.sh > codes/nohup_outs/math_second_stage_qwen.log 2>&1 &
+
+[[ -f outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt'; exit 1; }
+[[ -f outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt'; exit 1; }
+[[ -f outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt'; exit 1; }
+[[ -f outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt'; exit 1; }
+[[ -f outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt'; exit 1; }
+#aunabil2nd: what are these above array contents: if not important, we should remove thiese and even the first set -euo command too
+
+#aunabil2nd: we should prepare the 2nd stage commands on hotpotqa and openbookqa too.
+#aunabil2nd: I need to validate the parameters for the 2nd stage commands
+
+#aunabil2nd: for reasoning I believe we should finetune to explore even large spans (since small ones will not create any differences)
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+  --code math500_reasoning_qwen_rpo5_lpo_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --optimizer-model Qwen/Qwen3-14B \
+  --optimizer-device cuda:0 \
+  --backend vllm \
+  --gpu-memory-utilization 0.90 \
+  --optimizer-max-new-tokens 10000 \
+  --train-sample-size 512 \
+  --feedback-examples 3 \
+  --max-locations 5 \
+  --max-words-per-location 3 \
+  --num-candidates 5 \
+  --top-z 5
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_rpo5_greater_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_rpo5_greater_tg_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater_tg \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_rpo5_gradpo_gen_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_rpo5_gradpo_prob_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant prob \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_rpo5_gradpo_gen_random_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen_random \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+  --code math500_reasoning_qwen_rpo10_lpo_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --optimizer-model Qwen/Qwen3-14B \
+  --optimizer-device cuda:0 \
+  --backend vllm \
+  --gpu-memory-utilization 0.90 \
+  --optimizer-max-new-tokens 10000 \
+  --train-sample-size 512 \
+  --feedback-examples 3 \
+  --max-locations 5 \
+  --max-words-per-location 3 \
+  --num-candidates 5 \
+  --top-z 5
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_rpo10_greater_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_rpo10_greater_tg_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater_tg \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_rpo10_gradpo_gen_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_rpo10_gradpo_prob_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant prob \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_rpo10_gradpo_gen_random_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen_random \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+  --code math500_reasoning_qwen_evoprompt5_lpo_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --optimizer-model Qwen/Qwen3-14B \
+  --optimizer-device cuda:0 \
+  --backend vllm \
+  --gpu-memory-utilization 0.90 \
+  --optimizer-max-new-tokens 10000 \
+  --train-sample-size 512 \
+  --feedback-examples 3 \
+  --max-locations 5 \
+  --max-words-per-location 3 \
+  --num-candidates 5 \
+  --top-z 5
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_evoprompt5_greater_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_evoprompt5_greater_tg_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater_tg \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_evoprompt5_gradpo_gen_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_evoprompt5_gradpo_prob_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant prob \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_evoprompt5_gradpo_gen_random_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen_random \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+  --code math500_reasoning_qwen_evoprompt10_lpo_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --optimizer-model Qwen/Qwen3-14B \
+  --optimizer-device cuda:0 \
+  --backend vllm \
+  --gpu-memory-utilization 0.90 \
+  --optimizer-max-new-tokens 10000 \
+  --train-sample-size 512 \
+  --feedback-examples 3 \
+  --max-locations 5 \
+  --max-words-per-location 3 \
+  --num-candidates 5 \
+  --top-z 5
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_evoprompt10_greater_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_evoprompt10_greater_tg_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater_tg \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_evoprompt10_gradpo_gen_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_evoprompt10_gradpo_prob_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant prob \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_evoprompt10_gradpo_gen_random_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen_random \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+  --code math500_reasoning_qwen_etgpo1_lpo_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --optimizer-model Qwen/Qwen3-14B \
+  --optimizer-device cuda:0 \
+  --backend vllm \
+  --gpu-memory-utilization 0.90 \
+  --optimizer-max-new-tokens 10000 \
+  --train-sample-size 512 \
+  --feedback-examples 3 \
+  --max-locations 5 \
+  --max-words-per-location 3 \
+  --num-candidates 5 \
+  --top-z 5
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_etgpo1_greater_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+  --code math500_reasoning_qwen_etgpo1_greater_tg_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant greater_tg \
+  --train-sample-size 3000 \
+  --gradient-batch-size 4 \
+  --selection-batch-size 8 \
+  --proposal-top-k 25 \
+  --proposal-example-size 50 \
+  --proposal-min-candidates 10 \
+  --selection-top-mu 10 \
+  --top-u 5 \
+  --fluency-lambda 0.2 \
+  --region-expansion-threshold 0.6
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_etgpo1_gradpo_gen_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_etgpo1_gradpo_prob_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant prob \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4
+
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+  --code math500_reasoning_qwen_etgpo1_gradpo_gen_random_lambda1_vs900 \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --validation-path data/processed/math500/validation.jsonl \
+  --initial-prompt-file outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt \
+  --model Qwen/Qwen3-4B \
+  --device cuda:0 \
+  --target-max-new-tokens 8192 \
+  --validation-std-penalty 1.0 \
+  --output-root outputs/math_prompt_optimization \
+  --overwrite \
+  --validation-fold-size 300 \
+  --backend transformers \
+  --variant gen_random \
+  --train-sample-size 3000 \
+  --gradient-batch-size 2 \
+  --selection-batch-size 4 \
+  --num-edit-regions 5 \
+  --max-region-tokens 2 \
+  --region-expansion-threshold 0.6 \
+  --num-region-candidates 5 \
+  --beam-width 5 \
+  --beam-replacement-mode llm_synthesis \
+  --fluency-lambda 0.5 \
+  --candidate-max-new-tokens 10000 \
+  --synthesis-max-new-tokens 10000 \
+  --synthesis-batch-size 4

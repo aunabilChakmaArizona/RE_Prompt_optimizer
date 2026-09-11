@@ -1,9 +1,10 @@
-"""QA answer-label gradients, region selection, and local token utilities."""
+"""QA answer gradients, reasoning conditioning, and local token utilities."""
 
 from __future__ import annotations
 
 import math
 import random
+import re
 import time
 from typing import Any, Iterable, Sequence
 
@@ -15,8 +16,45 @@ except ImportError:
     F = None
 
 from agents.agent_memory import clear_cuda_cache
-from prompt_optimization.qa_task import QAMode, choices_as_text, render_qa_prompt
+from prompt_optimization.meta_prompts import qa_task_description, qa_task_label
+from prompt_optimization.qa_task import (
+    QAMode,
+    choices_as_text,
+    context_as_text,
+    render_qa_prompt,
+)
 from prompt_optimization.run_io import format_elapsed
+
+
+ANSWER_EXTRACTOR_PREFIX = "\n\nTherefore, the final answer is <answer>"
+ANSWER_BLOCK_PATTERN = re.compile(
+    r"<answer>.*?</answer>",
+    flags=re.DOTALL | re.IGNORECASE,
+)
+
+
+def replace_or_append_gold_answer(
+    reasoning_trace: str,
+    gold_answer: str,
+) -> tuple[str, str, str]:
+    """Replace the last tagged prediction, or append a gold-answer fallback."""
+    matches = list(ANSWER_BLOCK_PATTERN.finditer(reasoning_trace))
+    if matches:
+        last_match = matches[-1]
+        answer_prefix = "<answer>"
+        gold_block = f"{answer_prefix}{gold_answer}</answer>"
+        assistant_answer = (
+            f"{reasoning_trace[:last_match.start()]}"
+            f"{gold_block}"
+            f"{reasoning_trace[last_match.end():]}"
+        )
+        return assistant_answer, answer_prefix, "replaced_existing_answer"
+
+    answer_prefix = ANSWER_EXTRACTOR_PREFIX
+    assistant_answer = (
+        f"{reasoning_trace.rstrip()}{answer_prefix}{gold_answer}</answer>"
+    )
+    return assistant_answer, answer_prefix, "appended_missing_answer_fallback"
 
 
 def _log_batch_checkpoint(
@@ -70,11 +108,21 @@ def render_teacher_forced_qa(
     record: dict[str, Any],
     mode: QAMode,
     tokenizer,
+    reasoning_trace: str | None = None,
 ) -> dict[str, Any]:
-    """Render a user question and gold tagged assistant answer for label loss."""
+    """Render one gold answer, optionally conditioned on generated reasoning."""
     user_prompt = render_qa_prompt(instruction_prompt, record, mode)
-    gold_label = str(record["answer"]).strip().upper()
-    assistant_answer = f"<answer>{gold_label}</answer>"
+    gold_answer = str(record["answer"]).strip()
+    if mode.task_name == "openbookqa":
+        gold_answer = gold_answer.upper()
+    if reasoning_trace is None:
+        answer_prefix = "<answer>"
+        assistant_answer = f"{answer_prefix}{gold_answer}</answer>"
+        answer_target_mode = "direct_gold_answer"
+    else:
+        assistant_answer, answer_prefix, answer_target_mode = (
+            replace_or_append_gold_answer(reasoning_trace, gold_answer)
+        )
     messages = [
         {"role": "user", "content": user_prompt},
         {"role": "assistant", "content": assistant_answer},
@@ -88,17 +136,20 @@ def render_teacher_forced_qa(
     instruction_start = rendered.find(instruction_prompt)
     if instruction_start < 0:
         raise ValueError("Instruction text was not found after chat-template rendering.")
-    answer_start = rendered.rfind(assistant_answer)
-    if answer_start < 0:
-        raise ValueError("Tagged gold answer was not found after chat-template rendering.")
-    label_start = answer_start + len("<answer>")
+    target_text = f"{answer_prefix}{gold_answer}</answer>"
+    target_start = rendered.rfind(target_text)
+    if target_start < 0:
+        raise ValueError("Gold answer target was not found after chat-template rendering.")
+    answer_start = target_start + len(answer_prefix)
     return {
         "text": rendered,
         "instruction_start": instruction_start,
         "instruction_end": instruction_start + len(instruction_prompt),
-        "label_start": label_start,
-        "label_end": label_start + len(gold_label),
-        "gold_label": gold_label,
+        "label_start": answer_start,
+        "label_end": answer_start + len(gold_answer),
+        "gold_label": gold_answer,
+        "reasoning_conditioned": reasoning_trace is not None,
+        "answer_target_mode": answer_target_mode,
     }
 
 
@@ -122,11 +173,21 @@ def _encode_teacher_forced_batch(
     records: Sequence[dict[str, Any]],
     mode: QAMode,
     tokenizer,
+    reasoning_traces: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Tokenize a teacher-forced batch and align instruction and answer tokens."""
+    """Tokenize a batch and align instruction and gold-answer tokens."""
+    if reasoning_traces is not None and len(reasoning_traces) != len(records):
+        raise ValueError("Reasoning traces and records must have equal lengths.")
+    traces = list(reasoning_traces) if reasoning_traces is not None else [None] * len(records)
     rendered = [
-        render_teacher_forced_qa(instruction_prompt, record, mode, tokenizer)
-        for record in records
+        render_teacher_forced_qa(
+            instruction_prompt,
+            record,
+            mode,
+            tokenizer,
+            reasoning_trace=trace,
+        )
+        for record, trace in zip(records, traces)
     ]
     encoded = tokenizer(
         [item["text"] for item in rendered],
@@ -189,21 +250,31 @@ def _label_loss_from_logits(
     answer_positions: Sequence[Sequence[int]],
     reduction: str,
 ) -> torch.Tensor:
-    """Calculate causal cross entropy only for gold option-label tokens."""
+    """Average gold-answer token loss per problem, then reduce problems."""
     require_torch()
-    selected_logits = []
-    selected_targets = []
-    for row_index, positions in enumerate(answer_positions):
-        for token_position in positions:
-            selected_logits.append(logits[row_index, token_position - 1, :])
-            selected_targets.append(input_ids[row_index, token_position])
-    if not selected_logits:
-        raise ValueError("No answer-label tokens were selected for task loss.")
-    return F.cross_entropy(
-        torch.stack(selected_logits),
-        torch.stack(selected_targets),
-        reduction=reduction,
-    )
+    example_losses = []
+    for row_index, positions in enumerate(answer_positions): #aunabil2nd: this should be weired if the answer is wrong: we reasoned one thing and put the ground truth another thing.
+        if not positions:
+            raise ValueError("Every problem must provide at least one answer token.")
+        selected_logits = torch.stack(
+            [logits[row_index, token_position - 1, :] for token_position in positions]
+        )
+        selected_targets = torch.stack(
+            [input_ids[row_index, token_position] for token_position in positions]
+        )
+        example_losses.append(
+            F.cross_entropy(selected_logits, selected_targets, reduction="mean")
+        )
+    if not example_losses:
+        raise ValueError("No gold-answer tokens were selected for task loss.")
+    losses = torch.stack(example_losses)
+    if reduction == "sum":
+        return losses.sum()
+    if reduction == "mean":
+        return losses.mean()
+    if reduction == "none":
+        return losses
+    raise ValueError(f"Unsupported answer-loss reduction: {reduction!r}")
 
 
 def collect_instruction_gradients(
@@ -214,15 +285,20 @@ def collect_instruction_gradients(
     model,
     tokenizer,
     batch_size: int,
+    reasoning_traces: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Average answer-label loss gradients over instruction token embeddings."""
+    """Average gold-answer gradients over instruction token embeddings."""
     require_torch()
     if not records:
         raise ValueError("Gradient records must not be empty.")
     if batch_size <= 0:
         raise ValueError("Gradient batch size must be positive.")
+    if reasoning_traces is not None and len(reasoning_traces) != len(records):
+        raise ValueError("Reasoning traces and gradient records must have equal lengths.")
     freeze_model_parameters(model)
     device = model_device(model)
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
     gradient_sums: torch.Tensor | None = None
     embedding_sums: torch.Tensor | None = None
     canonical_ids: list[int] | None = None
@@ -231,18 +307,27 @@ def collect_instruction_gradients(
     processed = 0
     total_batches = math.ceil(len(records) / batch_size)
     started_at = time.monotonic()
+    record_list = list(records)
+    trace_list = list(reasoning_traces) if reasoning_traces is not None else None
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
     try:
-        for batch_index, chunk in enumerate(
-            batched(list(records), batch_size),
+        for batch_index, start in enumerate(
+            range(0, len(records), batch_size),
             start=1,
         ):
+            chunk = record_list[start : start + batch_size]
+            trace_chunk = ( #aunabil2nd: what is chunk vs trace_chunk
+                trace_list[start : start + batch_size]
+                if trace_list is not None
+                else None
+            )
             payload = _encode_teacher_forced_batch(
                 instruction_prompt,
                 chunk,
                 mode,
                 tokenizer,
+                reasoning_traces=trace_chunk,
             )
             encoded = payload["encoded"]
             input_ids = encoded["input_ids"].to(device)
@@ -306,10 +391,18 @@ def collect_instruction_gradients(
     embedding_means = embedding_sums / processed
     norms = gradient_means.norm(dim=-1)
     tokens = tokenizer.convert_ids_to_tokens(canonical_ids)
+    peak_allocated_bytes = None #aunabil2nd: why these peack_ memory variables for? what is the use?
+    peak_reserved_bytes = None
+    if device.type == "cuda":
+        peak_allocated_bytes = int(torch.cuda.max_memory_allocated(device))
+        peak_reserved_bytes = int(torch.cuda.max_memory_reserved(device))
     return {
         "instruction_prompt": instruction_prompt,
         "num_records": processed,
         "mean_task_loss": total_loss / processed,
+        "reasoning_conditioned": reasoning_traces is not None,
+        "gradient_peak_allocated_bytes": peak_allocated_bytes,
+        "gradient_peak_reserved_bytes": peak_reserved_bytes,
         "token_ids": canonical_ids,
         "tokens": tokens,
         "offsets": canonical_offsets or [],
@@ -338,24 +431,36 @@ def score_instruction_task_loss(
     model,
     tokenizer,
     batch_size: int,
+    reasoning_traces: Sequence[str] | None = None,
 ) -> float:
-    """Measure mean teacher-forced answer-label cross entropy for one prompt."""
+    """Measure mean per-problem gold-answer cross entropy for one prompt."""
     require_torch()
     if not records:
         raise ValueError("Task-loss records must not be empty.")
+    if reasoning_traces is not None and len(reasoning_traces) != len(records):
+        raise ValueError("Reasoning traces and scored records must have equal lengths.")
     device = model_device(model)
     total_loss = 0.0
-    label_token_count = 0
+    processed = 0
+    record_list = list(records)
+    trace_list = list(reasoning_traces) if reasoning_traces is not None else None
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
     try:
         with torch.inference_mode():
-            for chunk in batched(list(records), batch_size):
+            for start in range(0, len(records), batch_size):
+                chunk = record_list[start : start + batch_size]
+                trace_chunk = (
+                    trace_list[start : start + batch_size]
+                    if trace_list is not None
+                    else None
+                )
                 payload = _encode_teacher_forced_batch(
                     instruction_prompt,
                     chunk,
                     mode,
                     tokenizer,
+                    reasoning_traces=trace_chunk,
                 )
                 encoded = payload["encoded"]
                 input_ids = encoded["input_ids"].to(device)
@@ -372,12 +477,12 @@ def score_instruction_task_loss(
                     reduction="sum",
                 )
                 total_loss += float(loss_sum.detach().cpu())
-                label_token_count += sum(len(row) for row in payload["answer_positions"])
+                processed += len(chunk)
                 del encoded, input_ids, attention_mask, outputs, loss_sum
                 clear_cuda_cache()
     finally:
         tokenizer.padding_side = original_padding_side
-    return total_loss / max(1, label_token_count)
+    return total_loss / max(1, processed)
 
 
 def score_instruction_nll(instruction_prompt: str, model, tokenizer) -> float:
@@ -414,8 +519,9 @@ def score_combined_objective(
     tokenizer,
     batch_size: int,
     fluency_lambda: float,
+    reasoning_traces: Sequence[str] | None = None,
 ) -> dict[str, float]:
-    """Combine QA label loss with the weighted log-perplexity penalty."""
+    """Combine gold-answer loss with the weighted prompt-fluency penalty."""
     task_loss = score_instruction_task_loss(
         instruction_prompt,
         records,
@@ -423,6 +529,7 @@ def score_combined_objective(
         model=model,
         tokenizer=tokenizer,
         batch_size=batch_size,
+        reasoning_traces=reasoning_traces,
     )
     instruction_nll = score_instruction_nll(instruction_prompt, model, tokenizer)
     return {
@@ -644,16 +751,20 @@ def _allowed_candidate_token(
     return text.isascii() and "\n" not in text and "\r" not in text
 
 
-def qa_proposal_header(record: dict[str, Any]) -> str:
-    """Build GreaTer's instruction-generation context around one QA example."""
+def qa_proposal_header(record: dict[str, Any], mode: QAMode) -> str:
+    """Build GreaTer's task-specific proposal context around one example."""
+    example_lines = []
+    if mode.task_name == "hotpotqa":
+        example_lines.extend(["Context:", context_as_text(record)])
+    example_lines.append(f"Question: {record['question']}")
+    if mode.task_name == "openbookqa":
+        example_lines.append(f"Choices: {choices_as_text(record)}")
+    example_input = "\n".join(example_lines)
     return (
-        "You are optimizing an instruction prompt for a multiple-choice question "
-        "answering model.\n\n"
-        "The instruction should help the model select the single best option for "
-        "a question with labeled choices.\n\n"
-        "Example model input:\n"
-        f"Question: {record['question']}\n"
-        f"Choices: {choices_as_text(record)}\n\n"
+        f"You are optimizing an instruction prompt for a {qa_task_label(mode)} "
+        "model.\n\n"
+        f"{qa_task_description(mode)}\n\n"
+        f"Example model input:\n{example_input}\n\n"
         "Write an instruction that should appear before this type of input and help "
         "the model solve the task.\n\nInstruction:\n"
     )
@@ -664,6 +775,7 @@ def proposal_token_candidates(
     token_index: int,
     proposal_records: Sequence[dict[str, Any]],
     *,
+    mode: QAMode,
     model,
     tokenizer,
     top_k: int,
@@ -682,7 +794,7 @@ def proposal_token_candidates(
     candidate_sets: list[list[int]] = []
     with torch.inference_mode():
         for record in proposal_records:
-            context = qa_proposal_header(record) + prefix
+            context = qa_proposal_header(record, mode) + prefix
             encoded = tokenizer(
                 context,
                 return_tensors="pt",
@@ -769,6 +881,7 @@ def rank_fixed_token_candidates(
     tokenizer,
     batch_size: int,
     fluency_lambda: float,
+    reasoning_traces: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Rank fixed GreaTer candidates with a combined-loss one-hot gradient."""
     require_torch()
@@ -778,6 +891,8 @@ def rank_fixed_token_candidates(
         raise ValueError("GreaTer gradient batch size must be positive.")
     if fluency_lambda < 0:
         raise ValueError("GreaTer fluency weight must be non-negative.")
+    if reasoning_traces is not None and len(reasoning_traces) != len(records):
+        raise ValueError("Reasoning traces and ranking records must have equal lengths.")
     instruction_prompt = str(gradient_analysis["instruction_prompt"])
     instruction_token_ids = [int(value) for value in gradient_analysis["token_ids"]]
     if not 0 <= token_index < len(instruction_token_ids):
@@ -805,15 +920,24 @@ def rank_fixed_token_candidates(
     total_batches = math.ceil(len(records) / batch_size)
     processed = 0
     started_at = time.monotonic()
+    record_list = list(records)
+    trace_list = list(reasoning_traces) if reasoning_traces is not None else None
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
     try:
-        for chunk_index, chunk in enumerate(batched(list(records), batch_size)):
+        for chunk_index, start in enumerate(range(0, len(records), batch_size)):
+            chunk = record_list[start : start + batch_size]
+            trace_chunk = (
+                trace_list[start : start + batch_size]
+                if trace_list is not None
+                else None
+            )
             payload = _encode_teacher_forced_batch(
                 instruction_prompt,
                 chunk,
                 mode,
                 tokenizer,
+                reasoning_traces=trace_chunk,
             )
             if list(payload["instruction_token_ids"]) != instruction_token_ids:
                 raise ValueError(

@@ -22,13 +22,22 @@ def parse_args() -> argparse.Namespace:
         "--train-sample-size",
         type=int,
         default=3000,
-        help="Label-balanced training questions used for optimization.",
+        help=(
+            "Initial random training pool; gradients use an equal number of its "
+            "correct and incorrect results."
+        ),
     )
     parser.add_argument(
         "--gradient-batch-size",
         type=int,
         default=2,
         help="Examples per batch when accumulating prompt-token gradients.",
+    )
+    parser.add_argument(
+        "--gradient-sample-size",
+        type=int,
+        default=200,
+        help="Final even-sized subset split equally between correct and incorrect results.",
     )
     parser.add_argument(
         "--selection-batch-size",
@@ -101,6 +110,7 @@ def parse_args() -> argparse.Namespace:
         parser.error("GradPO requires --backend transformers to compute gradients.")
     positive_values = (
         args.train_sample_size,
+        args.gradient_sample_size,
         args.gradient_batch_size,
         args.selection_batch_size,
         args.num_region_candidates,
@@ -111,6 +121,8 @@ def parse_args() -> argparse.Namespace:
     )
     if any(value <= 0 for value in positive_values):
         parser.error("GradPO sample, batch, beam, and candidate counts must be positive.")
+    if args.gradient_sample_size % 2 != 0:
+        parser.error("--gradient-sample-size must be even.")
     if args.num_edit_regions is not None and args.num_edit_regions <= 0:
         parser.error("--num-edit-regions must be positive when provided.")
     if args.max_region_tokens is not None and args.max_region_tokens <= 0:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import re
 import time
 from typing import Any, Sequence
@@ -19,11 +20,12 @@ from prompt_optimization.evaluation import (
     select_incorrect_feedback,
 )
 from prompt_optimization.meta_prompts import (
-    QA_TASK_DESCRIPTIONS,
     extract_json_object,
     gradpo_candidate_prompt,
     lpo_location_prompt,
     lpo_rewrite_prompt,
+    qa_task_description,
+    qa_task_label,
     unique_nonempty,
 )
 from prompt_optimization.models import TARGET_ROLE
@@ -38,7 +40,9 @@ from prompt_optimization.optimizer_common import (
 from prompt_optimization.qa_task import (
     QAMode,
     feedback_example,
-    sample_label_balanced_records,
+    render_qa_prompt,
+    sample_records,
+    score_qa_response,
 )
 from prompt_optimization.run_io import format_elapsed, save_json
 from prompt_optimization.sequence_gradients import (
@@ -70,6 +74,133 @@ def _source_scored_item(
         "metrics": evaluation["metrics"],
         "evaluation": evaluation,
     }
+
+
+def _sample_second_stage_records(
+    context: QAOptimizationContext,
+    sample_size: int,
+) -> list[dict[str, Any]]:
+    """Randomly sample training records for non-gradient second-stage methods."""
+    return sample_records(context.train_records, sample_size, context.rng)
+
+
+def _balance_gradient_pairs(
+    records: Sequence[dict[str, Any]],
+    predictions: Sequence[dict[str, Any]],
+    rng: random.Random,
+    sample_size: int,
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], dict[str, int]]:
+    """Select equal random counts of correct and incorrect model results."""
+    if len(records) != len(predictions):
+        raise ValueError("Gradient records and predictions must have equal lengths.")
+    if sample_size <= 0 or sample_size % 2 != 0:
+        raise ValueError("Gradient sample size must be a positive even number.")
+    pairs = list(zip(records, predictions))
+    correct = [pair for pair in pairs if bool(pair[1]["correct"])]
+    incorrect = [pair for pair in pairs if not bool(pair[1]["correct"])]
+    requested_per_outcome = sample_size // 2
+    selected_per_outcome = min(
+        requested_per_outcome,
+        len(correct),
+        len(incorrect),
+    )
+    selected = [
+        *rng.sample(correct, selected_per_outcome),
+        *rng.sample(incorrect, selected_per_outcome),
+    ]
+    rng.shuffle(selected)
+    counts = {
+        "available_correct": len(correct),
+        "available_incorrect": len(incorrect),
+        "requested_total": sample_size,
+        "requested_per_outcome": requested_per_outcome,
+        "selected_correct": selected_per_outcome,
+        "selected_incorrect": selected_per_outcome,
+        "selected_total": 2 * selected_per_outcome,
+        "shortfall": sample_size - 2 * selected_per_outcome,
+    }
+    return selected, counts
+
+
+def _build_balanced_gradient_subset(
+    context: QAOptimizationContext,
+    instruction_prompt: str,
+    sample_size: int,
+    gradient_sample_size: int,
+    *,
+    log_label: str,
+) -> tuple[list[dict[str, Any]], list[str] | None, dict[str, Any]]:
+    """Randomly sample a pool, then balance its correct and incorrect results."""
+    pool_records = sample_records(context.train_records, sample_size, context.rng)
+    rendered_prompts = [
+        render_qa_prompt(instruction_prompt, record, context.mode)
+        for record in pool_records
+    ]
+    pool_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"gradient pool inference started | examples={len(pool_records)}",
+    )
+    responses = context.model_pool.generate(
+        TARGET_ROLE,
+        rendered_prompts,
+        max_new_tokens=context.evaluator.max_new_tokens,
+        batch_size=context.evaluator.batch_size,
+        enable_thinking=context.mode.enable_thinking,
+        do_sample=False,
+        log_label=log_label,
+        return_token_usage=False,
+    )
+    predictions = [
+        score_qa_response(record, response, context.mode)
+        for record, response in zip(pool_records, responses)
+    ]
+    selected_pairs, counts = _balance_gradient_pairs(
+        pool_records,
+        predictions,
+        context.rng,
+        gradient_sample_size,
+    )
+    if counts["shortfall"] > 0:
+        log_progress(
+            context,
+            "WARNING: requested gradient subset unavailable; using largest "
+            f"balanced subset | requested_total={counts['requested_total']} | "
+            f"selected_total={counts['selected_total']} | "
+            f"available_correct={counts['available_correct']} | "
+            f"available_incorrect={counts['available_incorrect']}",
+        )
+    selected_records = [record for record, _prediction in selected_pairs]
+    reasoning_traces = (
+        [prediction["raw_response"] for _record, prediction in selected_pairs]
+        if context.mode.enable_thinking
+        else None
+    )
+    metadata = {
+        "strategy": "random_pool_then_equal_correct_incorrect",
+        "initial_pool_size": len(pool_records),
+        **counts,
+        "initial_pool_record_ids": [str(record["id"]) for record in pool_records],
+        "selected_examples": [
+            {
+                "id": str(record["id"]),
+                "correct": bool(prediction["correct"]),
+                "gold_answer": prediction.get("gold_answer"),
+                "predicted_answer": prediction.get("predicted_answer"),
+            }
+            for record, prediction in selected_pairs
+        ],
+    }
+    log_progress(
+        context,
+        "gradient pool balancing completed | "
+        f"available_correct={counts['available_correct']} | "
+        f"available_incorrect={counts['available_incorrect']} | "
+        f"selected_correct={counts['selected_correct']} | "
+        f"selected_incorrect={counts['selected_incorrect']}",
+        phase_started_at=pool_started_at,
+    )
+    return selected_records, reasoning_traces, metadata
 
 
 def _strictly_select_against_source(
@@ -133,11 +264,7 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         log_label="qa_lpo_initial_validation",
     )
     source = _source_scored_item(context, initial_evaluation)
-    train_records = sample_label_balanced_records(
-        context.train_records,
-        args.train_sample_size,
-        context.rng,
-    )
+    train_records = _sample_second_stage_records(context, args.train_sample_size)
     train_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
         train_records,
@@ -332,11 +459,16 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         log_label=f"qa_{args.variant}_initial_validation",
     )
     source = _source_scored_item(context, initial_evaluation)
-    train_records = sample_label_balanced_records(
-        context.train_records,
-        args.train_sample_size,
-        context.rng,
+    train_records, reasoning_traces, gradient_sample = (
+        _build_balanced_gradient_subset(
+            context,
+            context.initial_prompt,
+            args.train_sample_size,
+            args.gradient_sample_size,
+            log_label=f"qa_{args.variant}_gradient_pool_inference",
+        )
     )
+    save_json(context.run_dir / "gradient_sample.json", gradient_sample)
     model, tokenizer = context.model_pool.ensure(TARGET_ROLE)
     gradient_started_at = time.monotonic()
     log_progress(
@@ -351,6 +483,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         model=model,
         tokenizer=tokenizer,
         batch_size=args.gradient_batch_size,
+        reasoning_traces=reasoning_traces,
     )
     log_progress(
         context,
@@ -393,6 +526,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         gradient_analysis,
         int(region["peak_token_index"]),
         proposal_records,
+        mode=context.mode,
         model=model,
         tokenizer=tokenizer,
         top_k=args.proposal_top_k,
@@ -419,6 +553,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         tokenizer=tokenizer,
         batch_size=args.gradient_batch_size,
         fluency_lambda=args.fluency_lambda,
+        reasoning_traces=reasoning_traces,
     )
     log_progress(
         context,
@@ -477,6 +612,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
             tokenizer=tokenizer,
             batch_size=args.selection_batch_size,
             fluency_lambda=args.fluency_lambda,
+            reasoning_traces=reasoning_traces,
         )
         objective_scores.append(
             {"candidate_index": candidate_index, "prompt": prompt, **score}
@@ -546,6 +682,11 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
             "algorithm": args.variant,
             "iterations": 1,
             "improved_on_validation": improved,
+            "gradient_sampling": {
+                key: value
+                for key, value in gradient_sample.items()
+                if key not in {"initial_pool_record_ids", "selected_examples"}
+            },
             "selected_region": region,
             "proposal_metadata": proposal_metadata,
             "top_objective_candidates": top_objective,
@@ -794,8 +935,8 @@ def _gradpo_synthesis_prompt(
         )
     qa_prompt = "\n\n".join(
         [
-            "You are an expert prompt generator for a multiple-choice question-answering task.",
-            QA_TASK_DESCRIPTIONS[mode.name],
+            f"You are an expert prompt generator for a {qa_task_label(mode)} task.",
+            qa_task_description(mode),
             GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1,
         ]
     )
@@ -830,6 +971,7 @@ def _beam_search_replacements(
     replacement_mode: str,
     synthesis_max_new_tokens: int,
     synthesis_batch_size: int,
+    reasoning_traces: Sequence[str] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Combine local replacements and keep the lowest-loss prompt beam."""
     candidate_index = {
@@ -966,6 +1108,7 @@ def _beam_search_replacements(
                 tokenizer=tokenizer,
                 batch_size=selection_batch_size,
                 fluency_lambda=fluency_lambda,
+                reasoning_traces=reasoning_traces,
             )
             scored_expansions.append(
                 {"candidate_index": candidate_index_value, **expansion, **objective}
@@ -1023,11 +1166,16 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         log_label=f"qa_gradpo_{args.variant}_initial_validation",
     )
     source = _source_scored_item(context, initial_evaluation)
-    train_records = sample_label_balanced_records(
-        context.train_records,
-        args.train_sample_size,
-        context.rng,
+    train_records, reasoning_traces, gradient_sample = (
+        _build_balanced_gradient_subset(
+            context,
+            context.initial_prompt,
+            args.train_sample_size,
+            args.gradient_sample_size,
+            log_label=f"qa_gradpo_{args.variant}_gradient_pool_inference",
+        )
     )
+    save_json(context.run_dir / "gradient_sample.json", gradient_sample)
     model, tokenizer = context.model_pool.ensure(TARGET_ROLE)
     gradient_started_at = time.monotonic()
     log_progress(
@@ -1042,6 +1190,7 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         model=model,
         tokenizer=tokenizer,
         batch_size=args.gradient_batch_size,
+        reasoning_traces=reasoning_traces,
     )
     log_progress(
         context,
@@ -1136,6 +1285,7 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         replacement_mode=args.beam_replacement_mode,
         synthesis_max_new_tokens=args.synthesis_max_new_tokens,
         synthesis_batch_size=args.synthesis_batch_size,
+        reasoning_traces=reasoning_traces,
     )
     log_progress(
         context,
@@ -1192,6 +1342,11 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "algorithm": f"gradpo_{args.variant}",
             "iterations": 1,
             "improved_on_validation": improved,
+            "gradient_sampling": {
+                key: value
+                for key, value in gradient_sample.items()
+                if key not in {"initial_pool_record_ids", "selected_examples"}
+            },
             "selection_mode": selection_mode,
             "num_edit_regions": num_edit_regions,
             "max_region_tokens": max_region_tokens,

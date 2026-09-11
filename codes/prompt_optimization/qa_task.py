@@ -331,34 +331,46 @@ def sample_records(
     return rng.sample(list(records), sample_size)
 
 
-def sample_label_balanced_records(
+def select_validation_fold_subset(
     records: Sequence[dict[str, Any]],
-    sample_size: int,
-    rng: random.Random,
+    fold_size: int | None,
 ) -> list[dict[str, Any]]:
-    """Sample approximately equal numbers of A, B, C, and D answers."""
-    if sample_size <= 0 or sample_size >= len(records):
+    """Keep a deterministic equal-size prefix from each validation fold."""
+    if fold_size is None:
         return list(records)
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for record in records:
-        groups.setdefault(str(record["answer"]).strip().upper(), []).append(record)
-    labels = sorted(groups)
-    if not labels:
-        return []
-    for group in groups.values():
-        rng.shuffle(group)
+    if fold_size <= 0:
+        raise ValueError("Validation fold size must be positive.")
 
+    available: dict[str, int] = {}
+    for record in records:
+        if record.get("validation_fold") is None:
+            raise ValueError(
+                "Validation subsampling requires validation_fold on every record."
+            )
+        fold = str(record["validation_fold"])
+        available[fold] = available.get(fold, 0) + 1
+    if len(available) != 3:
+        raise ValueError(
+            "Validation subsampling requires exactly three folds; "
+            f"found {len(available)}."
+        )
+    undersized = {
+        fold: count for fold, count in available.items() if count < fold_size
+    }
+    if undersized:
+        raise ValueError(
+            f"Requested {fold_size} records per fold, but folds are too small: "
+            f"{undersized}."
+        )
+
+    retained: dict[str, int] = {fold: 0 for fold in available}
     selected: list[dict[str, Any]] = []
-    per_label = sample_size // len(labels)
-    for label in labels:
-        selected.extend(groups[label][:per_label])
-    selected_ids = {str(record["id"]) for record in selected}
-    remaining = [
-        record for record in records if str(record["id"]) not in selected_ids
-    ]
-    rng.shuffle(remaining)
-    selected.extend(remaining[: sample_size - len(selected)])
-    rng.shuffle(selected)
+    for record in records:
+        fold = str(record["validation_fold"])
+        if retained[fold] >= fold_size:
+            continue
+        selected.append(record)
+        retained[fold] += 1
     return selected
 
 

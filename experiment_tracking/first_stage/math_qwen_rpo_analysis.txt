@@ -1,0 +1,119 @@
+Qwen Math-500 RPO Analysis
+==========================
+
+Run identity
+------------
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
+Output directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
+Validation: 3 folds x 300 examples = 900 examples
+Stable-score penalty (lambda): 1.0
+Iterations: 10
+
+Main result
+-----------
+RPO completed correctly, but it did not find a prompt that outperformed the
+initial prompt. All ten rewritten prompts had lower raw accuracy and lower
+stable accuracy. RPO therefore correctly retained the initial prompt at both
+the fifth- and tenth-iteration snapshots.
+
+Initial/retained prompt:
+Solve the following math problem. Think step by step carefully before answering.
+
+Iteration results
+-----------------
+| Iteration | Raw accuracy (%) | Stable score (%) | Main prompt change |
+|-----------|------------------|------------------|--------------------|
+| Initial   | 87.78            | 87.36            | Short, general instruction |
+| 1         | 86.11            | 85.70            | Multiple approaches and assumptions |
+| 2         | 86.00            | 85.02            | Algebra expansion and edge cases |
+| 3         | 86.78            | 86.09            | Symmetry, rotations, and overcounting |
+| 4         | 86.44            | 86.03            | Exact boxed answer |
+| 5         | 85.11            | 83.61            | Multiple methods and boxed answer |
+| 6         | 85.56            | 84.06            | Ordering and answer formatting |
+| 7         | 86.11            | 84.98            | Geometry and numerical precision |
+| 8         | 86.22            | 84.18            | Transformations and cross-checking |
+| 9         | 85.89            | 85.32            | Rationalization and Jensen's inequality |
+| 10        | 86.00            | 84.91            | Combinatorics and conditional probability |
+
+The strongest rewritten prompt was iteration 3, but its stable score was still
+1.27 percentage points below the initial prompt. Every candidate also had lower
+raw accuracy, so changing lambda from 1 to 0 would not have selected any of them.
+
+Prompt analysis
+---------------
+1. The initial prompt contains 12 words, whereas the rewritten prompts contain
+   29-97 words. RPO consistently made the instruction much longer.
+
+2. The new prompts encouraged substantially more reasoning. Average generated
+   output length increased from 3,276.85 tokens for the initial prompt to
+   3,557.66-4,233.66 tokens for the candidates.
+
+3. Several prompts overfit the small set of feedback examples. They introduced
+   narrow instructions concerning rotations, geometric theorems, Jensen's
+   inequality, algebraic expansion, and conditional probability rather than a
+   broadly useful mathematical strategy.
+
+4. Iterations 4, 5, and 7 added boxed-answer instructions even though answer
+   formatting is handled by the separate fixed answer instruction. Explicit
+   answer-tag extraction fell from 380 examples initially to only 4 and 2 in
+   iterations 5 and 7, respectively. Boxed fallback recovered most answers, but
+   the two instructions were still competing with each other.
+
+5. The initial prompt produced 88 examples with no extractable final answer.
+   Every candidate was worse on this measure, producing 98-113 unextractable
+   answers. The more verbose prompts likely increased overthinking, unfinished
+   responses, and failure to reach the required final answer.
+
+Feedback analysis
+-----------------
+RPO used three feedback examples in every iteration, intentionally consisting
+of one correct and two incorrect examples. Across ten iterations, this produced
+10 correct and 20 incorrect feedback examples.
+
+However, 17 of the 20 incorrect examples had:
+
+LLM Selected Answer: INVALID
+
+Many of these were final-answer completion or extraction failures rather than
+clear mathematical-reasoning errors. In several cases, the reasoning reached or
+approached the correct result but did not provide an extractable final answer.
+The optimizer sometimes interpreted these cases as correct but mislabeled, or
+as external formatting errors. It then generated longer or formatting-oriented
+instructions rather than correcting a mathematical reasoning weakness.
+
+Parent selection was not the primary problem. Iterations 1-4 and 9 directly
+rewrote the initial prompt, while later iterations sometimes explored children
+of weaker candidates. Although this later exploration compounded prompt drift,
+the first four direct rewrites of the initial prompt were already worse.
+
+Conclusion
+----------
+This was not a parser, validation, or RPO-selection failure. All ten rewrite
+calls produced valid parsed prompts, and the selection procedure correctly
+rejected every weaker candidate. The main problem was that the feedback set was
+dominated by INVALID answer/extraction failures and the optimizer converted
+those signals into verbose, example-specific instructions.
+
+Proposed next fix
+-----------------
+For reasoning-prompt optimization, prioritize incorrect training examples that
+have a valid extracted final answer. These are more likely to represent genuine
+reasoning mistakes. INVALID, truncated, and answer-format-only failures should
+be excluded when the editable prompt does not include the fixed answer-format
+instruction.
+
+The feedback prompt should also distinguish a genuine mathematical error from
+a missing or malformed final answer. Revised instructions should remain concise
+and task-general and should not introduce answer-format directions that compete
+with the fixed answer instruction.
+
+Source artifacts
+----------------
+- summary.json
+- candidates.jsonl
+- events.jsonl
+- population.json
+- initial_validation_summary.json
+- final_validation_summary.json
+
+All source artifacts are stored in the output directory listed above.
