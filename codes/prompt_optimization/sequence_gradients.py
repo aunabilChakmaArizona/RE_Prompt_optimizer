@@ -244,6 +244,54 @@ def _encode_teacher_forced_batch(
     }
 
 
+def _encode_teacher_forced_scoring_batch(
+    instruction_prompts: Sequence[str],
+    records: Sequence[dict[str, Any]],
+    mode: QAMode,
+    tokenizer,
+    reasoning_traces: Sequence[str | None],
+) -> dict[str, Any]:
+    """Tokenize mixed candidate/example sequences for HF task-loss scoring."""
+    if not (
+        len(instruction_prompts) == len(records) == len(reasoning_traces)
+    ):
+        raise ValueError("Prompts, records, and reasoning traces must have equal lengths.")
+    rendered = [
+        render_teacher_forced_qa(
+            instruction_prompt,
+            record,
+            mode,
+            tokenizer,
+            reasoning_trace=reasoning_trace,
+        )
+        for instruction_prompt, record, reasoning_trace in zip(
+            instruction_prompts,
+            records,
+            reasoning_traces,
+        )
+    ]
+    encoded = tokenizer(
+        [item["text"] for item in rendered],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        return_offsets_mapping=True,
+        add_special_tokens=False,
+    )
+    offset_rows = encoded.pop("offset_mapping").tolist()
+    answer_positions = []
+    for item, offsets in zip(rendered, offset_rows):
+        positions = overlapping_token_positions(
+            offsets,
+            item["label_start"],
+            item["label_end"],
+        )
+        if not positions or any(position <= 0 for position in positions):
+            raise ValueError("Unable to align causal gold-answer tokens for HF scoring.")
+        answer_positions.append(positions)
+    return {"encoded": encoded, "answer_positions": answer_positions}
+
+
 def _label_loss_from_logits(
     logits: torch.Tensor,
     input_ids: torch.Tensor,
@@ -434,33 +482,67 @@ def score_instruction_task_loss(
     reasoning_traces: Sequence[str] | None = None,
 ) -> float:
     """Measure mean per-problem gold-answer cross entropy for one prompt."""
+    return score_instruction_task_losses(
+        [instruction_prompt],
+        records,
+        mode=mode,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        reasoning_traces=reasoning_traces,
+    )[0]
+
+
+def score_instruction_task_losses(
+    instruction_prompts: Sequence[str],
+    records: Sequence[dict[str, Any]],
+    *,
+    mode: QAMode,
+    model,
+    tokenizer,
+    batch_size: int,
+    reasoning_traces: Sequence[str] | None = None,
+) -> list[float]:
+    """Batch candidate/example pairs and calculate every task loss with HF."""
     require_torch()
+    prompts = list(instruction_prompts)
+    if not prompts:
+        return []
     if not records:
         raise ValueError("Task-loss records must not be empty.")
+    if batch_size <= 0:
+        raise ValueError("Task-loss batch size must be positive.")
     if reasoning_traces is not None and len(reasoning_traces) != len(records):
         raise ValueError("Reasoning traces and scored records must have equal lengths.")
-    device = model_device(model)
-    total_loss = 0.0
-    processed = 0
+
     record_list = list(records)
-    trace_list = list(reasoning_traces) if reasoning_traces is not None else None
+    trace_list: list[str | None] = (
+        list(reasoning_traces) if reasoning_traces is not None else [None] * len(records)
+    )
+    work_items = [
+        (candidate_index, prompt, record, reasoning_trace)
+        for candidate_index, prompt in enumerate(prompts)
+        for record, reasoning_trace in zip(record_list, trace_list)
+    ]
+    loss_sums = [0.0] * len(prompts)
+    loss_counts = [0] * len(prompts)
+    device = model_device(model)
+    total_batches = math.ceil(len(work_items) / batch_size)
+    scoring_started_at = time.monotonic()
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
     try:
         with torch.inference_mode():
-            for start in range(0, len(records), batch_size):
-                chunk = record_list[start : start + batch_size]
-                trace_chunk = (
-                    trace_list[start : start + batch_size]
-                    if trace_list is not None
-                    else None
-                )
-                payload = _encode_teacher_forced_batch(
-                    instruction_prompt,
-                    chunk,
+            for batch_index, chunk in enumerate(
+                batched(work_items, batch_size),
+                start=1,
+            ):
+                payload = _encode_teacher_forced_scoring_batch(
+                    [item[1] for item in chunk],
+                    [item[2] for item in chunk],
                     mode,
                     tokenizer,
-                    reasoning_traces=trace_chunk,
+                    [item[3] for item in chunk],
                 )
                 encoded = payload["encoded"]
                 input_ids = encoded["input_ids"].to(device)
@@ -470,19 +552,34 @@ def score_instruction_task_loss(
                     attention_mask=attention_mask,
                     use_cache=False,
                 )
-                loss_sum = _label_loss_from_logits(
+                losses = _label_loss_from_logits(
                     outputs.logits,
                     input_ids,
                     payload["answer_positions"],
-                    reduction="sum",
+                    reduction="none",
                 )
-                total_loss += float(loss_sum.detach().cpu())
-                processed += len(chunk)
-                del encoded, input_ids, attention_mask, outputs, loss_sum
+                for item, loss in zip(chunk, losses.detach().cpu().tolist()):
+                    candidate_index = int(item[0])
+                    loss_sums[candidate_index] += float(loss)
+                    loss_counts[candidate_index] += 1
+                del encoded, input_ids, attention_mask, outputs, losses
                 clear_cuda_cache()
+                _log_batch_checkpoint(
+                    "candidate-task-loss",
+                    batch_index,
+                    total_batches,
+                    min(batch_index * batch_size, len(work_items)),
+                    len(work_items),
+                    scoring_started_at,
+                )
     finally:
         tokenizer.padding_side = original_padding_side
-    return total_loss / max(1, processed)
+    if any(count != len(records) for count in loss_counts):
+        raise RuntimeError("HF task-loss scoring did not process every candidate example.")
+    return [
+        loss_sum / count
+        for loss_sum, count in zip(loss_sums, loss_counts)
+    ]
 
 
 def score_instruction_nll(instruction_prompt: str, model, tokenizer) -> float:
@@ -508,6 +605,62 @@ def score_instruction_nll(instruction_prompt: str, model, tokenizer) -> float:
     del encoded, input_ids, outputs, loss
     clear_cuda_cache()
     return value
+
+
+def score_instruction_nlls(
+    instruction_prompts: Sequence[str],
+    model,
+    tokenizer,
+    *,
+    batch_size: int,
+) -> list[float]:
+    """Measure prompt fluency for several candidate instructions in HF batches."""
+    require_torch()
+    if not instruction_prompts:
+        return []
+    if batch_size <= 0:
+        raise ValueError("Fluency batch size must be positive.")
+    device = model_device(model)
+    values = []
+    original_padding_side = tokenizer.padding_side
+    tokenizer.padding_side = "left"
+    try:
+        with torch.inference_mode():
+            for chunk in batched(list(instruction_prompts), batch_size):
+                encoded = tokenizer(
+                    list(chunk),
+                    return_tensors="pt",
+                    padding=True,
+                    add_special_tokens=False,
+                )
+                input_ids = encoded["input_ids"].to(device)
+                attention_mask = encoded["attention_mask"].to(device)
+                outputs = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    use_cache=False,
+                )
+                for row_index in range(input_ids.size(0)):
+                    valid_positions = torch.nonzero(
+                        attention_mask[row_index],
+                        as_tuple=False,
+                    ).flatten()
+                    if valid_positions.numel() < 2:
+                        values.append(0.0)
+                        continue
+                    source_positions = valid_positions[:-1]
+                    target_positions = valid_positions[1:]
+                    loss = F.cross_entropy(
+                        outputs.logits[row_index, source_positions, :],
+                        input_ids[row_index, target_positions],
+                        reduction="mean",
+                    )
+                    values.append(float(loss.detach().cpu()))
+                del encoded, input_ids, attention_mask, outputs
+                clear_cuda_cache()
+    finally:
+        tokenizer.padding_side = original_padding_side
+    return values
 
 
 def score_combined_objective(
@@ -537,6 +690,46 @@ def score_combined_objective(
         "instruction_nll": instruction_nll,
         "combined_score": task_loss + fluency_lambda * instruction_nll,
     }
+
+
+def score_combined_objectives(
+    instruction_prompts: Sequence[str],
+    records: Sequence[dict[str, Any]],
+    *,
+    mode: QAMode,
+    model,
+    tokenizer,
+    batch_size: int,
+    fluency_lambda: float,
+    reasoning_traces: Sequence[str] | None = None,
+) -> list[dict[str, float]]:
+    """Score all candidate task losses and fluency penalties in HF batches."""
+    prompts = list(instruction_prompts)
+    if not prompts:
+        return []
+    task_losses = score_instruction_task_losses(
+        prompts,
+        records,
+        mode=mode,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        reasoning_traces=reasoning_traces,
+    )
+    instruction_nlls = score_instruction_nlls(
+        prompts,
+        model,
+        tokenizer,
+        batch_size=batch_size,
+    )
+    return [
+        {
+            "task_loss": task_loss,
+            "instruction_nll": instruction_nll,
+            "combined_score": task_loss + fluency_lambda * instruction_nll,
+        }
+        for task_loss, instruction_nll in zip(task_losses, instruction_nlls)
+    ]
 
 
 def _differentiable_instruction_nll(

@@ -114,6 +114,55 @@ def evaluate_candidates(
 ) -> list[dict[str, Any]]:
     """Evaluate candidates and store their accuracy and applicable selection score."""
     candidate_list = unique_nonempty(candidates)
+    if context.model_pool.uses_vllm_generation:
+        evaluation_started_at = time.monotonic()
+        log_progress(
+            context,
+            f"{phase} batched evaluation started | iteration={iteration} | "
+            f"candidates={len(candidate_list)} | examples={len(records)}",
+        )
+        evaluations = context.evaluator.evaluate_many(
+            candidate_list,
+            records,
+            split_name=split_name,
+            log_label=f"qa_promptopt_{context.optimizer_name}_{phase}",
+        )
+        scored = []
+        for candidate_index, (prompt, evaluation) in enumerate(
+            zip(candidate_list, evaluations)
+        ):
+            item = {
+                "phase": phase,
+                "iteration": iteration,
+                "candidate_index": candidate_index,
+                "prompt": prompt,
+                "accuracy": metric_accuracy(evaluation),
+                "selection_score": metric_selection_score(evaluation),
+                "metrics": evaluation["metrics"],
+                "evaluation": evaluation,
+            }
+            scored.append(item)
+            context.logger.candidate(
+                phase=phase,
+                iteration=iteration,
+                candidate_index=candidate_index,
+                prompt=prompt,
+                metrics=evaluation["metrics"],
+            )
+            log_progress(
+                context,
+                f"{phase} batched result {candidate_index + 1}/{len(candidate_list)} "
+                f"| iteration={iteration} | current {scored_item_text(item)}",
+            )
+        if scored:
+            log_progress(
+                context,
+                f"{phase} batched evaluation completed | iteration={iteration} | "
+                f"best {scored_item_text(best_scored_candidate(scored))}",
+                phase_started_at=evaluation_started_at,
+            )
+        return scored
+
     scored: list[dict[str, Any]] = []
     for candidate_index, prompt in enumerate(candidate_list):
         candidate_started_at = time.monotonic()

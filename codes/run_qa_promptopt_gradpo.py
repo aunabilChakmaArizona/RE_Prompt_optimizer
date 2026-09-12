@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import argparse
 
-from prompt_optimization.cli_common import add_shared_arguments, build_context
+from prompt_optimization.cli_common import (
+    add_gradient_runtime_arguments,
+    add_shared_arguments,
+    build_context,
+)
 from prompt_optimization.second_stage import run_gradpo
 
 
@@ -12,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     """Read the full-scale QA GradPO configuration."""
     parser = argparse.ArgumentParser(description=__doc__)
     add_shared_arguments(parser, require_optimizer_model=False)
+    add_gradient_runtime_arguments(parser)
     parser.add_argument(
         "--variant",
         choices=("gen", "prob", "gen_random"),
@@ -107,7 +112,9 @@ def parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
     if args.backend == "vllm":
-        parser.error("GradPO requires --backend transformers to compute gradients.")
+        parser.error("GradPO requires --backend transformers or dual for gradients.")
+    if args.backend == "dual" and args.final_evaluation_backend != "vllm":
+        parser.error("Dual mode uses its resident vLLM engine for final evaluation.")
     positive_values = (
         args.train_sample_size,
         args.gradient_sample_size,

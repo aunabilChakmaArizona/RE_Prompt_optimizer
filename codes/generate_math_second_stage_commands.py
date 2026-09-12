@@ -74,6 +74,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--qwen-gpu", default="2", help="Physical GPU for Qwen.")
     parser.add_argument("--gemma-gpu", default="3", help="Physical GPU for Gemma.")
     parser.add_argument(
+        "--qwen-hf-gpu",
+        default=None,
+        help="Optional second physical GPU for Qwen HF gradient scoring.",
+    )
+    parser.add_argument(
+        "--gemma-hf-gpu",
+        default=None,
+        help="Optional second physical GPU for Gemma HF gradient scoring.",
+    )
+    parser.add_argument(
+        "--gradient-backend",
+        choices=("dual", "transformers"),
+        default="transformers",
+        help="Use resident HF+vLLM or HF followed by vLLM for gradient refiners.",
+    )
+    parser.add_argument(
+        "--dual-vllm-gpu-memory-utilization",
+        type=float,
+        default=0.50,
+        help="vLLM memory fraction while its HF copy is also resident.",
+    )
+    parser.add_argument(
+        "--final-vllm-gpu-memory-utilization",
+        type=float,
+        default=0.90,
+        help="vLLM memory fraction after unloading HF in regular mode.",
+    )
+    parser.add_argument(
+        "--vllm-conservative-settings",
+        action="store_true",
+        help="Enable the optional conservative vLLM engine settings.",
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=DEFAULT_OUTPUT_ROOT,
@@ -85,7 +118,14 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_COMMAND_DIR,
         help="Directory receiving the generated shell scripts.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    for name in (
+        "dual_vllm_gpu_memory_utilization",
+        "final_vllm_gpu_memory_utilization",
+    ):
+        if not 0.0 < getattr(args, name) <= 1.0:
+            parser.error(f"--{name.replace('_', '-')} must be in (0, 1].")
+    return args
 
 
 def source_prompt_path(
@@ -133,11 +173,20 @@ def common_arguments(
     return arguments
 
 
-def method_arguments(family: str, method_name: str, variant: str | None) -> list[str]:
+def method_arguments(
+    family: str,
+    method_name: str,
+    variant: str | None,
+    *,
+    gradient_backend: str,
+    dual_vllm_utilization: float,
+    final_vllm_utilization: float,
+    conservative_settings: bool,
+) -> list[str]:
     """Build the fixed hyperparameters for one second-stage method."""
     config = MODEL_CONFIGS[family]
     if method_name == "lpo":
-        return [
+        arguments = [
             "--optimizer-model", str(config["optimizer"]),
             "--optimizer-device", "cuda:0",
             "--backend", "vllm",
@@ -151,9 +200,37 @@ def method_arguments(family: str, method_name: str, variant: str | None) -> list
             "--num-candidates", "5",
             "--top-z", "5",
         ]
+        if conservative_settings:
+            arguments.append("--vllm-conservative-settings")
+        return arguments
+    gradient_runtime = [
+        "--backend", gradient_backend,
+        "--final-evaluation-backend", "vllm",
+    ]
+    if gradient_backend == "dual":
+        gradient_runtime.extend(
+            [
+                "--dual-vllm-gpu-memory-utilization",
+                str(dual_vllm_utilization),
+                "--vllm-max-model-len",
+                "16384",
+            ]
+        )
+        if family == "gemma":
+            gradient_runtime.append("--vllm-disable-images")
+    else:
+        gradient_runtime.extend(
+            [
+                "--gpu-memory-utilization",
+                str(final_vllm_utilization),
+                *config["vllm_extra"],
+            ]
+        )
+    if conservative_settings:
+        gradient_runtime.append("--vllm-conservative-settings")
     if method_name in {"greater", "greater_tg"}:
         return [
-            "--backend", "transformers",
+            *gradient_runtime,
             "--variant", str(variant),
             "--train-sample-size", "3000",
             "--gradient-batch-size", "4",
@@ -167,7 +244,7 @@ def method_arguments(family: str, method_name: str, variant: str | None) -> list
             "--region-expansion-threshold", "0.6",
         ]
     return [
-        "--backend", "transformers",
+        *gradient_runtime,
         "--variant", str(variant),
         "--train-sample-size", "3000",
         "--gradient-batch-size", "2",
@@ -208,7 +285,10 @@ def format_command(
     arguments: Sequence[str],
 ) -> str:
     """Render one command with one option group per shell line."""
-    lines = [f"CUDA_VISIBLE_DEVICES={shlex.quote(gpu)} python -u {runner} \\"]
+    lines = [
+        "CUDA_DEVICE_ORDER=PCI_BUS_ID "
+        f"CUDA_VISIBLE_DEVICES={shlex.quote(gpu)} python -u {runner} \\"
+    ]
     groups = split_argument_groups(arguments)
     for index, group in enumerate(groups):
         suffix = " \\" if index < len(groups) - 1 else ""
@@ -219,7 +299,13 @@ def format_command(
 def commands_for_family(
     family: str,
     output_root: Path,
-    gpu: str,
+    vllm_gpu: str,
+    *,
+    hf_gpu: str | None,
+    gradient_backend: str,
+    dual_vllm_utilization: float,
+    final_vllm_utilization: float,
+    conservative_settings: bool,
 ) -> tuple[list[Path], list[str]]:
     """Create source paths and thirty commands for one target-model family."""
     source_paths: list[Path] = []
@@ -236,8 +322,22 @@ def commands_for_family(
                 prompt_path=prompt_path,
                 output_root=output_root,
             )
-            arguments.extend(method_arguments(family, method_name, variant))
-            commands.append(format_command(gpu, runner, arguments))
+            arguments.extend(
+                method_arguments(
+                    family,
+                    method_name,
+                    variant,
+                    gradient_backend=gradient_backend,
+                    dual_vllm_utilization=dual_vllm_utilization,
+                    final_vllm_utilization=final_vllm_utilization,
+                    conservative_settings=conservative_settings,
+                )
+            )
+            visible_gpus = vllm_gpu
+            if gradient_backend == "dual" and method_name != "lpo" and hf_gpu:
+                visible_gpus = f"{vllm_gpu},{hf_gpu}"
+                arguments.extend(["--hf-device", "cuda:1"])
+            commands.append(format_command(visible_gpus, runner, arguments))
     return source_paths, commands
 
 
@@ -272,12 +372,18 @@ def main() -> None:
     args = parse_args()
     families = ("qwen", "gemma") if args.model_family == "all" else (args.model_family,)
     gpu_overrides = {"qwen": args.qwen_gpu, "gemma": args.gemma_gpu}
+    hf_gpu_overrides = {"qwen": args.qwen_hf_gpu, "gemma": args.gemma_hf_gpu}
     args.command_dir.mkdir(parents=True, exist_ok=True)
     for family in families:
         source_paths, commands = commands_for_family(
             family,
             args.output_root,
             gpu_overrides[family],
+            hf_gpu=hf_gpu_overrides[family],
+            gradient_backend=args.gradient_backend,
+            dual_vllm_utilization=args.dual_vllm_gpu_memory_utilization,
+            final_vllm_utilization=args.final_vllm_gpu_memory_utilization,
+            conservative_settings=args.vllm_conservative_settings,
         )
         output_path = args.command_dir / f"run_math_second_stage_{family}.sh"
         output_path.write_text(

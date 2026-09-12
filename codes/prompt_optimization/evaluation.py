@@ -51,28 +51,12 @@ class QAEvaluator:
         self.validation_std_penalty = validation_std_penalty
         self.run_started_at = run_started_at or time.monotonic()
 
-    def evaluate(
+    def _evaluation_seed(
         self,
-        instruction_prompt: str,
         records: Sequence[dict[str, Any]],
-        *,
         split_name: str,
-        log_label: str,
-    ) -> dict[str, Any]:
-        """Generate answers and return prompt-level and per-example results."""
-        if not records:
-            raise ValueError("Cannot evaluate an empty record subset.")
-        evaluation_started_at = time.monotonic()
-        print(
-            f"[qa:{log_label}] evaluation started | split={split_name} | "
-            f"examples={len(records)} | "
-            f"total_elapsed={format_elapsed(evaluation_started_at - self.run_started_at)}",
-            flush=True,
-        )
-        rendered_prompts = [
-            render_qa_prompt(instruction_prompt, record, self.mode)
-            for record in records
-        ]
+    ) -> tuple[str, int]:
+        """Derive the shared deterministic seed for one ordered record subset."""
         subset_id = record_set_id(records)
         seed_material = (
             f"{self.seed}\n{self.mode.task_name}\n{self.mode.name}\n"
@@ -82,19 +66,20 @@ class QAEvaluator:
             hashlib.sha256(seed_material.encode("utf-8")).hexdigest()[:8],
             16,
         )
-        self.model_pool.ensure(TARGET_ROLE)
-        seed_everything(evaluation_seed)
-        responses, token_usages = self.model_pool.generate(
-            TARGET_ROLE,
-            rendered_prompts,
-            max_new_tokens=self.max_new_tokens,
-            batch_size=self.batch_size,
-            enable_thinking=self.mode.enable_thinking,
-            do_sample=True,
-            log_label=log_label,
-            return_token_usage=True,
-            seed=evaluation_seed,
-        )
+        return subset_id, evaluation_seed
+
+    def _assemble_evaluation(
+        self,
+        instruction_prompt: str,
+        records: Sequence[dict[str, Any]],
+        responses: Sequence[str],
+        token_usages: Sequence[dict[str, int]],
+        *,
+        split_name: str,
+        subset_id: str,
+        evaluation_seed: int,
+    ) -> dict[str, Any]:
+        """Convert generated responses into one complete evaluation payload."""
         predictions = []
         for record, response, token_usage in zip(records, responses, token_usages):
             prediction = score_qa_response(record, response, self.mode)
@@ -123,6 +108,60 @@ class QAEvaluator:
                 )
             )
         metrics["token_usage"] = summarize_token_usage(token_usages)
+        return {
+            "split": split_name,
+            "record_set_id": subset_id,
+            "evaluation_seed": evaluation_seed,
+            "instruction_prompt": instruction_prompt,
+            "metrics": metrics,
+            "predictions": predictions,
+        }
+
+    def evaluate(
+        self,
+        instruction_prompt: str,
+        records: Sequence[dict[str, Any]],
+        *,
+        split_name: str,
+        log_label: str,
+    ) -> dict[str, Any]:
+        """Generate answers and return prompt-level and per-example results."""
+        if not records:
+            raise ValueError("Cannot evaluate an empty record subset.")
+        evaluation_started_at = time.monotonic()
+        print(
+            f"[qa:{log_label}] evaluation started | split={split_name} | "
+            f"examples={len(records)} | "
+            f"total_elapsed={format_elapsed(evaluation_started_at - self.run_started_at)}",
+            flush=True,
+        )
+        rendered_prompts = [
+            render_qa_prompt(instruction_prompt, record, self.mode)
+            for record in records
+        ]
+        subset_id, evaluation_seed = self._evaluation_seed(records, split_name)
+        seed_everything(evaluation_seed)
+        responses, token_usages = self.model_pool.generate(
+            TARGET_ROLE,
+            rendered_prompts,
+            max_new_tokens=self.max_new_tokens,
+            batch_size=self.batch_size,
+            enable_thinking=self.mode.enable_thinking,
+            do_sample=True,
+            log_label=log_label,
+            return_token_usage=True,
+            seed=evaluation_seed,
+        )
+        evaluation = self._assemble_evaluation(
+            instruction_prompt,
+            records,
+            responses,
+            token_usages,
+            split_name=split_name,
+            subset_id=subset_id,
+            evaluation_seed=evaluation_seed,
+        )
+        metrics = evaluation["metrics"]
         score_text = f"accuracy={100.0 * float(metrics['accuracy']):.2f}%"
         if "stable_accuracy" in metrics:
             score_text += (
@@ -136,14 +175,89 @@ class QAEvaluator:
             f"total_elapsed={format_elapsed(completed_at - self.run_started_at)}",
             flush=True,
         )
-        return {
-            "split": split_name,
-            "record_set_id": subset_id,
-            "evaluation_seed": evaluation_seed,
-            "instruction_prompt": instruction_prompt,
-            "metrics": metrics,
-            "predictions": predictions,
-        }
+        return evaluation
+
+    def evaluate_many(
+        self,
+        instruction_prompts: Sequence[str],
+        records: Sequence[dict[str, Any]],
+        *,
+        split_name: str,
+        log_label: str,
+    ) -> list[dict[str, Any]]:
+        """Evaluate candidate-prompt/example pairs in one vLLM submission."""
+        prompts = list(instruction_prompts)
+        if not prompts:
+            return []
+        if not self.model_pool.uses_vllm_generation: #aunabil3rd: what is this case?
+            return [
+                self.evaluate(
+                    prompt,
+                    records,
+                    split_name=split_name,
+                    log_label=log_label,
+                )
+                for prompt in prompts
+            ]
+        if not records:
+            raise ValueError("Cannot evaluate an empty record subset.")
+
+        evaluation_started_at = time.monotonic()
+        print(
+            f"[qa:{log_label}] batched candidate evaluation started | "
+            f"split={split_name} | candidates={len(prompts)} | "
+            f"examples_per_candidate={len(records)} | "
+            f"requests={len(prompts) * len(records)} | "
+            f"total_elapsed={format_elapsed(evaluation_started_at - self.run_started_at)}",
+            flush=True,
+        )
+        rendered_prompts = [
+            render_qa_prompt(prompt, record, self.mode)
+            for prompt in prompts
+            for record in records
+        ]
+        subset_id, evaluation_seed = self._evaluation_seed(records, split_name)
+        request_seeds = [
+            evaluation_seed + record_index
+            for _prompt in prompts
+            for record_index in range(len(records))
+        ] #aunabil3rd: why do we need different seeds? what will happen if we don't use different seeds
+        responses, token_usages = self.model_pool.generate(
+            TARGET_ROLE,
+            rendered_prompts,
+            max_new_tokens=self.max_new_tokens,
+            batch_size=self.batch_size,
+            enable_thinking=self.mode.enable_thinking,
+            do_sample=True,
+            log_label=log_label,
+            return_token_usage=True,
+            seeds=request_seeds,
+        )
+        evaluations = []
+        records_per_prompt = len(records)
+        for prompt_index, prompt in enumerate(prompts):
+            start = prompt_index * records_per_prompt
+            end = start + records_per_prompt
+            evaluations.append(
+                self._assemble_evaluation(
+                    prompt,
+                    records,
+                    responses[start:end],
+                    token_usages[start:end],
+                    split_name=split_name,
+                    subset_id=subset_id,
+                    evaluation_seed=evaluation_seed,
+                )
+            )
+        completed_at = time.monotonic()
+        print(
+            f"[qa:{log_label}] batched candidate evaluation completed | "
+            f"candidates={len(prompts)} | "
+            f"phase_elapsed={format_elapsed(completed_at - evaluation_started_at)} | "
+            f"total_elapsed={format_elapsed(completed_at - self.run_started_at)}",
+            flush=True,
+        )
+        return evaluations
 
 
 def metric_accuracy(evaluation: dict[str, Any]) -> float:

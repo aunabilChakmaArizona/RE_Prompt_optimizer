@@ -14,6 +14,7 @@ CUDA_VISIBLE_DEVICES="$SMOKE_GPU" python -u codes/run_qa_promptopt_greater.py \
   --model Qwen/Qwen3-4B \
   --device cuda:0 \
   --backend transformers \
+  --final-evaluation-backend transformers \
   --target-max-new-tokens 256 \
   --validation-fold-size 1 \
   --validation-std-penalty 1.0 \
@@ -38,6 +39,7 @@ CUDA_VISIBLE_DEVICES="$SMOKE_GPU" python -u codes/run_qa_promptopt_gradpo.py \
   --model Qwen/Qwen3-4B \
   --device cuda:0 \
   --backend transformers \
+  --final-evaluation-backend transformers \
   --target-max-new-tokens 256 \
   --validation-fold-size 1 \
   --validation-std-penalty 1.0 \

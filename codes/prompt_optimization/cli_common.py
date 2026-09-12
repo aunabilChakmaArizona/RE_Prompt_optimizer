@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from prompt_optimization.evaluation import QAEvaluator
+from prompt_optimization.gradient_cache import (
+    DEFAULT_GRADIENT_CACHE_ROOT,
+    resolve_gradient_cache_root,
+)
 from prompt_optimization.models import ModelPool, seed_everything
 from prompt_optimization.qa_task import (
     DEFAULT_TRAIN_PATH,
@@ -34,6 +38,7 @@ from prompt_optimization.run_io import (
 
 
 DEFAULT_MATH_OUTPUT_ROOT = DEFAULT_OUTPUT_ROOT.parent / "math_prompt_optimization"
+DEFAULT_DUAL_VLLM_MAX_MODEL_LEN = 16_384
 
 
 @dataclass
@@ -80,18 +85,59 @@ def add_shared_arguments(
         default=None,
         help="Larger model used for reasoning-based prompt proposals.",
     )
-    parser.add_argument("--device", default="cuda:0", help="Target model device map.")
+    parser.add_argument(
+        "--device",
+        default="cuda:0",
+        help="Target device; in dual mode this selects the vLLM generation GPU.",
+    )
+    parser.add_argument(
+        "--hf-device",
+        default=None,
+        help=(
+            "HF target-model device for gradients and scoring; defaults to --device. "
+            "With two visible GPUs, use cuda:1 to separate HF from vLLM cuda:0."
+        ),
+    )
     parser.add_argument(
         "--backend",
-        choices=("transformers", "vllm"),
+        choices=("transformers", "vllm", "dual"),
         default="transformers",
-        help="Generation backend; vLLM uses continuous batching.",
+        help=(
+            "Generation backend; dual keeps an HF model for gradients and a vLLM "
+            "copy for generation and batched prediction."
+        ),
     )
     parser.add_argument(
         "--gpu-memory-utilization",
         type=float,
         default=0.90,
         help="Fraction of selected GPU memory reserved by vLLM.",
+    )
+    parser.add_argument(
+        "--dual-vllm-gpu-memory-utilization",
+        type=float,
+        default=0.50,
+        help="vLLM memory fraction in dual HF+vLLM mode; start at 0.50.",
+    )
+    parser.add_argument(
+        "--vllm-conservative-settings",
+        action="store_true",
+        help=(
+            "Opt into eager execution, 4,096 batched tokens, 128 sequences, "
+            "and disabled prefix caching; otherwise retain vLLM defaults."
+        ),
+    )
+    parser.add_argument(
+        "--dual-vllm-max-num-batched-tokens",
+        type=int,
+        default=4096,
+        help="Token limit used only with --vllm-conservative-settings.",
+    )
+    parser.add_argument(
+        "--dual-vllm-max-num-seqs",
+        type=int,
+        default=128,
+        help="Sequence limit used only with --vllm-conservative-settings.",
     )
     parser.add_argument(
         "--vllm-max-model-len",
@@ -110,7 +156,7 @@ def add_shared_arguments(
         help="Optimizer model device map; defaults to --device.",
     )
     parser.add_argument(
-        "--keep-models-loaded",
+        "--keep-models-loaded", #aunabil3rd: what this is actually doing?
         action="store_true",
         help="Keep target and optimizer models resident when memory or separate GPUs allow.",
     )
@@ -197,12 +243,52 @@ def add_shared_arguments(
     )
 
 
+def add_gradient_runtime_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add cache and final-evaluation routing shared by GreaTer and GradPO."""
+    parser.add_argument(
+        "--final-evaluation-backend",
+        choices=("vllm", "transformers"),
+        default="vllm",
+        help=(
+            "Backend for source/candidate validation; regular mode unloads HF and "
+            "loads vLLM, while dual mode reuses its resident vLLM engine."
+        ),
+    )
+    parser.add_argument(
+        "--gradient-cache-root",
+        default=str(DEFAULT_GRADIENT_CACHE_ROOT),
+        help="Shared JSON cache for initial gradient-pool responses and balancing.",
+    )
+    parser.add_argument(
+        "--refresh-gradient-cache",
+        action="store_true",
+        help="Regenerate and replace a matching shared gradient-pool cache.",
+    )
+    parser.add_argument(
+        "--disable-gradient-cache",
+        action="store_true",
+        help="Run gradient-pool inference without reading or writing the shared cache.",
+    )
+
+
 def build_context(
     args: argparse.Namespace,
     optimizer_name: str,
 ) -> QAOptimizationContext:
     """Load one QA experiment and initialize its shared runtime services."""
     started_at = time.monotonic()
+    dual_optimizers = {
+        "greater",
+        "greater_tg",
+        "gradpo_gen",
+        "gradpo_prob",
+        "gradpo_gen_random",
+    }
+    if args.backend == "dual" and optimizer_name not in dual_optimizers:
+        raise ValueError(
+            "--backend dual is only for GreaTer and GradPO gradient runs; "
+            "use --backend vllm for reasoning-based optimizers and LPO."
+        )
     mode = resolve_mode(args.qa_mode, args.qa_task)
     max_new_tokens = args.target_max_new_tokens or mode.default_max_new_tokens
     if max_new_tokens <= 0:
@@ -217,6 +303,15 @@ def build_context(
         raise ValueError("--validation-fold-size must be positive when provided.")
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
         raise ValueError("--gpu-memory-utilization must be greater than 0 and at most 1.")
+    if not 0.0 < args.dual_vllm_gpu_memory_utilization <= 1.0:
+        raise ValueError(
+            "--dual-vllm-gpu-memory-utilization must be greater than 0 and at most 1."
+        )
+    if min(
+        args.dual_vllm_max_num_batched_tokens,
+        args.dual_vllm_max_num_seqs,
+    ) <= 0:
+        raise ValueError("Dual vLLM scheduler limits must be positive.")
     if args.vllm_max_model_len is not None and args.vllm_max_model_len <= 0:
         raise ValueError("--vllm-max-model-len must be positive when provided.")
     if (
@@ -228,6 +323,13 @@ def build_context(
         raise ValueError(
             "Offline vLLM uses one visible device per process; --optimizer-device "
             "must match --device."
+        )
+    if (
+        getattr(args, "disable_gradient_cache", False)
+        and getattr(args, "refresh_gradient_cache", False)
+    ):
+        raise ValueError(
+            "--disable-gradient-cache and --refresh-gradient-cache cannot be combined."
         )
     seed_everything(args.seed)
     rng = random.Random(args.seed)
@@ -270,17 +372,34 @@ def build_context(
         args.overwrite,
     )
     logger = RunLogger(run_dir)
+    resolved_vllm_max_model_len = args.vllm_max_model_len
+    if args.backend == "dual" and resolved_vllm_max_model_len is None:
+        resolved_vllm_max_model_len = DEFAULT_DUAL_VLLM_MAX_MODEL_LEN
+    resolved_hf_device = args.hf_device or args.device
+    resolved_gradient_cache_root = None
+    if hasattr(args, "gradient_cache_root"):
+        resolved_gradient_cache_root = str(
+            resolve_gradient_cache_root(args.gradient_cache_root)
+        )
     model_pool = ModelPool(
         target_model_id=args.model,
         optimizer_model_id=args.optimizer_model,
         target_device=args.device,
+        hf_target_device=resolved_hf_device,
         optimizer_device=args.optimizer_device,
         keep_models_loaded=args.keep_models_loaded,
         seed=args.seed,
         backend=args.backend,
-        gpu_memory_utilization=args.gpu_memory_utilization,
-        vllm_max_model_len=args.vllm_max_model_len,
+        gpu_memory_utilization=(
+            args.dual_vllm_gpu_memory_utilization
+            if args.backend == "dual"
+            else args.gpu_memory_utilization
+        ),
+        vllm_max_model_len=resolved_vllm_max_model_len,
         vllm_disable_images=args.vllm_disable_images,
+        vllm_conservative_settings=args.vllm_conservative_settings,
+        dual_vllm_max_num_batched_tokens=args.dual_vllm_max_num_batched_tokens,
+        dual_vllm_max_num_seqs=args.dual_vllm_max_num_seqs,
     )
     evaluator = QAEvaluator(
         model_pool=model_pool,
@@ -313,9 +432,35 @@ def build_context(
             "resolved_train_path": train_path,
             "resolved_validation_path": validation_path,
             "resolved_output_root": output_root,
+            "resolved_vllm_target_device": args.device,
+            "resolved_hf_target_device": resolved_hf_device,
+            "resolved_gradient_cache_root": resolved_gradient_cache_root,
             "optimizer_name": optimizer_name,
             "qa_mode_config": asdict(mode),
             "resolved_target_max_new_tokens": max_new_tokens,
+            "resolved_vllm_gpu_memory_utilization": (
+                args.dual_vllm_gpu_memory_utilization
+                if args.backend == "dual"
+                else args.gpu_memory_utilization
+            ),
+            "resolved_vllm_max_model_len": resolved_vllm_max_model_len,
+            "resolved_vllm_engine_settings": {
+                "conservative_settings": args.vllm_conservative_settings,
+                "enforce_eager": args.vllm_conservative_settings,
+                "max_num_batched_tokens": (
+                    args.dual_vllm_max_num_batched_tokens
+                    if args.vllm_conservative_settings
+                    else None
+                ),
+                "max_num_seqs": (
+                    args.dual_vllm_max_num_seqs
+                    if args.vllm_conservative_settings
+                    else None
+                ),
+                "enable_prefix_caching": (
+                    False if args.vllm_conservative_settings else None
+                ),
+            },
             "dataset_sizes": {
                 "train": len(train_records),
                 "validation": len(validation_records),
@@ -330,6 +475,8 @@ def build_context(
         qa_task=args.qa_task,
         qa_mode=args.qa_mode,
         backend=args.backend,
+        vllm_target_device=args.device,
+        hf_target_device=resolved_hf_device,
         initial_prompt=initial_prompt,
     )
     return context

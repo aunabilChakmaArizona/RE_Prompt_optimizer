@@ -101,6 +101,7 @@ def run_prompts_vllm(
     log_label: str | None = None,
     return_token_usage: bool = False,
     seed: int | None = None,
+    seeds: Sequence[int] | None = None,
     **gen_kwargs,
 ) -> list[str] | tuple[list[str], list[TokenUsage]]:
     """Generate prompts with the same interface and continuous vLLM batching."""
@@ -108,6 +109,8 @@ def run_prompts_vllm(
         return ([], []) if return_token_usage else []
     if max_new_tokens <= 0:
         raise ValueError("max_new_tokens must be positive.")
+    if seeds is not None and len(seeds) != len(prompts): #aunabil3rd: why this is needed?
+        raise ValueError("One generation seed is required for every prompt.")
 
     try:
         from vllm import SamplingParams
@@ -136,7 +139,12 @@ def run_prompts_vllm(
         "max_tokens": max_new_tokens,
         "skip_special_tokens": True,
     }
-    if seed is None:
+    if seeds is not None:
+        sampling_params = [
+            SamplingParams(**sampling_arguments, seed=int(prompt_seed))
+            for prompt_seed in seeds
+        ]
+    elif seed is None:
         sampling_params = SamplingParams(**sampling_arguments)
     else:
         sampling_params = [

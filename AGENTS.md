@@ -12,3 +12,6 @@ Experiment tracking
 * The compact stable-score table and complete initial/retained prompts are tracked in `experiment_tracking/first_stage/first_stage_summary_and_prompts.txt`.
 * Regenerate both reports after a first-stage run finishes with `python -u codes/report_first_stage_results.py`.
 * See `experiment_tracking/first_stage/README.md` for the report scope and interpretation rules.
+
+Performance TODO
+* For the first-stage optimizers (RPO, EvoPrompt, and ETGPO), batch all candidate-prompt/example pairs together when scoring candidates on a training or validation set, instead of evaluating each candidate prompt separately, wherever the scoring method permits it. The current vLLM-backed shared evaluation path already supports this; retain the design in future changes.

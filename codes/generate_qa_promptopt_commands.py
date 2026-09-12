@@ -42,12 +42,17 @@ def parse_args() -> argparse.Namespace:
         default="all",
     )
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--hf-device",
+        default=None,
+        help="Optional HF gradient/scoring device used by dual gradient refiners.",
+    )
     parser.add_argument("--optimizer-device", default=None)
     parser.add_argument(
         "--backend",
-        choices=("transformers", "vllm"),
+        choices=("transformers", "vllm", "dual"),
         default="transformers",
-        help="Use vLLM where the optimizer does not require gradients.",
+        help="Use Transformers, vLLM, or dual HF+vLLM where supported.",
     )
     parser.add_argument(
         "--gpu-memory-utilization",
@@ -55,11 +60,26 @@ def parse_args() -> argparse.Namespace:
         default=0.90,
         help="Fraction of selected GPU memory reserved by each vLLM engine.",
     )
+    parser.add_argument(
+        "--dual-vllm-gpu-memory-utilization",
+        type=float,
+        default=0.50,
+        help="vLLM memory fraction while the HF gradient model is resident.",
+    )
+    parser.add_argument(
+        "--vllm-conservative-settings",
+        action="store_true",
+        help="Enable the optional conservative vLLM engine settings.",
+    )
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     parser.add_argument("--output-file", type=Path, default=None)
     args = parser.parse_args()
     if not 0.0 < args.gpu_memory_utilization <= 1.0:
         parser.error("--gpu-memory-utilization must be greater than 0 and at most 1.")
+    if not 0.0 < args.dual_vllm_gpu_memory_utilization <= 1.0:
+        parser.error(
+            "--dual-vllm-gpu-memory-utilization must be greater than 0 and at most 1."
+        )
     return args
 
 
@@ -101,6 +121,17 @@ def shared_parts(
         parts.extend(
             ["--gpu-memory-utilization", str(args.gpu_memory_utilization)]
         )
+    elif backend == "dual":
+        parts.extend(
+            [
+                "--dual-vllm-gpu-memory-utilization",
+                str(args.dual_vllm_gpu_memory_utilization),
+            ]
+        )
+        if args.hf_device:
+            parts.extend(["--hf-device", args.hf_device])
+    if backend in {"vllm", "dual"} and args.vllm_conservative_settings:
+        parts.append("--vllm-conservative-settings")
     if include_optimizer:
         parts.extend(["--optimizer-model", model_config["optimizer"]])
         if args.optimizer_device:
@@ -123,6 +154,7 @@ def first_stage_commands(args: argparse.Namespace) -> list[str]:
             model_config = MODEL_CONFIGS[family]
             for method, runner in runners:
                 code = f"openbookqa_{mode}_{family}_{method}"
+                backend = "vllm" if args.backend == "dual" else args.backend
                 parts = ["python", "-u", runner]
                 parts.extend(
                     shared_parts(
@@ -131,7 +163,7 @@ def first_stage_commands(args: argparse.Namespace) -> list[str]:
                         model_config=model_config,
                         args=args,
                         include_optimizer=True,
-                        backend=args.backend,
+                        backend=backend,
                     )
                 )
                 commands.append(shell_command(parts))
@@ -242,9 +274,10 @@ def second_stage_commands(args: argparse.Namespace) -> list[str]:
             model_config = MODEL_CONFIGS[family]
             for source in stage_one_sources(output_root, mode, family):
                 for method in second_stage_specs():
-                    backend = (
-                        args.backend if method["supports_vllm"] else "transformers"
-                    )
+                    if method["supports_vllm"]:
+                        backend = "vllm" if args.backend == "dual" else args.backend
+                    else:
+                        backend = "dual" if args.backend == "dual" else "transformers"
                     code = (
                         f"openbookqa_{mode}_{family}_{source['name']}_{method['name']}"
                     )

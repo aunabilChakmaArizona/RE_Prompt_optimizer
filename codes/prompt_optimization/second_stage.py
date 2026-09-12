@@ -19,6 +19,15 @@ from prompt_optimization.evaluation import (
     metric_selection_score,
     select_incorrect_feedback,
 )
+from prompt_optimization.gradient_cache import (
+    balanced_subset_cache_key,
+    build_gradient_pool_identity,
+    gradient_pool_cache_path,
+    load_gradient_cache,
+    lock_gradient_cache,
+    prediction_outcome_hash,
+    save_gradient_cache,
+)
 from prompt_optimization.meta_prompts import (
     extract_json_object,
     gradpo_candidate_prompt,
@@ -53,7 +62,7 @@ from prompt_optimization.sequence_gradients import (
     proposal_token_candidates,
     rank_fixed_token_candidates,
     replace_selected_regions,
-    score_combined_objective,
+    score_combined_objectives,
     select_gradient_regions,
     tensor_free_gradient_summary,
 )
@@ -122,6 +131,89 @@ def _balance_gradient_pairs(
     return selected, counts
 
 
+def _gradient_pool_cache_rows(
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    predictions: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build inspectable cache rows containing every raw target-model response."""
+    if not (len(records) == len(responses) == len(predictions)):
+        raise ValueError("Cached records, responses, and predictions must align.")
+    return [
+        {
+            "record_id": str(record["id"]),
+            "raw_response": response,
+            "gold_answer": prediction.get("gold_answer"),
+            "predicted_answer": prediction.get("predicted_answer"),
+            "correct": bool(prediction["correct"]),
+        }
+        for record, response, prediction in zip(records, responses, predictions)
+    ]
+
+
+def _responses_from_gradient_cache(
+    cache_payload: dict[str, Any],
+    records: Sequence[dict[str, Any]],
+) -> list[str]:
+    """Restore raw responses while verifying the cached record order."""
+    rows = cache_payload["pool_results"]
+    cached_ids = [str(row["record_id"]) for row in rows]
+    expected_ids = [str(record["id"]) for record in records]
+    if cached_ids != expected_ids:
+        raise ValueError("Cached gradient-pool record order does not match its metadata.")
+    return [str(row["raw_response"]) for row in rows]
+
+
+def _balanced_subset_entry(
+    selected_pairs: Sequence[tuple[dict[str, Any], dict[str, Any]]],
+    counts: dict[str, int],
+    *,
+    gradient_sample_size: int,
+    balance_seed: int,
+    outcome_hash: str,
+) -> dict[str, Any]:
+    """Serialize one exact seeded correct/incorrect gradient subset."""
+    return {
+        "gradient_sample_size": int(gradient_sample_size),
+        "balance_seed": int(balance_seed),
+        "outcome_hash": outcome_hash,
+        "selected_record_ids": [
+            str(record["id"]) for record, _prediction in selected_pairs
+        ],
+        "correct_record_ids": [
+            str(record["id"])
+            for record, prediction in selected_pairs
+            if bool(prediction["correct"])
+        ],
+        "incorrect_record_ids": [
+            str(record["id"])
+            for record, prediction in selected_pairs
+            if not bool(prediction["correct"])
+        ],
+        "counts": dict(counts),
+    }
+
+
+def _restore_balanced_pairs(
+    entry: dict[str, Any],
+    records: Sequence[dict[str, Any]],
+    predictions: Sequence[dict[str, Any]],
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], dict[str, int]]:
+    """Restore the cached balanced subset in its original shuffled order."""
+    pairs_by_id = {
+        str(record["id"]): (record, prediction)
+        for record, prediction in zip(records, predictions)
+    }
+    if len(pairs_by_id) != len(records):
+        raise ValueError("Gradient-pool records must have unique IDs for caching.")
+    selected_ids = [str(record_id) for record_id in entry["selected_record_ids"]]
+    if any(record_id not in pairs_by_id for record_id in selected_ids):
+        raise ValueError("Cached balanced subset references an unavailable record ID.")
+    selected_pairs = [pairs_by_id[record_id] for record_id in selected_ids]
+    counts = {key: int(value) for key, value in entry["counts"].items()}
+    return selected_pairs, counts
+
+
 def _build_balanced_gradient_subset(
     context: QAOptimizationContext,
     instruction_prompt: str,
@@ -130,37 +222,142 @@ def _build_balanced_gradient_subset(
     *,
     log_label: str,
 ) -> tuple[list[dict[str, Any]], list[str] | None, dict[str, Any]]:
-    """Randomly sample a pool, then balance its correct and incorrect results."""
-    pool_records = sample_records(context.train_records, sample_size, context.rng)
+    """Reuse or create a shared pool, then restore one seeded balanced subset."""
+    pool_seed = int(context.args.seed)
+    balance_seed = int(context.args.seed)
+    pool_rng = random.Random(pool_seed)
+    pool_records = sample_records(context.train_records, sample_size, pool_rng)
     rendered_prompts = [
         render_qa_prompt(instruction_prompt, record, context.mode)
         for record in pool_records
     ]
     pool_started_at = time.monotonic()
-    log_progress(
-        context,
-        f"gradient pool inference started | examples={len(pool_records)}",
+    generation_backend = (
+        "vllm" if context.model_pool.uses_vllm_generation else "transformers"
     )
-    responses = context.model_pool.generate(
-        TARGET_ROLE,
-        rendered_prompts,
+    cache_identity = build_gradient_pool_identity(
+        model_id=context.args.model,
+        generation_backend=generation_backend,
+        task_name=context.mode.task_name,
+        mode_name=context.mode.name,
+        source_prompt=instruction_prompt,
+        pool_records=pool_records,
+        rendered_prompts=rendered_prompts,
+        pool_seed=pool_seed,
+        requested_pool_size=sample_size,
         max_new_tokens=context.evaluator.max_new_tokens,
-        batch_size=context.evaluator.batch_size,
         enable_thinking=context.mode.enable_thinking,
-        do_sample=False,
-        log_label=log_label,
-        return_token_usage=False,
     )
-    predictions = [
-        score_qa_response(record, response, context.mode)
-        for record, response in zip(pool_records, responses)
-    ]
-    selected_pairs, counts = _balance_gradient_pairs(
-        pool_records,
-        predictions,
-        context.rng,
-        gradient_sample_size,
+    cache_path, cache_key = gradient_pool_cache_path(
+        context.args.gradient_cache_root,
+        cache_identity,
     )
+    cache_enabled = not context.args.disable_gradient_cache
+    pool_cache_hit = False
+    balanced_subset_cache_hit = False
+
+    def generate_pool_responses() -> list[str]:
+        """Run the one expensive greedy inference used by every gradient refiner."""
+        log_progress(
+            context,
+            f"gradient pool inference started | examples={len(pool_records)}",
+        )
+        return context.model_pool.generate(
+            TARGET_ROLE,
+            rendered_prompts,
+            max_new_tokens=context.evaluator.max_new_tokens,
+            batch_size=context.evaluator.batch_size,
+            enable_thinking=context.mode.enable_thinking,
+            do_sample=False,
+            log_label=log_label,
+            return_token_usage=False,
+            seed=pool_seed,
+        )
+
+    if cache_enabled:
+        log_progress(context, f"gradient cache lookup | path={cache_path}")
+        with lock_gradient_cache(cache_path):
+            cache_payload = None
+            if not context.args.refresh_gradient_cache:
+                cache_payload = load_gradient_cache(cache_path, cache_identity)
+            if cache_payload is None:
+                responses = generate_pool_responses()
+                cache_payload = {
+                    "metadata": cache_identity,
+                    "pool_results": [],
+                    "balanced_subsets": {},
+                }
+                log_progress(context, "gradient pool cache miss | generated responses")
+            else:
+                responses = _responses_from_gradient_cache(
+                    cache_payload,
+                    pool_records,
+                )
+                context.model_pool.record_cached_generation()
+                pool_cache_hit = True
+                log_progress(context, "gradient pool cache hit | restored raw responses")
+
+            predictions = [
+                score_qa_response(record, response, context.mode)
+                for record, response in zip(pool_records, responses)
+            ]
+            cache_payload["pool_results"] = _gradient_pool_cache_rows(
+                pool_records,
+                responses,
+                predictions,
+            )
+            outcome_hash = prediction_outcome_hash(predictions)
+            subset_key = balanced_subset_cache_key(
+                gradient_sample_size=gradient_sample_size,
+                balance_seed=balance_seed,
+                outcome_hash=outcome_hash,
+            )
+            subset_entry = cache_payload["balanced_subsets"].get(subset_key)
+            if subset_entry is None:
+                selected_pairs, counts = _balance_gradient_pairs(
+                    pool_records,
+                    predictions,
+                    random.Random(balance_seed),
+                    gradient_sample_size,
+                )
+                subset_entry = _balanced_subset_entry(
+                    selected_pairs,
+                    counts,
+                    gradient_sample_size=gradient_sample_size,
+                    balance_seed=balance_seed,
+                    outcome_hash=outcome_hash,
+                )
+                cache_payload["balanced_subsets"][subset_key] = subset_entry
+                log_progress(context, "balanced gradient subset cache miss | selected")
+            else:
+                selected_pairs, counts = _restore_balanced_pairs(
+                    subset_entry,
+                    pool_records,
+                    predictions,
+                )
+                balanced_subset_cache_hit = True
+                log_progress(context, "balanced gradient subset cache hit | restored")
+            save_gradient_cache(cache_path, cache_payload)
+    else:
+        log_progress(context, "gradient cache disabled")
+        responses = generate_pool_responses()
+        predictions = [
+            score_qa_response(record, response, context.mode)
+            for record, response in zip(pool_records, responses)
+        ]
+        outcome_hash = prediction_outcome_hash(predictions)
+        subset_key = balanced_subset_cache_key(
+            gradient_sample_size=gradient_sample_size,
+            balance_seed=balance_seed,
+            outcome_hash=outcome_hash,
+        )
+        selected_pairs, counts = _balance_gradient_pairs(
+            pool_records,
+            predictions,
+            random.Random(balance_seed),
+            gradient_sample_size,
+        )
+
     if counts["shortfall"] > 0:
         log_progress(
             context,
@@ -178,8 +375,18 @@ def _build_balanced_gradient_subset(
     )
     metadata = {
         "strategy": "random_pool_then_equal_correct_incorrect",
+        "pool_seed": pool_seed,
+        "balance_seed": balance_seed,
         "initial_pool_size": len(pool_records),
         **counts,
+        "cache": {
+            "enabled": cache_enabled,
+            "path": str(cache_path) if cache_enabled else None,
+            "cache_key": cache_key if cache_enabled else None,
+            "balanced_subset_key": subset_key if cache_enabled else None,
+            "pool_cache_hit": pool_cache_hit,
+            "balanced_subset_cache_hit": balanced_subset_cache_hit,
+        },
         "initial_pool_record_ids": [str(record["id"]) for record in pool_records],
         "selected_examples": [
             {
@@ -215,6 +422,74 @@ def _strictly_select_against_source(
         source["selection_score"]
     )
     return (best_candidate if improved else source), improved
+
+
+def _score_objective_candidates(
+    context: QAOptimizationContext,
+    prompts: Sequence[str],
+    records: Sequence[dict[str, Any]],
+    *,
+    model,
+    tokenizer,
+    batch_size: int,
+    fluency_lambda: float,
+    reasoning_traces: Sequence[str] | None,
+) -> list[dict[str, float]]:
+    """Batch candidate task-loss and fluency calculations with HF."""
+    return score_combined_objectives(
+        prompts,
+        records,
+        mode=context.mode,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        fluency_lambda=fluency_lambda,
+        reasoning_traces=reasoning_traces,
+    )
+
+
+def _prepare_final_evaluation_backend(
+    context: QAOptimizationContext,
+    args,
+) -> str:
+    """Switch regular gradient runs from HF to vLLM for final validation."""
+    requested = args.final_evaluation_backend
+    if requested == "vllm" and context.model_pool.backend == "transformers":
+        log_progress(
+            context,
+            "switching from HF to vLLM for batched final validation",
+        )
+        context.model_pool.activate_vllm_only(args.gpu_memory_utilization)
+    return "vllm" if context.model_pool.uses_vllm_generation else "transformers"
+
+
+def _evaluate_source_and_candidates(
+    context: QAOptimizationContext,
+    args,
+    candidate_prompts: Sequence[str],
+    *,
+    phase: str,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], str]:
+    """Evaluate the source and all retained prompts together on validation."""
+    final_backend = _prepare_final_evaluation_backend(context, args)
+    prompts = unique_nonempty([context.initial_prompt, *candidate_prompts])
+    scored = evaluate_candidates(
+        context,
+        prompts,
+        context.validation_records,
+        split_name="validation",
+        phase=phase,
+        iteration=1,
+    )
+    source_candidate = next(
+        item for item in scored if item["prompt"] == context.initial_prompt
+    )
+    initial_evaluation = source_candidate["evaluation"]
+    source = _source_scored_item(context, initial_evaluation)
+    candidates = [
+        item for item in scored if item["prompt"] != context.initial_prompt
+    ]
+    return initial_evaluation, source, candidates, final_backend
 
 
 def _extract_lpo_prompt(raw_output: str) -> str:
@@ -449,16 +724,9 @@ def _sequential_greater_region(
     raise ValueError("No editable token exists at or after --start-position.")
 
 
-def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
+def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]: #aunabil3rd: where is the initial results of caching goin on? we talked about this where the GreaTer and GradPO have a common initial trainset run and we pick the balanced subset which is supposed to be cached
     """Run one GreaTer sequential or top-gradient single-token refinement."""
     log_progress(context, "run started | iterations=1")
-    initial_evaluation = context.evaluator.evaluate(
-        context.initial_prompt,
-        context.validation_records,
-        split_name="validation",
-        log_label=f"qa_{args.variant}_initial_validation",
-    )
-    source = _source_scored_item(context, initial_evaluation)
     train_records, reasoning_traces, gradient_sample = (
         _build_balanced_gradient_subset(
             context,
@@ -597,40 +865,41 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
         candidate_prompts.append(candidate_prompt)
     candidate_tokens = stable_candidate_tokens
     candidate_prompts = unique_nonempty(candidate_prompts)
-    objective_scores = []
-    for candidate_index, prompt in enumerate(candidate_prompts):
-        objective_started_at = time.monotonic()
-        log_progress(
-            context,
-            f"objective candidate {candidate_index + 1}/{len(candidate_prompts)} started",
+    objective_started_at = time.monotonic()
+    log_progress(
+        context,
+        f"batched objective scoring started | candidates={len(candidate_prompts)} | "
+        f"examples={len(train_records)}",
+    )
+    candidate_objectives = _score_objective_candidates(
+        context,
+        candidate_prompts,
+        train_records,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=args.selection_batch_size,
+        fluency_lambda=args.fluency_lambda,
+        reasoning_traces=reasoning_traces,
+    )
+    objective_scores = [
+        {"candidate_index": index, "prompt": prompt, **score}
+        for index, (prompt, score) in enumerate(
+            zip(candidate_prompts, candidate_objectives)
         )
-        score = score_combined_objective(
-            prompt,
-            train_records,
-            mode=context.mode,
-            model=model,
-            tokenizer=tokenizer,
-            batch_size=args.selection_batch_size,
-            fluency_lambda=args.fluency_lambda,
-            reasoning_traces=reasoning_traces,
-        )
-        objective_scores.append(
-            {"candidate_index": candidate_index, "prompt": prompt, **score}
-        )
-        best_objective = min(
-            objective_scores,
-            key=lambda item: (
-                float(item["combined_score"]),
-                int(item["candidate_index"]),
-            ),
-        )
-        log_progress(
-            context,
-            f"objective candidate {candidate_index + 1}/{len(candidate_prompts)} "
-            f"completed | current={float(score['combined_score']):.6f} | "
-            f"best_so_far={float(best_objective['combined_score']):.6f}",
-            phase_started_at=objective_started_at,
-        )
+    ]
+    best_objective = min(
+        objective_scores,
+        key=lambda item: (
+            float(item["combined_score"]),
+            int(item["candidate_index"]),
+        ),
+    )
+    log_progress(
+        context,
+        "batched objective scoring completed | "
+        f"best={float(best_objective['combined_score']):.6f}",
+        phase_started_at=objective_started_at,
+    )
     top_objective = sorted(
         objective_scores,
         key=lambda item: (float(item["combined_score"]), int(item["candidate_index"])),
@@ -638,21 +907,6 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
     dev_prompts = [
         item["prompt"] for item in top_objective if item["prompt"] != context.initial_prompt
     ]
-    dev_scored = evaluate_candidates(
-        context,
-        dev_prompts,
-        context.validation_records,
-        split_name="validation",
-        phase=f"{args.variant}_candidate_validation",
-        iteration=1,
-    )
-    selected, improved = _strictly_select_against_source(source, dev_scored)
-    log_progress(
-        context,
-        f"iteration 1/1 completed | improved={improved} | "
-        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
-        f"best {scored_item_text(selected)}",
-    )
     save_json(
         context.run_dir / "gradient_analysis.json",
         tensor_free_gradient_summary(gradient_analysis),
@@ -673,6 +927,22 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
             "objective_scores": objective_scores,
         },
     )
+    del gradient_analysis, model, tokenizer
+    initial_evaluation, source, dev_scored, final_backend = (
+        _evaluate_source_and_candidates(
+            context,
+            args,
+            dev_prompts,
+            phase=f"{args.variant}_candidate_validation",
+        )
+    )
+    selected, improved = _strictly_select_against_source(source, dev_scored)
+    log_progress(
+        context,
+        f"iteration 1/1 completed | improved={improved} | "
+        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
+        f"best {scored_item_text(selected)}",
+    )
     return finalize_run(
         context,
         initial_evaluation=initial_evaluation,
@@ -682,6 +952,8 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]:
             "algorithm": args.variant,
             "iterations": 1,
             "improved_on_validation": improved,
+            "objective_task_loss_backend": "transformers",
+            "final_evaluation_backend": final_backend,
             "gradient_sampling": {
                 key: value
                 for key, value in gradient_sample.items()
@@ -1098,21 +1370,23 @@ def _beam_search_replacements(
                     "replacement_metadata": replacement_metadata,
                 },
             )
-        scored_expansions = []
-        for candidate_index_value, expansion in enumerate(expansions.values()):
-            objective = score_combined_objective(
-                expansion["prompt"],
-                train_records,
-                mode=context.mode,
-                model=model,
-                tokenizer=tokenizer,
-                batch_size=selection_batch_size,
-                fluency_lambda=fluency_lambda,
-                reasoning_traces=reasoning_traces,
+        expansion_list = list(expansions.values())
+        objectives = _score_objective_candidates(
+            context,
+            [item["prompt"] for item in expansion_list],
+            train_records,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=selection_batch_size,
+            fluency_lambda=fluency_lambda,
+            reasoning_traces=reasoning_traces,
+        )
+        scored_expansions = [
+            {"candidate_index": index, **expansion, **objective}
+            for index, (expansion, objective) in enumerate(
+                zip(expansion_list, objectives)
             )
-            scored_expansions.append(
-                {"candidate_index": candidate_index_value, **expansion, **objective}
-            )
+        ]
         beam = sorted(
             scored_expansions,
             key=lambda item: (
@@ -1159,13 +1433,6 @@ def _resolve_gradpo_shape(args, model_id: str) -> tuple[int, int]:
 def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run GradPO-Gen, GradPO-Prob, or random-region GradPO-Gen for QA."""
     log_progress(context, "run started | iterations=1")
-    initial_evaluation = context.evaluator.evaluate(
-        context.initial_prompt,
-        context.validation_records,
-        split_name="validation",
-        log_label=f"qa_gradpo_{args.variant}_initial_validation",
-    )
-    source = _source_scored_item(context, initial_evaluation)
     train_records, reasoning_traces, gradient_sample = (
         _build_balanced_gradient_subset(
             context,
@@ -1295,21 +1562,6 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     dev_prompts = unique_nonempty(
         [item["prompt"] for item in beam if item["prompt"] != context.initial_prompt]
     )
-    dev_scored = evaluate_candidates(
-        context,
-        dev_prompts,
-        context.validation_records,
-        split_name="validation",
-        phase=f"gradpo_{args.variant}_candidate_validation",
-        iteration=1,
-    )
-    selected, improved = _strictly_select_against_source(source, dev_scored)
-    log_progress(
-        context,
-        f"iteration 1/1 completed | improved={improved} | "
-        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
-        f"best {scored_item_text(selected)}",
-    )
     save_json(
         context.run_dir / "gradient_analysis.json",
         tensor_free_gradient_summary(gradient_analysis),
@@ -1333,6 +1585,22 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         },
     )
     save_json(context.run_dir / "beam_trace.json", beam_trace)
+    del gradient_analysis, model, tokenizer
+    initial_evaluation, source, dev_scored, final_backend = (
+        _evaluate_source_and_candidates(
+            context,
+            args,
+            dev_prompts,
+            phase=f"gradpo_{args.variant}_candidate_validation",
+        )
+    )
+    selected, improved = _strictly_select_against_source(source, dev_scored)
+    log_progress(
+        context,
+        f"iteration 1/1 completed | improved={improved} | "
+        f"current {scored_item_text(selected)} | source {scored_item_text(source)} | "
+        f"best {scored_item_text(selected)}",
+    )
     return finalize_run(
         context,
         initial_evaluation=initial_evaluation,
@@ -1342,6 +1610,8 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "algorithm": f"gradpo_{args.variant}",
             "iterations": 1,
             "improved_on_validation": improved,
+            "objective_task_loss_backend": "transformers",
+            "final_evaluation_backend": final_backend,
             "gradient_sampling": {
                 key: value
                 for key, value in gradient_sample.items()

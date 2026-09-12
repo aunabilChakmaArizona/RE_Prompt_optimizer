@@ -10,7 +10,7 @@ set -euo pipefail
 [[ -f outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt'; exit 1; }
 [[ -f outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500/final_prompt.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500/final_prompt.txt'; exit 1; }
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --code math500_reasoning_gemma_rpo5_lpo_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -37,7 +37,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --num-candidates 5 \
   --top-z 5
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_rpo5_greater_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -51,6 +51,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -63,7 +67,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_rpo5_greater_tg_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -77,6 +81,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -89,7 +97,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_rpo5_gradpo_gen_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -103,6 +111,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -118,7 +130,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_rpo5_gradpo_prob_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -132,6 +144,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant prob \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -147,7 +163,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_rpo5_gradpo_gen_random_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -161,6 +177,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -176,7 +196,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --code math500_reasoning_gemma_rpo10_lpo_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -203,7 +223,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --num-candidates 5 \
   --top-z 5
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_rpo10_greater_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -217,6 +237,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -229,7 +253,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_rpo10_greater_tg_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -243,6 +267,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -255,7 +283,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_rpo10_gradpo_gen_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -269,6 +297,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -284,7 +316,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_rpo10_gradpo_prob_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -298,6 +330,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant prob \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -313,7 +349,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_rpo10_gradpo_gen_random_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -327,6 +363,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -342,7 +382,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --code math500_reasoning_gemma_evoprompt5_lpo_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -369,7 +409,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --num-candidates 5 \
   --top-z 5
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_evoprompt5_greater_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -383,6 +423,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -395,7 +439,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_evoprompt5_greater_tg_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -409,6 +453,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -421,7 +469,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_evoprompt5_gradpo_gen_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -435,6 +483,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -450,7 +502,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_evoprompt5_gradpo_prob_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -464,6 +516,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant prob \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -479,7 +535,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_evoprompt5_gradpo_gen_random_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -493,6 +549,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -508,7 +568,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --code math500_reasoning_gemma_evoprompt10_lpo_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -535,7 +595,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --num-candidates 5 \
   --top-z 5
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_evoprompt10_greater_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -549,6 +609,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -561,7 +625,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_evoprompt10_greater_tg_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -575,6 +639,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -587,7 +655,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_evoprompt10_gradpo_gen_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -601,6 +669,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -616,7 +688,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_evoprompt10_gradpo_prob_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -630,6 +702,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant prob \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -645,7 +721,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_evoprompt10_gradpo_gen_random_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -659,6 +735,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -674,7 +754,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --code math500_reasoning_gemma_etgpo1_lpo_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -701,7 +781,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --num-candidates 5 \
   --top-z 5
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_etgpo1_greater_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -715,6 +795,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -727,7 +811,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_etgpo1_greater_tg_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -741,6 +825,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 3000 \
   --gradient-batch-size 4 \
@@ -753,7 +841,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --fluency-lambda 0.2 \
   --region-expansion-threshold 0.6
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_etgpo1_gradpo_gen_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -767,6 +855,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -782,7 +874,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_etgpo1_gradpo_prob_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -796,6 +888,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant prob \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \
@@ -811,7 +907,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --synthesis-max-new-tokens 10000 \
   --synthesis-batch-size 4
 
-CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --code math500_reasoning_gemma_etgpo1_gradpo_gen_random_lambda1_vs1500 \
   --qa-task math500 \
   --qa-mode reasoning \
@@ -825,6 +921,10 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --output-root outputs/math_prompt_optimization \
   --overwrite \
   --backend transformers \
+  --final-evaluation-backend vllm \
+  --gpu-memory-utilization 0.9 \
+  --vllm-max-model-len 32768 \
+  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 3000 \
   --gradient-batch-size 2 \

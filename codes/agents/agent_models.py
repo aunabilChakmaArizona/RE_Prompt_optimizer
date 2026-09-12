@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 
 import torch
 from huggingface_hub import login
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, __version__
 from transformers.utils import is_flash_attn_2_available
 
 
@@ -30,6 +30,13 @@ def _default_attn_implementation(device_map: str) -> str | None:
     return None
 
 
+def _dtype_keyword() -> str: #aunabil3rd: redundant for now
+    """Use the dtype keyword supported by the installed Transformers release."""
+    version_parts = __version__.split(".")[:2]
+    major_minor = tuple(int(part) for part in version_parts)
+    return "dtype" if major_minor >= (4, 56) else "torch_dtype"
+
+
 def load_model_and_tokenizer(
     model_id: str, device_map: Optional[str] = None
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
@@ -41,11 +48,11 @@ def load_model_and_tokenizer(
     device_map = _default_device_map(device_map)
     attn_implementation = _default_attn_implementation(device_map)
     model_kwargs = {
-        "dtype": _default_dtype(device_map),
         "trust_remote_code": True,
         # "local_files_only": True,
         "device_map": device_map,
     }
+    model_kwargs[_dtype_keyword()] = _default_dtype(device_map)
     if attn_implementation:
         model_kwargs["attn_implementation"] = attn_implementation
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)

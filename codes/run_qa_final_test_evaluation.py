@@ -162,6 +162,7 @@ def main() -> None:
         target_model_id=args.model,
         optimizer_model_id=None,
         target_device=args.device,
+        hf_target_device=args.device,
         optimizer_device=None,
         keep_models_loaded=True,
         seed=args.seed,
