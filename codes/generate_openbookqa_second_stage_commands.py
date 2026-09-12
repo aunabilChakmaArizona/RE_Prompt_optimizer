@@ -208,7 +208,6 @@ def method_arguments(
             "--max-locations", "5",
             "--max-words-per-location", "3",
             "--num-candidates", "5",
-            "--top-z", "5",
         ]
         if conservative_settings:
             arguments.append("--vllm-conservative-settings")

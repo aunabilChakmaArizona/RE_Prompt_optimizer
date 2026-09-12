@@ -33,8 +33,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_qwen_rpo5_greater_lambda1_vs900 \
@@ -55,7 +54,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -86,7 +86,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -117,7 +118,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -151,7 +153,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -185,7 +188,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -223,8 +227,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_qwen_rpo10_greater_lambda1_vs900 \
@@ -245,7 +248,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -276,7 +280,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -307,7 +312,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -341,7 +347,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -375,7 +382,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -413,8 +421,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_qwen_evoprompt5_greater_lambda1_vs900 \
@@ -435,7 +442,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -466,7 +474,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -497,7 +506,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -531,7 +541,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -565,7 +576,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -603,8 +615,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_qwen_evoprompt10_greater_lambda1_vs900 \
@@ -625,7 +636,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -656,7 +668,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -687,7 +700,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -721,7 +735,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -755,7 +770,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -793,8 +809,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_qwen_etgpo1_greater_lambda1_vs900 \
@@ -815,7 +830,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -846,7 +862,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -877,7 +894,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -911,7 +929,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \
@@ -945,7 +964,8 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 1200 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 5 \

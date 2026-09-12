@@ -395,41 +395,10 @@ def feedback_example(
     record: dict[str, Any],
     prediction: dict[str, Any],
     index: int,
+    mode: QAMode,
 ) -> str:
-    """Describe one prediction without exposing the dataset science fact."""
-    predicted = prediction.get("predicted_answer") or "INVALID"
-    outcome = "correct" if prediction.get("correct") else "incorrect"
-    if record.get("task_type") == "math_symbolic_answer": #aunabil: what is this type? where you get form. is the math500 only this task type or we have multiple
-        return "\n".join(
-            [
-                f"Example {index}",
-                f"Question: {record['question']}",
-                f"Gold answer: {record['answer']}",
-                f"Predicted answer: {predicted}",
-                f"Outcome: {outcome}",
-            ]
-        )
-    if record.get("task_type") == "hotpotqa_open_qa":
-        return "\n".join(
-            [
-                f"Example {index}",
-                f"Context: {context_as_text(record)}",
-                f"Question: {record['question']}",
-                f"Gold answer: {record['answer']}",
-                f"Predicted answer: {predicted}",
-                f"Outcome: {outcome}",
-            ]
-        )
-    return "\n".join(
-        [
-            f"Example {index}",
-            f"Question: {record['question']}",
-            f"Choices: {choices_as_text(record)}",
-            f"Gold option: {record['answer']}",
-            f"Predicted option: {predicted}",
-            f"Outcome: {outcome}",
-        ]
-    )
+    """Format LPO feedback and retain the complete reasoning trace when used."""
+    return rpo_feedback_example(record, prediction, index, mode)
 
 
 def reasoning_without_tagged_answer(response: str) -> str:

@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
         "--top-z",
         type=int,
         default=5,
-        help="Top training-ranked candidates evaluated on full validation.",
+        help="Deprecated compatibility option; all rewrites use full validation.",
     )
     args = parser.parse_args()
     positive_values = (

@@ -33,8 +33,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_rpo5_greater_lambda1_vs1500 \
@@ -222,8 +221,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_rpo10_greater_lambda1_vs1500 \
@@ -411,8 +409,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_greater_lambda1_vs1500 \
@@ -600,8 +597,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_greater_lambda1_vs1500 \
@@ -789,8 +785,7 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_greater_lambda1_vs1500 \

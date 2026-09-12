@@ -1,0 +1,195 @@
+QA/MATH SECOND-STAGE OPTIMIZER CODE AUDIT
+=========================================
+
+Date: 2026-09-12
+
+Scope
+-----
+This note records the code review of the shared QA/Math implementations of LPO,
+GreaTer, GreaTer-TG, GradPO-Gen, GradPO-Prob, and GradPO-Gen-Random. The review
+compared their main flows with the relation-extraction implementation and with
+the intended QA/Math experiment design.
+
+Main shared files
+-----------------
+- codes/prompt_optimization/second_stage.py
+- codes/prompt_optimization/sequence_gradients.py
+- codes/prompt_optimization/qa_task.py
+- codes/prompt_optimization/meta_prompts.py
+- codes/prompt_optimization/evaluation.py
+- codes/prompt_optimization/gradient_cache.py
+- codes/prompt_optimization/models.py
+- codes/run_qa_promptopt_lpo.py
+- codes/run_qa_promptopt_greater.py
+- codes/run_qa_promptopt_gradpo.py
+
+Relation-extraction references
+------------------------------
+- codes/LPO/experiments/relation_extraction_lpo.py
+- codes/GreaTer/experiments/relation_extraction_greater.py
+- codes/agents/agent_gradient_eval_debug.py
+- codes/agents/agent_prompts.py
+
+Verified method flows
+---------------------
+
+LPO
+1. Sample training records and run the source prompt.
+2. Keep incorrect examples only for feedback.
+3. Ask the optimizer model to mark editable spans in the complete editable
+   instruction prompt.
+4. Preserve every emitted edit tag and span; extraction does not enforce a
+   second hidden span-count or span-length restriction.
+5. Ask the optimizer model for five local rewrites and remove only the edit
+   tags/wrappers from parsed prompts.
+6. Evaluate the source prompt and every distinct parsed rewrite directly on
+   the full validation folds in one batched candidate evaluation.
+7. Retain a rewrite only if its validation stable score strictly exceeds the
+   source prompt's score.
+
+For reasoning tasks, each LPO feedback example now contains the complete model
+reasoning trace, with the tagged answer removed and the selected answer shown
+separately. No reasoning compaction is applied in the LPO path. For
+non-reasoning OpenBookQA, only the selected answer and outcome are shown.
+
+GreaTer and GreaTer-TG
+1. Randomly sample the configured initial training pool.
+2. Run the source prompt and cache its raw responses and correctness outcomes.
+3. Select the same deterministic, correctness-balanced subset for compatible
+   GreaTer/GradPO runs: normally 100 correct plus 100 incorrect examples.
+4. Generate reasoning once for reasoning tasks and condition gradient scoring
+   on that trace; calculate task loss over the exact gold answer text.
+5. Select one token sequentially for GreaTer or by top gradient for GreaTer-TG.
+6. Propose single-token replacements with the target model.
+7. Reject candidate token substitutions that do not decode and retokenize to
+   the intended one-token replacement before one-hot candidate ranking.
+8. Rank fixed token candidates with the one-hot combined-loss gradient, then
+   forward-score the top-mu valid prompts with task loss plus fluency loss.
+9. Evaluate the top-u prompts and source together on validation and retain only
+   a strict stable-score improvement.
+
+GradPO-Gen, GradPO-Prob, and GradPO-Gen-Random
+1. Reuse the same cached random pool and correctness-balanced gradient subset
+   used by compatible GreaTer runs.
+2. Generate reasoning once for reasoning tasks and compute gradients of exact
+   gold-answer loss conditioned on the source-prompt reasoning trace.
+3. Build non-overlapping token regions. GradPO-Gen and GradPO-Prob select
+   high-gradient regions; GradPO-Gen-Random samples regions with the same seeded
+   random generator.
+4. Generate replacements either with the target model (Gen/Gen-Random) or with
+   probability continuations (Prob).
+5. Combine region replacements with beam search and score each beam level on
+   the balanced training subset using task loss plus fluency loss.
+6. Preserve the exact unchanged source branch at every beam level. Selecting a
+   region's original text does not call the synthesis model and does not count
+   as an edit.
+7. Evaluate the surviving non-source prompts together with the source on the
+   full validation folds and retain only a strict stable-score improvement.
+
+Resolved findings from this review
+----------------------------------
+1. GradPO no-op branch: FIXED. The exact source/parent branch is cached and
+   reused without LLM synthesis. This prevents an alleged no-op from changing
+   unrelated wording.
+2. Math gradient-pool commands: FIXED. The generated full matrices now use an
+   initial random pool of 1,200 for Qwen and 600 for Gemma, followed by the
+   fixed target gradient subset of 200.
+3. LPO candidate validation: FIXED. Training inference is used only to obtain
+   incorrect feedback examples. All five generated rewrites (or all distinct,
+   valid parsed rewrites if generation duplicates/fails) are sent directly to
+   full validation together with the source prompt. The old top-z training
+   preselection is no longer used; --top-z remains accepted only for backward
+   command compatibility.
+4. GreaTer unstable token edits: FIXED. Candidate substitutions whose decoded
+   prompt does not retokenize to the intended token sequence are filtered before
+   one-hot/top-mu ranking. A defensive check remains when prompts are built.
+5. LPO reasoning feedback: FIXED. Reasoning-mode feedback exposes the complete
+   reasoning trace, while keeping the final selected answer separate.
+
+Gradient-pool configuration
+---------------------------
+| Task       | Qwen initial pool | Gemma initial pool | Final balanced subset |
+|------------|------------------:|-------------------:|----------------------:|
+| OpenBookQA |               800 |                600 | 200 (100 + 100)       |
+| HotpotQA   |               700 |                500 | 200 (100 + 100)       |
+| Math       |             1,200 |                600 | 200 (100 + 100)       |
+
+The detailed sampling procedure is recorded in
+experiment_tracking/second_stage/gradient_sampling_configuration.txt.
+
+Intentional QA/Math differences from relation extraction
+---------------------------------------------------------
+- Relation extraction balances TP/TN/FP/FN. QA and Math balance correct versus
+  incorrect outcomes because per-answer-label balancing is unsuitable for open
+  answers and unnecessarily small for four-choice QA.
+- OpenBookQA task loss targets A/B/C/D; HotpotQA targets its gold answer string;
+  Math targets its exact symbolic gold answer. Multi-token answer losses are
+  averaged per problem so long Math expressions do not dominate gradients.
+- Reasoning-task gradients use the source model's generated reasoning as
+  context, but loss is calculated only for the ground-truth final answer. If a
+  trace already contains an answer tag, its answer is replaced by the gold
+  answer; the extractor sentence is appended only when the tag is missing.
+- The fixed answer-format instruction is not part of the editable instruction
+  given to any optimizer.
+- Final prompt selection uses validation accuracy minus lambda times the
+  across-fold standard deviation (lambda=1 in the planned runs), rather than
+  relation-extraction stable F1.
+- vLLM is used only for faster output generation and final prompt evaluation;
+  Hugging Face Transformers performs gradients, differentiable task loss, and
+  fluency scoring.
+- Test evaluation remains disabled during tuning and will be run separately.
+
+Important follow-up before final experiments: protected words
+---------------------------------------------------------------
+TODO: Decide whether QA and Math need task-specific protected words/tokens
+before completing the full second-stage experiments. The relation-extraction
+GradPO code protects literal template words {query, support, relation} and the
+literal output labels {yes, no} from gradient-region editing. QA/Math currently
+do not apply an equivalent protected-word filter. We must determine which, if
+any, structural input-field words, answer-label literals, or formatting terms
+must remain fixed for OpenBookQA, HotpotQA, and Math. This should be decided
+carefully rather than copying the relation-extraction list blindly.
+
+Remaining review items (not changed in this pass)
+-------------------------------------------------
+- GradPO-Gen's parser expects the requested JSON structure. If output is
+  malformed, it retains only the original region text; the relation-extraction
+  implementation also has a looser raw-text fallback. Consider adding a safe
+  fallback only if real QA/Math traces show frequent parse failures.
+- LLM beam synthesis is instructed to edit only marked spans, but output is not
+  programmatically rejected when it changes wording outside those spans.
+  Consider an explicit outside-span validation if run traces show leakage.
+- GreaTer uses one-token regions, so its region-expansion threshold has no
+  practical effect. The option remains for shared CLI/config consistency.
+- Beam objective scoring conditions candidates on reasoning generated with the
+  source prompt. Full validation regenerates reasoning for each candidate. This
+  is the intended efficient local proxy, matching the motivation of the
+  reasoning-conditioned gradient design, but it should be described clearly.
+- HotpotQA prompt selection currently uses exact match as the primary accuracy;
+  token-level F1 is retained as a diagnostic. Confirm that this matches the
+  final paper's declared primary metric before reporting results.
+- QA/Math region construction excludes punctuation-only tokens before region
+  selection when the alphanumeric check is enabled; the relation implementation
+  applies its protected-token logic differently. Keep the default check off
+  unless this behavior is explicitly chosen.
+- Actual selected regions, token candidates, beam traces, prompts, and source
+  IDs are saved in each run. Aggregate edit/content reporting remains disabled
+  for now, as requested, and can be generated later from these artifacts.
+- The full OpenBookQA non-reasoning and Math reasoning shell matrices are
+  generated. Shared code supports other reasoning tasks, but final HotpotQA
+  second-stage command matrices still need to be prepared when requested.
+
+Generated full-matrix scripts after the fixes
+---------------------------------------------
+- codes/run_openbookqa_second_stage_qwen.sh
+- codes/run_openbookqa_second_stage_gemma.sh
+- codes/run_math_second_stage_qwen.sh
+- codes/run_math_second_stage_gemma.sh
+
+Verification
+------------
+- Python unittest discovery: 29 tests passed, 3 skipped because PyTorch is not
+  installed in the lightweight test environment.
+- New regression checks cover LPO's full reasoning feedback and direct
+  validation of five rewrites, GradPO's exact no-op branch, and stable GreaTer
+  single-token replacement construction.

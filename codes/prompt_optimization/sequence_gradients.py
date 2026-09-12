@@ -944,6 +944,29 @@ def _allowed_candidate_token(
     return text.isascii() and "\n" not in text and "\r" not in text
 
 
+def stable_single_token_replacement_prompt(
+    tokenizer,
+    source_token_ids: Sequence[int],
+    token_index: int,
+    candidate_token_id: int,
+) -> str | None:
+    """Return a prompt only when one token replacement retokenizes identically."""
+    candidate_token_ids = [int(value) for value in source_token_ids]
+    candidate_token_ids[token_index] = int(candidate_token_id)
+    candidate_prompt = tokenizer.decode(
+        candidate_token_ids,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False,
+    ).strip()
+    retokenized_ids = tokenizer.encode(
+        candidate_prompt,
+        add_special_tokens=False,
+    )
+    if retokenized_ids != candidate_token_ids:
+        return None
+    return candidate_prompt
+
+
 def qa_proposal_header(record: dict[str, Any], mode: QAMode) -> str:
     """Build GreaTer's task-specific proposal context around one example."""
     example_lines = []
@@ -982,9 +1005,11 @@ def proposal_token_candidates(
     prompt = str(gradient_analysis["instruction_prompt"])
     token_record = gradient_analysis["token_gradients"][token_index]
     prefix = prompt[: int(token_record["char_start"])]
-    current_id = int(gradient_analysis["token_ids"][token_index])
+    source_token_ids = [int(value) for value in gradient_analysis["token_ids"]]
+    current_id = source_token_ids[token_index]
     device = model_device(model)
     candidate_sets: list[list[int]] = []
+    unstable_candidate_ids: set[int] = set()
     with torch.inference_mode():
         for record in proposal_records:
             context = qa_proposal_header(record, mode) + prefix
@@ -1013,6 +1038,14 @@ def proposal_token_candidates(
                     candidate_id,
                     check_isalnum,
                 ):
+                    continue
+                if stable_single_token_replacement_prompt(
+                    tokenizer,
+                    source_token_ids,
+                    token_index,
+                    candidate_id,
+                ) is None:
+                    unstable_candidate_ids.add(candidate_id)
                     continue
                 text = tokenizer.decode([candidate_id], skip_special_tokens=True)
                 normalized = text.strip().casefold()
@@ -1059,6 +1092,8 @@ def proposal_token_candidates(
         "strict_intersection_token_ids": sorted(strict_intersection),
         "used_frequency_fallback": len(strict_intersection) < min_candidates,
         "candidate_frequency": {str(key): value for key, value in counts.items()},
+        "unstable_retokenization_count": len(unstable_candidate_ids),
+        "unstable_retokenization_token_ids": sorted(unstable_candidate_ids),
         "selected_token_ids": selected,
     }
 

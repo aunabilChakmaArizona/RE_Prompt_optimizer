@@ -34,8 +34,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_rpo5_greater_lambda1_vs1500 \
@@ -56,7 +55,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -87,7 +87,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -118,7 +119,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -152,7 +154,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -186,7 +189,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -225,8 +229,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_rpo10_greater_lambda1_vs1500 \
@@ -247,7 +250,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -278,7 +282,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -309,7 +314,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -343,7 +349,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -377,7 +384,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -416,8 +424,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_evoprompt5_greater_lambda1_vs1500 \
@@ -438,7 +445,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -469,7 +477,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -500,7 +509,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -534,7 +544,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -568,7 +579,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -607,8 +619,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_evoprompt10_greater_lambda1_vs1500 \
@@ -629,7 +640,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -660,7 +672,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -691,7 +704,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -725,7 +739,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -759,7 +774,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -798,8 +814,7 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --feedback-examples 3 \
   --max-locations 5 \
   --max-words-per-location 3 \
-  --num-candidates 5 \
-  --top-z 5
+  --num-candidates 5
 
 CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --code math500_reasoning_gemma_etgpo1_greater_lambda1_vs1500 \
@@ -820,7 +835,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -851,7 +867,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant greater_tg \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 4 \
   --selection-batch-size 8 \
   --proposal-top-k 25 \
@@ -882,7 +899,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -916,7 +934,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant prob \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \
@@ -950,7 +969,8 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --vllm-max-model-len 16384 \
   --vllm-disable-images \
   --variant gen_random \
-  --train-sample-size 3000 \
+  --train-sample-size 600 \
+  --gradient-sample-size 200 \
   --gradient-batch-size 2 \
   --selection-batch-size 4 \
   --num-edit-regions 3 \

@@ -25,6 +25,7 @@ MODEL_CONFIGS: dict[str, dict[str, Any]] = {
         },
         "gradpo_regions": 5,
         "gradpo_region_tokens": 2,
+        "gradient_pool_size": 1200,
         "vllm_extra": [],
     },
     "gemma": {
@@ -40,6 +41,7 @@ MODEL_CONFIGS: dict[str, dict[str, Any]] = {
         },
         "gradpo_regions": 3,
         "gradpo_region_tokens": 3,
+        "gradient_pool_size": 600,
         "vllm_extra": ["--vllm-max-model-len", "32768", "--vllm-disable-images"],
     },
 }
@@ -198,7 +200,6 @@ def method_arguments(
             "--max-locations", "5",
             "--max-words-per-location", "3",
             "--num-candidates", "5",
-            "--top-z", "5",
         ]
         if conservative_settings:
             arguments.append("--vllm-conservative-settings")
@@ -232,7 +233,8 @@ def method_arguments(
         return [
             *gradient_runtime,
             "--variant", str(variant),
-            "--train-sample-size", "3000",
+            "--train-sample-size", str(config["gradient_pool_size"]),
+            "--gradient-sample-size", "200",
             "--gradient-batch-size", "4",
             "--selection-batch-size", "8",
             "--proposal-top-k", "25",
@@ -246,7 +248,8 @@ def method_arguments(
     return [
         *gradient_runtime,
         "--variant", str(variant),
-        "--train-sample-size", "3000",
+        "--train-sample-size", str(config["gradient_pool_size"]),
+        "--gradient-sample-size", "200",
         "--gradient-batch-size", "2",
         "--selection-batch-size", "4",
         "--num-edit-regions", str(config["gradpo_regions"]),

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import random
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 try:
@@ -27,6 +31,7 @@ from prompt_optimization.meta_prompts import (
 )
 from prompt_optimization.qa_evoprompt_seeds import QA_EVOPROMPT_SEEDS
 from prompt_optimization.qa_task import (
+    feedback_example,
     load_qa_records,
     render_qa_prompt,
     resolve_mode,
@@ -37,12 +42,15 @@ from prompt_optimization.qa_task import (
 )
 from prompt_optimization.second_stage import (
     _balance_gradient_pairs,
+    _beam_search_replacements,
     _gradpo_synthesis_prompt,
+    run_lpo,
 )
 from prompt_optimization.sequence_gradients import (
     _label_loss_from_logits,
     qa_proposal_header,
     render_teacher_forced_qa,
+    stable_single_token_replacement_prompt,
 )
 
 
@@ -55,6 +63,27 @@ class _PlainChatTokenizer:
             f"{message['role'].upper()}: {message['content']}"
             for message in messages
         )
+
+
+class _RoundTripTokenizer:
+    """Expose one stable and one unstable decoded replacement for testing."""
+
+    def decode(self, token_ids, **_kwargs):
+        """Decode integer IDs as a whitespace-separated prompt."""
+        return " ".join(str(token_id) for token_id in token_ids)
+
+    def encode(self, text, **_kwargs):
+        """Retokenize ID 9 differently to simulate a boundary-unstable edit."""
+        token_ids = [int(value) for value in text.split()]
+        return [99 if token_id == 9 else token_id for token_id in token_ids]
+
+
+class _NoGenerationPool:
+    """Reject unexpected synthesis calls made by a no-op beam branch."""
+
+    def generate(self, *_args, **_kwargs):
+        """Fail if exact no-op preservation incorrectly invokes synthesis."""
+        raise AssertionError("The exact GradPO no-op branch must not be synthesized.")
 
 
 class MathPromptOptimizationTests(unittest.TestCase):
@@ -123,6 +152,120 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertIn("LLM Selected Answer: 2", example)
         self.assertNotIn("<answer>", example)
         self.assertNotIn("After you finish reasoning", example)
+
+    def test_lpo_feedback_keeps_the_full_reasoning_trace(self) -> None:
+        """Show LPO every part of a reasoning trace and the answer separately."""
+        prediction = {
+            "predicted_answer": "2",
+            "correct": False,
+            "raw_response": (
+                "Beginning of reasoning.\nMiddle of reasoning.\n"
+                "End of reasoning. <answer>2</answer>"
+            ),
+        }
+
+        example = feedback_example(self.record, prediction, 1, self.mode)
+
+        self.assertIn("Beginning of reasoning.", example)
+        self.assertIn("Middle of reasoning.", example)
+        self.assertIn("End of reasoning.", example)
+        self.assertIn("LLM Selected Answer: 2", example)
+        self.assertNotIn("<answer>", example)
+
+    def test_lpo_validates_every_distinct_rewrite_without_train_preselection(self) -> None:
+        """Send all five LPO rewrites and the source directly to validation."""
+        rewrite_outputs = [
+            f"<p>Candidate instruction {index}.</p>"
+            for index in range(1, 6)
+        ]
+        captured: dict[str, object] = {}
+
+        def fake_evaluate_candidates(
+            _context,
+            candidates,
+            records,
+            **_kwargs,
+        ):
+            """Capture the candidate batch and return simple scored items."""
+            captured["candidates"] = list(candidates)
+            captured["records"] = records
+            output = []
+            for candidate_index, prompt in enumerate(candidates):
+                accuracy = 0.5 + 0.01 * candidate_index
+                evaluation = {
+                    "metrics": {
+                        "accuracy": accuracy,
+                        "stable_accuracy": accuracy,
+                    }
+                }
+                output.append(
+                    {
+                        "candidate_index": candidate_index,
+                        "prompt": prompt,
+                        "accuracy": accuracy,
+                        "selection_score": accuracy,
+                        "metrics": evaluation["metrics"],
+                        "evaluation": evaluation,
+                    }
+                )
+            return output
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            context = SimpleNamespace(
+                initial_prompt="Solve carefully.",
+                mode=self.mode,
+                train_records=[self.record],
+                validation_records=[{**self.record, "validation_fold": 1}],
+                rng=random.Random(42),
+                evaluator=SimpleNamespace(
+                    evaluate=lambda *_args, **_kwargs: {"metrics": {"accuracy": 0.0}}
+                ),
+                run_dir=Path(temporary_directory),
+                optimizer_name="lpo",
+                started_at=time.monotonic(),
+            )
+            args = SimpleNamespace(
+                train_sample_size=1,
+                feedback_examples=1,
+                max_locations=5,
+                max_words_per_location=3,
+                num_candidates=5,
+                top_z=1,
+            )
+            prediction = {
+                "predicted_answer": "2",
+                "correct": False,
+                "raw_response": "Incorrect reasoning. <answer>2</answer>",
+            }
+            with (
+                patch(
+                    "prompt_optimization.second_stage.select_incorrect_feedback",
+                    return_value=[(self.record, prediction)],
+                ),
+                patch(
+                    "prompt_optimization.second_stage.generate_optimizer_texts",
+                    side_effect=[
+                        ["<p>Solve <edit>carefully</edit>.</p>"],
+                        rewrite_outputs,
+                    ],
+                ),
+                patch(
+                    "prompt_optimization.second_stage.evaluate_candidates",
+                    side_effect=fake_evaluate_candidates,
+                ),
+                patch(
+                    "prompt_optimization.second_stage.finalize_run",
+                    return_value={},
+                ),
+            ):
+                run_lpo(context, args)
+
+        self.assertEqual(len(captured["candidates"]), 6)
+        self.assertEqual(captured["candidates"][0], context.initial_prompt)
+        self.assertEqual(captured["candidates"][1:], [
+            f"Candidate instruction {index}." for index in range(1, 6)
+        ])
+        self.assertIs(captured["records"], context.validation_records)
 
     def test_math_meta_prompts_preserve_task_generic_wording(self) -> None:
         """Use math-specific instructions without naming the benchmark."""
@@ -318,6 +461,70 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertIn(self.record["question"], prompt)
         self.assertNotIn("multiple-choice", prompt)
         self.assertNotIn("Choices:", prompt)
+
+    def test_greater_rejects_boundary_unstable_token_replacements(self) -> None:
+        """Filter invalid one-token edits before GreaTer's top-mu ranking cutoff."""
+        tokenizer = _RoundTripTokenizer()
+
+        stable = stable_single_token_replacement_prompt(tokenizer, [1, 2, 3], 1, 4)
+        unstable = stable_single_token_replacement_prompt(tokenizer, [1, 2, 3], 1, 9)
+
+        self.assertEqual(stable, "1 4 3")
+        self.assertIsNone(unstable)
+
+    @patch("prompt_optimization.second_stage._score_objective_candidates")
+    def test_gradpo_no_op_branch_preserves_the_exact_source_prompt(
+        self,
+        mock_score,
+    ) -> None:
+        """Keep GradPO's unchanged beam branch without an LLM synthesis call."""
+        mock_score.return_value = [
+            {
+                "task_loss": 1.0,
+                "fluency_loss": 1.0,
+                "combined_score": 1.0,
+            }
+        ]
+        context = SimpleNamespace(
+            initial_prompt="Solve carefully.",
+            mode=self.mode,
+            model_pool=_NoGenerationPool(),
+            optimizer_name="gradpo_gen",
+            started_at=time.monotonic(),
+            logger=SimpleNamespace(event=lambda *_args, **_kwargs: None),
+        )
+
+        beam, _trace = _beam_search_replacements(
+            context,
+            [
+                {
+                    "region_rank": 1,
+                    "region_text": "carefully",
+                    "start_char": 6,
+                    "end_char": 15,
+                }
+            ],
+            [
+                {
+                    "region_rank": 1,
+                    "candidates": ["carefully"],
+                }
+            ],
+            [self.record],
+            model=object(),
+            tokenizer=object(),
+            beam_width=1,
+            selection_batch_size=1,
+            fluency_lambda=0.5,
+            replacement_mode="llm_synthesis",
+            synthesis_max_new_tokens=100,
+            synthesis_batch_size=1,
+            reasoning_traces=["Reasoning. <answer>2</answer>"],
+        )
+
+        self.assertEqual(beam[0]["prompt"], context.initial_prompt)
+        self.assertEqual(beam[0]["replacements"], {})
+        self.assertTrue(beam[0]["replacement_metadata"]["no_op"])
 
     @unittest.skipIf(torch is None, "PyTorch is not installed in this test environment.")
     def test_answer_loss_weights_problems_not_answer_token_counts(self) -> None:

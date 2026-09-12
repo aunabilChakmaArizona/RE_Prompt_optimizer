@@ -25,6 +25,9 @@ python -u codes/report_first_stage_results.py
 
 ## Second-stage experiments
 
+- `second_stage/qa_math_second_stage_code_audit.txt`: QA/Math LPO, GreaTer, and
+  GradPO flow review; resolved implementation issues; intentional differences
+  from relation extraction; and the pending protected-word decision.
 - `second_stage/gradient_sampling_configuration.txt`: task/model-specific
   random-pool sizes, the fixed 100-correct plus 100-incorrect gradient subset,
   and controlled-comparison requirements.

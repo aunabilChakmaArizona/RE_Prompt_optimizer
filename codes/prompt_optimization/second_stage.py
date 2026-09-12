@@ -64,6 +64,7 @@ from prompt_optimization.sequence_gradients import (
     replace_selected_regions,
     score_combined_objectives,
     select_gradient_regions,
+    stable_single_token_replacement_prompt,
     tensor_free_gradient_summary,
 )
 
@@ -532,13 +533,6 @@ def _lpo_candidate_prompts_from_outputs(
 def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run one reasoning-based local prompt optimization step for QA."""
     log_progress(context, "run started | iterations=1")
-    initial_evaluation = context.evaluator.evaluate(
-        context.initial_prompt,
-        context.validation_records,
-        split_name="validation",
-        log_label="qa_lpo_initial_validation",
-    )
-    source = _source_scored_item(context, initial_evaluation)
     train_records = _sample_second_stage_records(context, args.train_sample_size)
     train_evaluation = context.evaluator.evaluate(
         context.initial_prompt,
@@ -556,7 +550,7 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         f"feedback selection completed | incorrect_examples={len(feedback_pairs)}",
     )
     feedback_texts = [
-        feedback_example(record, prediction, index)
+        feedback_example(record, prediction, index, context.mode)
         for index, (record, prediction) in enumerate(feedback_pairs, start=1)
     ]
     location_meta_prompt = lpo_location_prompt(
@@ -600,7 +594,7 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         },
     )
 
-    candidate_prompts = [context.initial_prompt]
+    candidate_prompts: list[str] = []
     rewrite_outputs: list[str] = []
     rewrite_meta_prompt = None
     if locations:
@@ -614,10 +608,14 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             [rewrite_meta_prompt] * args.num_candidates,
             log_label="qa_lpo_local_rewrite",
         )
-        candidate_prompts = _lpo_candidate_prompts_from_outputs(
-            rewrite_outputs,
-            context.initial_prompt,
-        )
+        candidate_prompts = [
+            prompt
+            for prompt in _lpo_candidate_prompts_from_outputs(
+                rewrite_outputs,
+                context.initial_prompt,
+            )
+            if prompt != context.initial_prompt
+        ]
     log_progress(
         context,
         f"local rewriting completed | parsed_candidates={len(candidate_prompts)}",
@@ -636,34 +634,25 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         },
     )
 
-    train_scored = evaluate_candidates(
+    validation_scored = evaluate_candidates(
         context,
-        candidate_prompts,
-        train_records,
-        split_name="train_selection",
-        phase="lpo_candidate_train",
-        iteration=1,
-    )
-    top_train = sorted(
-        train_scored,
-        key=lambda item: (float(item["accuracy"]), -int(item["candidate_index"])),
-        reverse=True,
-    )[: args.top_z]
-    if top_train:
-        log_progress(
-            context,
-            f"training preselection completed | retained={len(top_train)} | "
-            f"best_training_accuracy={100.0 * float(top_train[0]['accuracy']):.2f}%",
-        )
-    dev_prompts = [item["prompt"] for item in top_train if item["prompt"] != context.initial_prompt]
-    dev_scored = evaluate_candidates(
-        context,
-        dev_prompts,
+        [context.initial_prompt, *candidate_prompts],
         context.validation_records,
         split_name="validation",
         phase="lpo_candidate_validation",
         iteration=1,
     )
+    source = next(
+        item
+        for item in validation_scored
+        if item["prompt"] == context.initial_prompt
+    )
+    initial_evaluation = source["evaluation"]
+    dev_scored = [
+        item
+        for item in validation_scored
+        if item["prompt"] != context.initial_prompt
+    ]
     selected, improved = _strictly_select_against_source(source, dev_scored)
     log_progress(
         context,
@@ -843,16 +832,17 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]: #aunabi
     for item in candidate_tokens:
         candidate_token_ids = list(source_token_ids)
         candidate_token_ids[token_index] = int(item["token_id"])
-        candidate_prompt = tokenizer.decode(
-            candidate_token_ids,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        ).strip()
-        retokenized_ids = tokenizer.encode(
-            candidate_prompt,
-            add_special_tokens=False,
+        candidate_prompt = (
+            context.initial_prompt
+            if bool(item["is_original"])
+            else stable_single_token_replacement_prompt(
+                tokenizer,
+                source_token_ids,
+                token_index,
+                int(item["token_id"]),
+            )
         )
-        if retokenized_ids != candidate_token_ids:
+        if candidate_prompt is None:
             continue
         stable_candidate_tokens.append(
             {
@@ -1257,7 +1247,15 @@ def _beam_search_replacements(
         }
     ]
     trace = []
-    synthesis_cache: dict[tuple[tuple[int, str], ...], dict[str, Any]] = {}
+    synthesis_cache: dict[tuple[tuple[int, str], ...], dict[str, Any]] = {
+        (): {
+            "prompt": context.initial_prompt,
+            "meta_prompt": None,
+            "raw_output": None,
+            "used_fallback": False,
+            "no_op": True,
+        }
+    }
     beam_started_at = time.monotonic()
     for region_index, region in enumerate(regions, start=1):
         region_started_at = time.monotonic()
@@ -1271,14 +1269,17 @@ def _beam_search_replacements(
         expansion_specs = []
         for beam_item in beam:
             for replacement in candidate_index[rank]["candidates"]:
-                replacements = {
-                    **beam_item["replacements"],
-                    rank: str(replacement),
-                }
+                replacements = dict(beam_item["replacements"])
+                history = list(beam_item["history"])
+                if str(replacement) == str(region["region_text"]):
+                    replacements.pop(rank, None)
+                else:
+                    replacements[rank] = str(replacement)
+                    history.append(rank)
                 expansion_specs.append(
                     {
                         "replacements": replacements,
-                        "history": [*beam_item["history"], rank],
+                        "history": history,
                     }
                 )
         if replacement_mode == "llm_synthesis":
@@ -1333,6 +1334,7 @@ def _beam_search_replacements(
                         "meta_prompt": meta_prompt,
                         "raw_output": raw_output,
                         "used_fallback": used_fallback,
+                        "no_op": False,
                     }
         elif replacement_mode != "direct":
             raise ValueError(f"Unsupported beam replacement mode: {replacement_mode!r}")
@@ -1348,6 +1350,7 @@ def _beam_search_replacements(
                     "meta_prompt": synthesis["meta_prompt"],
                     "raw_output": synthesis["raw_output"],
                     "used_fallback": synthesis["used_fallback"],
+                    "no_op": synthesis["no_op"],
                 }
             else:
                 prompt = replace_selected_regions(
@@ -1360,6 +1363,7 @@ def _beam_search_replacements(
                     "meta_prompt": None,
                     "raw_output": None,
                     "used_fallback": False,
+                    "no_op": not bool(spec["replacements"]),
                 }
             expansions.setdefault(
                 prompt,
