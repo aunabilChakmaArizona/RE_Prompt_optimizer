@@ -11,7 +11,7 @@ set -euo pipefail
 [[ -f outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_iteration_10.txt'; exit 1; }
 [[ -f outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500/final_prompt.txt ]] || { echo 'Missing first-stage prompt: outputs/qa_prompt_optimization/non_reasoning/etgpo/openbookqa_non_reasoning_qwen_etgpo_qwen14opt_lambda1_fixed_vs1500/final_prompt.txt'; exit 1; }
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --code openbookqa_non_reasoning_qwen_rpo5_lpo_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -36,7 +36,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --num-candidates 5 \
   --top-z 5
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_rpo5_greater_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -49,9 +49,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -63,9 +64,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_rpo5_greater_tg_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -78,9 +80,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater_tg \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -92,9 +95,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_rpo5_gradpo_gen_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -107,9 +111,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -124,9 +129,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_rpo5_gradpo_prob_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -139,9 +145,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant prob \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -156,9 +163,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_rpo5_gradpo_gen_random_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -171,9 +179,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen_random \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -188,9 +197,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --code openbookqa_non_reasoning_qwen_rpo10_lpo_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -215,7 +225,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --num-candidates 5 \
   --top-z 5
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_rpo10_greater_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -228,9 +238,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -242,9 +253,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_rpo10_greater_tg_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -257,9 +269,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater_tg \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -271,9 +284,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_rpo10_gradpo_gen_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -286,9 +300,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -303,9 +318,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_rpo10_gradpo_prob_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -318,9 +334,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant prob \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -335,9 +352,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_rpo10_gradpo_gen_random_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -350,9 +368,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen_random \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -367,9 +386,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_lpo_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -394,7 +414,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --num-candidates 5 \
   --top-z 5
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_greater_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -407,9 +427,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -421,9 +442,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_greater_tg_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -436,9 +458,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater_tg \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -450,9 +473,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_gradpo_gen_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -465,9 +489,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -482,9 +507,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_gradpo_prob_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -497,9 +523,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant prob \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -514,9 +541,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt5_gradpo_gen_random_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -529,9 +557,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen_random \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -546,9 +575,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_lpo_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -573,7 +603,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --num-candidates 5 \
   --top-z 5
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_greater_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -586,9 +616,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -600,9 +631,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_greater_tg_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -615,9 +647,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater_tg \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -629,9 +662,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_gradpo_gen_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -644,9 +678,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -661,9 +696,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_gradpo_prob_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -676,9 +712,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant prob \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -693,9 +730,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_evoprompt10_gradpo_gen_random_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -708,9 +746,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen_random \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -725,9 +764,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_lpo.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_lpo_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -752,7 +792,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --num-candidates 5 \
   --top-z 5
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_greater_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -765,9 +805,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -779,9 +820,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_greater.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_greater_tg_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -794,9 +836,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant greater_tg \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -808,9 +851,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --selection-top-mu 10 \
   --top-u 5 \
   --fluency-lambda 0.2 \
-  --region-expansion-threshold 0.6
+  --region-expansion-threshold 0.6 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_gradpo_gen_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -823,9 +867,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -840,9 +885,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_gradpo_prob_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -855,9 +901,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant prob \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -872,9 +919,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0
 
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
+CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_gradpo.py \
   --code openbookqa_non_reasoning_qwen_etgpo1_gradpo_gen_random_lambda1_vs1500 \
   --qa-task openbookqa \
   --qa-mode non_reasoning \
@@ -887,9 +935,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --validation-std-penalty 1.0 \
   --output-root outputs/qa_prompt_optimization \
   --overwrite \
-  --backend transformers \
+  --backend dual \
   --final-evaluation-backend vllm \
-  --gpu-memory-utilization 0.9 \
+  --dual-vllm-gpu-memory-utilization 0.5 \
+  --vllm-max-model-len 16384 \
   --variant gen_random \
   --train-sample-size 800 \
   --gradient-sample-size 200 \
@@ -904,4 +953,5 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promp
   --fluency-lambda 0.5 \
   --candidate-max-new-tokens 10000 \
   --synthesis-max-new-tokens 10000 \
-  --synthesis-batch-size 4
+  --synthesis-batch-size 4 \
+  --hf-device cuda:0

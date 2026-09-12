@@ -94,7 +94,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--gradient-backend",
         choices=("dual", "transformers"),
-        default="transformers",
+        default="dual",
         help="Use resident HF+vLLM or HF followed by vLLM for gradient refiners.",
     )
     parser.add_argument(
@@ -294,7 +294,6 @@ def split_argument_groups(arguments: Sequence[str]) -> list[list[str]]:
 def format_command(gpu: str, runner: str, arguments: Sequence[str]) -> str:
     """Render one command with one option group per shell line."""
     lines = [
-        "CUDA_DEVICE_ORDER=PCI_BUS_ID "
         f"CUDA_VISIBLE_DEVICES={shlex.quote(gpu)} python -u {runner} \\"
     ]
     groups = split_argument_groups(arguments)
@@ -342,9 +341,12 @@ def commands_for_family(
                 )
             )
             visible_gpus = vllm_gpu
-            if gradient_backend == "dual" and method_name != "lpo" and hf_gpu:
-                visible_gpus = f"{vllm_gpu},{hf_gpu}"
-                arguments.extend(["--hf-device", "cuda:1"])
+            if gradient_backend == "dual" and method_name != "lpo":
+                hf_device = "cuda:0"
+                if hf_gpu:
+                    visible_gpus = f"{vllm_gpu},{hf_gpu}"
+                    hf_device = "cuda:1"
+                arguments.extend(["--hf-device", hf_device])
             commands.append(format_command(visible_gpus, runner, arguments))
     return source_paths, commands
 
