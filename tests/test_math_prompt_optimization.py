@@ -231,7 +231,9 @@ class MathPromptOptimizationTests(unittest.TestCase):
                 max_words_per_location=3,
                 num_candidates=5,
                 top_z=1,
+                disable_source_validation_cache=True,
             )
+            context.args = args
             prediction = {
                 "predicted_answer": "2",
                 "correct": False,

@@ -35,6 +35,10 @@ from prompt_optimization.run_io import (
     save_json,
     save_text,
 )
+from prompt_optimization.source_validation_cache import (
+    DEFAULT_SOURCE_VALIDATION_CACHE_ROOT,
+    resolve_source_validation_cache_root,
+)
 
 
 DEFAULT_MATH_OUTPUT_ROOT = DEFAULT_OUTPUT_ROOT.parent / "math_prompt_optimization"
@@ -232,6 +236,21 @@ def add_shared_arguments(
         help="Lambda in validation mean accuracy minus lambda times fold std.",
     )
     parser.add_argument(
+        "--source-validation-cache-root",
+        default=str(DEFAULT_SOURCE_VALIDATION_CACHE_ROOT),
+        help="Shared JSON cache for repeated source-prompt validation results.",
+    )
+    parser.add_argument(
+        "--refresh-source-validation-cache",
+        action="store_true",
+        help="Regenerate and replace a matching source validation result.",
+    )
+    parser.add_argument(
+        "--disable-source-validation-cache",
+        action="store_true",
+        help="Evaluate source prompts without reading or writing the shared cache.",
+    )
+    parser.add_argument(
         "--output-root",
         default=str(DEFAULT_OUTPUT_ROOT),
         help="Root directory where run artifacts are saved.",
@@ -331,6 +350,14 @@ def build_context(
         raise ValueError(
             "--disable-gradient-cache and --refresh-gradient-cache cannot be combined."
         )
+    if (
+        args.disable_source_validation_cache
+        and args.refresh_source_validation_cache
+    ):
+        raise ValueError(
+            "--disable-source-validation-cache and "
+            "--refresh-source-validation-cache cannot be combined."
+        )
     seed_everything(args.seed)
     rng = random.Random(args.seed)
     train_path = args.train_path
@@ -381,6 +408,9 @@ def build_context(
         resolved_gradient_cache_root = str(
             resolve_gradient_cache_root(args.gradient_cache_root)
         )
+    resolved_source_validation_cache_root = str(
+        resolve_source_validation_cache_root(args.source_validation_cache_root)
+    )
     model_pool = ModelPool(
         target_model_id=args.model,
         optimizer_model_id=args.optimizer_model,
@@ -435,6 +465,9 @@ def build_context(
             "resolved_vllm_target_device": args.device,
             "resolved_hf_target_device": resolved_hf_device,
             "resolved_gradient_cache_root": resolved_gradient_cache_root,
+            "resolved_source_validation_cache_root": (
+                resolved_source_validation_cache_root
+            ),
             "optimizer_name": optimizer_name,
             "qa_mode_config": asdict(mode),
             "resolved_target_max_new_tokens": max_new_tokens,

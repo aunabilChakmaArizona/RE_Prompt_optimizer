@@ -18,6 +18,7 @@ Main shared files
 - codes/prompt_optimization/meta_prompts.py
 - codes/prompt_optimization/evaluation.py
 - codes/prompt_optimization/gradient_cache.py
+- codes/prompt_optimization/source_validation_cache.py
 - codes/prompt_optimization/models.py
 - codes/run_qa_promptopt_lpo.py
 - codes/run_qa_promptopt_greater.py
@@ -43,7 +44,8 @@ LPO
 5. Ask the optimizer model for five local rewrites and remove only the edit
    tags/wrappers from parsed prompts.
 6. Evaluate the source prompt and every distinct parsed rewrite directly on
-   the full validation folds in one batched candidate evaluation.
+   the full validation folds. The source result is generated once and then
+   reused from the shared source-validation cache across compatible methods.
 7. Retain a rewrite only if its validation stable score strictly exceeds the
    source prompt's score.
 
@@ -65,8 +67,8 @@ GreaTer and GreaTer-TG
    the intended one-token replacement before one-hot candidate ranking.
 8. Rank fixed token candidates with the one-hot combined-loss gradient, then
    forward-score the top-mu valid prompts with task loss plus fluency loss.
-9. Evaluate the top-u prompts and source together on validation and retain only
-   a strict stable-score improvement.
+9. Evaluate the top-u prompts on validation, reuse or create the exact matching
+   cached source result, and retain only a strict stable-score improvement.
 
 GradPO-Gen, GradPO-Prob, and GradPO-Gen-Random
 1. Reuse the same cached random pool and correctness-balanced gradient subset
@@ -83,8 +85,9 @@ GradPO-Gen, GradPO-Prob, and GradPO-Gen-Random
 6. Preserve the exact unchanged source branch at every beam level. Selecting a
    region's original text does not call the synthesis model and does not count
    as an edit.
-7. Evaluate the surviving non-source prompts together with the source on the
-   full validation folds and retain only a strict stable-score improvement.
+7. Evaluate the surviving non-source prompts on the full validation folds,
+   reuse or create the exact matching cached source result, and retain only a
+   strict stable-score improvement.
 
 Resolved findings from this review
 ----------------------------------
@@ -105,6 +108,14 @@ Resolved findings from this review
    one-hot/top-mu ranking. A defensive check remains when prompts are built.
 5. LPO reasoning feedback: FIXED. Reasoning-mode feedback exposes the complete
    reasoning trace, while keeping the final selected answer separate.
+6. Repeated source validation: FIXED. LPO, GreaTer, GreaTer-TG, and all GradPO
+   variants now share a source-only validation cache. A hit skips only source
+   generation; every new candidate is still evaluated. The exact identity
+   includes the source prompt, model, task/mode, ordered validation records and
+   contents, rendered inputs, backend/version, seed, output-token limit,
+   thinking/sampling settings, and stable-score lambda. Different validation
+   sizes or folds therefore cannot collide. Historical first-stage scores are
+   not imported automatically because their settings are not always identical.
 
 Gradient-pool configuration
 ---------------------------
@@ -188,8 +199,10 @@ Generated full-matrix scripts after the fixes
 
 Verification
 ------------
-- Python unittest discovery: 29 tests passed, 3 skipped because PyTorch is not
+- Python unittest discovery: 31 tests passed, 3 skipped because PyTorch is not
   installed in the lightweight test environment.
 - New regression checks cover LPO's full reasoning feedback and direct
   validation of five rewrites, GradPO's exact no-op branch, and stable GreaTer
-  single-token replacement construction.
+  single-token replacement construction. Source-cache checks verify that a
+  second method skips the cached source but still evaluates its candidates, and
+  that different validation subsets produce different keys.

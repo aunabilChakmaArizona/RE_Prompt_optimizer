@@ -54,6 +54,14 @@ from prompt_optimization.qa_task import (
     score_qa_response,
 )
 from prompt_optimization.run_io import format_elapsed, save_json
+from prompt_optimization.source_validation_cache import (
+    DEFAULT_SOURCE_VALIDATION_CACHE_ROOT,
+    build_source_validation_identity,
+    load_source_validation_cache,
+    lock_source_validation_cache,
+    save_source_validation_cache,
+    source_validation_cache_path,
+)
 from prompt_optimization.sequence_gradients import (
     build_gradient_region_pool,
     collect_instruction_gradients,
@@ -464,6 +472,130 @@ def _prepare_final_evaluation_backend(
     return "vllm" if context.model_pool.uses_vllm_generation else "transformers"
 
 
+def _evaluate_with_cached_source(
+    context: QAOptimizationContext,
+    candidate_prompts: Sequence[str],
+    *,
+    phase: str,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    """Reuse one exact source evaluation while scoring all new candidates."""
+    candidates = unique_nonempty(
+        [prompt for prompt in candidate_prompts if prompt != context.initial_prompt]
+    )
+    cache_disabled = bool(
+        getattr(context.args, "disable_source_validation_cache", False)
+    )
+    if cache_disabled:
+        scored = evaluate_candidates(
+            context,
+            [context.initial_prompt, *candidates],
+            context.validation_records,
+            split_name="validation",
+            phase=phase,
+            iteration=1,
+        )
+        source_candidate = next(
+            item for item in scored if item["prompt"] == context.initial_prompt
+        )
+        initial_evaluation = source_candidate["evaluation"]
+        return (
+            initial_evaluation,
+            _source_scored_item(context, initial_evaluation),
+            [item for item in scored if item["prompt"] != context.initial_prompt],
+        )
+
+    generation_backend = (
+        "vllm" if context.model_pool.uses_vllm_generation else "transformers"
+    )
+    rendered_source_prompts = [
+        render_qa_prompt(context.initial_prompt, record, context.mode)
+        for record in context.validation_records
+    ]
+    identity = build_source_validation_identity(
+        model_id=context.args.model,
+        generation_backend=generation_backend,
+        task_name=context.mode.task_name,
+        mode_name=context.mode.name,
+        source_prompt=context.initial_prompt,
+        validation_records=context.validation_records,
+        rendered_prompts=rendered_source_prompts,
+        seed=context.evaluator.seed,
+        max_new_tokens=context.evaluator.max_new_tokens,
+        enable_thinking=context.mode.enable_thinking,
+        validation_std_penalty=context.evaluator.validation_std_penalty,
+    )
+    cache_root = getattr(
+        context.args,
+        "source_validation_cache_root",
+        str(DEFAULT_SOURCE_VALIDATION_CACHE_ROOT),
+    )
+    cache_path, cache_key = source_validation_cache_path(cache_root, identity)
+    refresh_cache = bool(
+        getattr(context.args, "refresh_source_validation_cache", False)
+    )
+    log_progress(context, f"source validation cache lookup | path={cache_path}")
+
+    with lock_source_validation_cache(cache_path):
+        cached = None
+        if not refresh_cache:
+            cached = load_source_validation_cache(cache_path, identity)
+        if cached is None:
+            scored = evaluate_candidates(
+                context,
+                [context.initial_prompt, *candidates],
+                context.validation_records,
+                split_name="validation",
+                phase=phase,
+                iteration=1,
+            )
+            source_candidate = next(
+                item for item in scored if item["prompt"] == context.initial_prompt
+            )
+            initial_evaluation = source_candidate["evaluation"]
+            save_source_validation_cache(
+                cache_path,
+                {
+                    "metadata": identity,
+                    "cache_key": cache_key,
+                    "evaluation": initial_evaluation,
+                },
+            )
+            context.logger.event(
+                "source_validation_cache_miss",
+                cache_path=str(cache_path),
+                cache_key=cache_key,
+            )
+            log_progress(context, "source validation cache miss | evaluated and saved")
+            return (
+                initial_evaluation,
+                _source_scored_item(context, initial_evaluation),
+                [item for item in scored if item["prompt"] != context.initial_prompt],
+            )
+
+    initial_evaluation = cached["evaluation"]
+    context.logger.event(
+        "source_validation_cache_hit",
+        cache_path=str(cache_path),
+        cache_key=cache_key,
+    )
+    log_progress(context, "source validation cache hit | source generation skipped")
+    dev_scored = []
+    if candidates:
+        dev_scored = evaluate_candidates(
+            context,
+            candidates,
+            context.validation_records,
+            split_name="validation",
+            phase=phase,
+            iteration=1,
+        )
+    return (
+        initial_evaluation,
+        _source_scored_item(context, initial_evaluation),
+        dev_scored,
+    )
+
+
 def _evaluate_source_and_candidates(
     context: QAOptimizationContext,
     args,
@@ -473,23 +605,11 @@ def _evaluate_source_and_candidates(
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], str]:
     """Evaluate the source and all retained prompts together on validation."""
     final_backend = _prepare_final_evaluation_backend(context, args)
-    prompts = unique_nonempty([context.initial_prompt, *candidate_prompts])
-    scored = evaluate_candidates(
+    initial_evaluation, source, candidates = _evaluate_with_cached_source(
         context,
-        prompts,
-        context.validation_records,
-        split_name="validation",
+        candidate_prompts,
         phase=phase,
-        iteration=1,
     )
-    source_candidate = next(
-        item for item in scored if item["prompt"] == context.initial_prompt
-    )
-    initial_evaluation = source_candidate["evaluation"]
-    source = _source_scored_item(context, initial_evaluation)
-    candidates = [
-        item for item in scored if item["prompt"] != context.initial_prompt
-    ]
     return initial_evaluation, source, candidates, final_backend
 
 
@@ -634,25 +754,11 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         },
     )
 
-    validation_scored = evaluate_candidates(
+    initial_evaluation, source, dev_scored = _evaluate_with_cached_source(
         context,
-        [context.initial_prompt, *candidate_prompts],
-        context.validation_records,
-        split_name="validation",
+        candidate_prompts,
         phase="lpo_candidate_validation",
-        iteration=1,
     )
-    source = next(
-        item
-        for item in validation_scored
-        if item["prompt"] == context.initial_prompt
-    )
-    initial_evaluation = source["evaluation"]
-    dev_scored = [
-        item
-        for item in validation_scored
-        if item["prompt"] != context.initial_prompt
-    ]
     selected, improved = _strictly_select_against_source(source, dev_scored)
     log_progress(
         context,
