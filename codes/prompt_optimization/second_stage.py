@@ -12,7 +12,7 @@ try:
 except ImportError:
     torch = None
 
-from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1
+from agents.agent_prompts import GRADIENT_REGION_CANDIDATE_SYNTHESIS_TAGGED_BODY_V1
 from prompt_optimization.cli_common import QAOptimizationContext
 from prompt_optimization.evaluation import (
     metric_accuracy,
@@ -1305,7 +1305,7 @@ def _gradpo_synthesis_prompt(
         [
             f"You are an expert prompt generator for a {qa_task_label(mode)} task.",
             qa_task_description(mode),
-            GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1,
+            GRADIENT_REGION_CANDIDATE_SYNTHESIS_TAGGED_BODY_V1,
         ]
     )
     return (
@@ -1316,11 +1316,19 @@ def _gradpo_synthesis_prompt(
 
 
 def _normalize_synthesized_prompt(raw_output: str) -> str:
-    """Remove a surrounding fence and any leaked numbered span tags."""
+    """Extract the last complete prompt block and remove leaked span tags."""
     text = raw_output.strip()
     fenced = re.fullmatch(r"```(?:[A-Za-z0-9_-]+)?\s*(.*?)\s*```", text, re.DOTALL)
     if fenced:
         text = fenced.group(1).strip()
+    prompt_blocks = re.findall(
+        r"<prompt\s*>(.*?)</prompt\s*>",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not prompt_blocks:
+        return ""
+    text = prompt_blocks[-1].strip()
     text = re.sub(r"</?span_\d+>", "", text, flags=re.IGNORECASE)
     return text.strip()
 
@@ -1418,7 +1426,7 @@ def _beam_search_replacements(
                     max_new_tokens=synthesis_max_new_tokens,
                     batch_size=synthesis_batch_size,
                     enable_thinking=False,
-                    do_sample=True,
+                    do_sample=False,
                     log_label="qa_gradpo_beam_synthesis",
                     return_token_usage=False,
                 )

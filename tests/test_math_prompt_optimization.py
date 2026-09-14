@@ -9,7 +9,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 try:
     import torch
@@ -44,6 +44,7 @@ from prompt_optimization.second_stage import (
     _balance_gradient_pairs,
     _beam_search_replacements,
     _gradpo_synthesis_prompt,
+    _normalize_synthesized_prompt,
     run_lpo,
 )
 from prompt_optimization.sequence_gradients import (
@@ -453,6 +454,27 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertIn("mathematical problem-solving", prompt)
         self.assertIn("exact final answer", prompt)
         self.assertNotIn("multiple-choice", prompt)
+        self.assertIn("<prompt>", prompt)
+        self.assertIn("</prompt>", prompt)
+
+    def test_gradpo_synthesis_extracts_last_complete_tagged_prompt(self) -> None:
+        """Use the final complete prompt block and remove leaked span markers."""
+        raw_output = (
+            "Draft: <prompt>Ignore this draft.</prompt>\n"
+            "<prompt>Solve <span_1>systematically</span_1>.</prompt>"
+        )
+
+        prompt = _normalize_synthesized_prompt(raw_output)
+
+        self.assertEqual(prompt, "Solve systematically.")
+
+    def test_gradpo_synthesis_rejects_truncated_tagged_prompt(self) -> None:
+        """Reject an output that ends before its closing prompt tag."""
+        prompt = _normalize_synthesized_prompt(
+            "<prompt>Output only the letter corresponding"
+        )
+
+        self.assertEqual(prompt, "")
 
     def test_greater_proposal_uses_math_task_description(self) -> None:
         """Keep GreaTer's token proposal context task-correct for Math."""
@@ -527,6 +549,114 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertEqual(beam[0]["prompt"], context.initial_prompt)
         self.assertEqual(beam[0]["replacements"], {})
         self.assertTrue(beam[0]["replacement_metadata"]["no_op"])
+
+    @patch("prompt_optimization.second_stage._score_objective_candidates")
+    def test_gradpo_beam_synthesis_uses_greedy_decoding(
+        self,
+        mock_score,
+    ) -> None:
+        """Keep constrained beam synthesis deterministic rather than sampled."""
+        mock_score.return_value = [
+            {"task_loss": 1.0, "fluency_loss": 1.0, "combined_score": 1.0},
+            {"task_loss": 2.0, "fluency_loss": 1.0, "combined_score": 2.0},
+        ]
+        generate = MagicMock(
+            return_value=["<prompt>Solve systematically.</prompt>"]
+        )
+        context = SimpleNamespace(
+            initial_prompt="Solve carefully.",
+            mode=self.mode,
+            model_pool=SimpleNamespace(generate=generate),
+            optimizer_name="gradpo_gen",
+            started_at=time.monotonic(),
+            logger=SimpleNamespace(event=lambda *_args, **_kwargs: None),
+        )
+
+        _beam_search_replacements(
+            context,
+            [
+                {
+                    "region_rank": 1,
+                    "region_text": "carefully",
+                    "start_char": 6,
+                    "end_char": 15,
+                }
+            ],
+            [
+                {
+                    "region_rank": 1,
+                    "candidates": ["carefully", "systematically"],
+                }
+            ],
+            [self.record],
+            model=object(),
+            tokenizer=object(),
+            beam_width=2,
+            selection_batch_size=1,
+            fluency_lambda=0.5,
+            replacement_mode="llm_synthesis",
+            synthesis_max_new_tokens=100,
+            synthesis_batch_size=1,
+            reasoning_traces=["Reasoning. <answer>2</answer>"],
+        )
+
+        generate.assert_called_once()
+        self.assertFalse(generate.call_args.kwargs["do_sample"])
+
+    @patch("prompt_optimization.second_stage._score_objective_candidates")
+    def test_gradpo_beam_synthesis_falls_back_after_truncated_output(
+        self,
+        mock_score,
+    ) -> None:
+        """Apply replacements directly when synthesis lacks a closing prompt tag."""
+        mock_score.return_value = [
+            {"task_loss": 1.0, "fluency_loss": 1.0, "combined_score": 1.0},
+            {"task_loss": 2.0, "fluency_loss": 1.0, "combined_score": 2.0},
+        ]
+        context = SimpleNamespace(
+            initial_prompt="Solve carefully.",
+            mode=self.mode,
+            model_pool=SimpleNamespace(
+                generate=MagicMock(
+                    return_value=["<prompt>Solve systematically."]
+                )
+            ),
+            optimizer_name="gradpo_gen",
+            started_at=time.monotonic(),
+            logger=SimpleNamespace(event=lambda *_args, **_kwargs: None),
+        )
+
+        beam, _trace = _beam_search_replacements(
+            context,
+            [
+                {
+                    "region_rank": 1,
+                    "region_text": "carefully",
+                    "start_char": 6,
+                    "end_char": 15,
+                }
+            ],
+            [
+                {
+                    "region_rank": 1,
+                    "candidates": ["carefully", "systematically"],
+                }
+            ],
+            [self.record],
+            model=object(),
+            tokenizer=object(),
+            beam_width=2,
+            selection_batch_size=1,
+            fluency_lambda=0.5,
+            replacement_mode="llm_synthesis",
+            synthesis_max_new_tokens=100,
+            synthesis_batch_size=1,
+            reasoning_traces=["Reasoning. <answer>2</answer>"],
+        )
+
+        synthesized = next(item for item in beam if item["replacements"])
+        self.assertEqual(synthesized["prompt"], "Solve systematically.")
+        self.assertTrue(synthesized["replacement_metadata"]["used_fallback"])
 
     @unittest.skipIf(torch is None, "PyTorch is not installed in this test environment.")
     def test_answer_loss_weights_problems_not_answer_token_counts(self) -> None:

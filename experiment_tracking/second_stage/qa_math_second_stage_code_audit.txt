@@ -116,6 +116,13 @@ Resolved findings from this review
    thinking/sampling settings, and stable-score lambda. Different validation
    sizes or folds therefore cannot collide. Historical first-stage scores are
    not imported automatically because their settings are not always identical.
+7. GradPO beam-synthesis truncation: FIXED. QA/Math synthesis now requests the
+   complete revised instruction inside one <prompt>...</prompt> block and uses
+   deterministic decoding. The parser extracts the last complete block and
+   removes leaked numbered span tags. A missing or incomplete block is rejected
+   and replaced by the deterministic direct-span-edit fallback; the raw output
+   and used_fallback flag remain in the saved beam trace. The relation-extraction
+   synthesis output format is unchanged.
 
 Gradient-pool configuration
 ---------------------------
@@ -199,10 +206,12 @@ Generated full-matrix scripts after the fixes
 
 Verification
 ------------
-- Python unittest discovery: 31 tests passed, 3 skipped because PyTorch is not
+- Python unittest discovery: 35 tests passed, 3 skipped because PyTorch is not
   installed in the lightweight test environment.
 - New regression checks cover LPO's full reasoning feedback and direct
   validation of five rewrites, GradPO's exact no-op branch, and stable GreaTer
   single-token replacement construction. Source-cache checks verify that a
   second method skips the cached source but still evaluates its candidates, and
-  that different validation subsets produce different keys.
+  that different validation subsets produce different keys. GradPO checks also
+  cover deterministic beam synthesis, last-complete-block extraction, span-tag
+  cleanup, and direct fallback after a truncated tagged output.

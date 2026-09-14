@@ -421,7 +421,7 @@ GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_ROLE_V1 = (
 GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_TASK_V1 = '''A relation captures the connection between two entities in a sentence by describing their relationship. We will refer to these entities as the subject and object entities.
 The task requires inferring a binary (yes/no) answer based on whether the query sentence expresses this relation between the subject and the object entities.'''
 
-GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1 = '''You are given the current instruction prompt with targeted spans below:
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_CORE_V1 = '''You are given the current instruction prompt with targeted spans below:
 ```
 #ALL_MARKED_PROMPT#
 ```
@@ -434,10 +434,24 @@ Your task is to generate a revised instruction prompt by applying the given repl
 Use the replacements exactly as provided, except for minimal local adjustments if necessary for spelling and grammatical correctness or coherence.
 Do not modify any other parts of the prompt (but remove the span tags).
 
-*** Remove the span tags (e.g., <span_1>...</span_1>, <span_2>...</span_2>, and so on.) from the revised prompt. ***
+*** Remove the span tags (e.g., <span_1>...</span_1>, <span_2>...</span_2>, and so on.) from the revised prompt. ***'''
 
-Output only the revised prompt.
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_BODY_V1 = (
+    GRADIENT_REGION_CANDIDATE_SYNTHESIS_CORE_V1
+    + "\n\nOutput only the revised prompt.\n"
+)
+
+GRADIENT_REGION_CANDIDATE_SYNTHESIS_TAGGED_BODY_V1 = (
+    GRADIENT_REGION_CANDIDATE_SYNTHESIS_CORE_V1
+    + '''
+
+Output the complete revised instruction prompt exactly once in the following format:
+<prompt>
+[complete revised instruction prompt]
+</prompt>
+Do not output anything outside the <prompt> tags.
 '''
+)
 
 GRADIENT_REGION_CANDIDATE_SYNTHESIS_PROMPT_V1 = (
     GRADIENT_REGION_CANDIDATE_SYNTHESIS_RELATION_ROLE_V1
