@@ -1,0 +1,459 @@
+OpenBookQA GradPO-Gen hyperparameter tuning
+============================================
+
+Purpose
+-------
+Tune GradPO-Gen separately for each target-model family using one fixed RPO-5
+source prompt and the OpenBookQA non-reasoning 3 x 500 validation folds. Test
+data are not used during tuning.
+
+Qwen tuning setup
+-----------------
+Target model: Qwen/Qwen3-4B
+Source prompt:
+outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1/prompt_iteration_5.txt
+Training pool: 800
+Validation: 1,500 examples in three fixed 500-example folds
+Validation score: mean accuracy - 1.0 x across-fold standard deviation
+Seed: 42
+
+Qwen results
+------------
+All accuracy and stable-score values below are percentages. S is selected span
+count, T is maximum tokens/span, C is generated candidates/span, G is the final
+balanced gradient subset, B is beam width, and F is the fluency weight.
+
+| S | T | C | G | B | F    | Accuracy | Stable | Accuracy gain | Stable gain | Result |
+|---|---|---|---|---|------|----------|--------|---------------|-------------|--------|
+| 5 | 5 | 7 | 300 | 10 | 0.25 | 80.13 | 79.23 | -0.13 | +0.11 | Rejected: raw accuracy decreased and prompt was ungrammatical |
+| 5 | 5 | 7 | 300 | 10 | 0.50 | 80.53 | 79.60 | +0.27 | +0.49 | Tied best; T=5 gave no longer actual spans than T=3 |
+| 3 | 1 | 7 | 300 | 10 | 0.50 | 80.27 | 79.44 | +0.00 | +0.33 | Lower raw accuracy than winner; task wording drifted |
+| 3 | 3 | 7 | 300 | 10 | 0.50 | 80.40 | 79.17 | +0.13 | +0.05 | Smaller gain |
+| 3 | 5 | 7 | 300 | 10 | 0.50 | 80.40 | 79.17 | +0.13 | +0.05 | Identical to S=3,T=3 |
+| 5 | 1 | 7 | 300 | 10 | 0.50 | 80.27 | 79.43 | +0.00 | +0.31 | Lower raw accuracy than winner; less precise wording |
+| 5 | 3 | 7 | 300 | 10 | 0.50 | 80.53 | 79.60 | +0.27 | +0.49 | Selected span/token configuration |
+| 5 | 3 | 7 | 200 | 10 | 0.50 | 80.27 | 79.12 | +0.00 | +0.00 | No improvement; G=300 selected |
+| 5 | 3 | 5 | 300 | 10 | 0.50 | 80.40 | 79.26 | +0.13 | +0.14 | Smaller gain; C=7 selected |
+| 5 | 3 | 7 | 300 | 5  | 0.50 | 80.53 | 79.60 | +0.27 | +0.49 | Exact tie with B=10 |
+
+Qwen selected configuration
+---------------------------
+Fluency weight: 0.50
+Selected spans: 5
+Maximum tokens per span: 3
+Balanced gradient subset: 300 (150 correct + 150 incorrect)
+Candidates per span: 7 new candidates, with the source span also retained
+Beam width: 10
+Region expansion threshold: 0.6 (not tuned)
+Training pool: 800
+
+Beam widths 5 and 10 produced the same prompt and validation scores. Beam 10 is
+retained by explicit project decision to preserve the larger search beam.
+
+Selected Qwen run
+-----------------
+CODE:
+openbookqa_non_reasoning_qwen_rpo5_gradpo_tune_s5_t3_c7_g300_b10_f050
+
+Directory:
+outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_qwen_rpo5_gradpo_tune_s5_t3_c7_g300_b10_f050
+
+Source score: 80.27 accuracy, 79.12 stable
+Final score: 80.53 accuracy, 79.60 stable
+Gain: +0.27 accuracy points, +0.49 stable-score points
+
+Selected prompt:
+You are offered a multiple-choice question that may include metaphorical,
+symbolic, or context-dependent language. Analyze the scenario carefully,
+considering both literal and figurative interpretations, as well as relevant
+scientific or contextual knowledge. Select the answer choice that best aligns
+with the described situation.
+
+Qwen RPO-10 transfer check
+--------------------------
+The selected RPO-5 configuration did not improve the RPO-10 source:
+
+Source score: 80.87 accuracy, 80.13 stable
+Final score: 80.87 accuracy, 80.13 stable
+Result: source prompt retained
+
+Completed CODE:
+openbookqa_non_reasoning_qwen_rpo10_gradpo_tuned_s5_t3_c7_g300_b10_f050
+
+Therefore, a ten-case RPO-10 matrix at fluency 0.50 is prepared in:
+codes/run_openbookqa_gradpo_tuning_qwen.sh
+
+The matrix covers all six S={3,5} x T={1,3,5} combinations, then checks
+G=200, C=5, B=5, and seed=43 around S=5/T=3. The completed
+S5/T3/C7/G300/B10/seed42 case is disabled, leaving nine active runs.
+
+Qwen RPO-10 tuning results (completed)
+---------------------------------------
+All ten planned cases completed. Nine use seed 42 and share a source score of
+80.87 accuracy / 80.13 stable. The seed-43 run re-evaluated the same source as
+81.00 / 80.35, so it is compared only against its own source evaluation.
+
+| Configuration | Final accuracy | Final stable | Outcome |
+|---------------|----------------|--------------|---------|
+| S3/T1/C7/G300/B10 | 80.87 | 80.13 | No improvement |
+| S3/T3/C7/G300/B10 | 80.87 | 80.13 | No improvement |
+| S3/T5/C7/G300/B10 | 80.87 | 80.13 | No improvement |
+| S5/T1/C7/G300/B10 | 81.13 | 80.52 | Improved |
+| S5/T3/C7/G300/B10 | 80.87 | 80.13 | No improvement |
+| S5/T5/C7/G300/B10 | 80.87 | 80.13 | No improvement |
+| S5/T3/C7/G200/B10 | 80.87 | 80.13 | No improvement |
+| S5/T3/C5/G300/B10 | 80.87 | 80.13 | No improvement |
+| S5/T3/C7/G300/B5 | 80.87 | 80.13 | No improvement |
+| S5/T3/C7/G300/B10, seed 43 | 81.00 | 80.35 | No improvement over its source |
+
+Best numeric configuration:
+S=5, T=1, C=7, G=300, B=10, F=0.50, seed=42
+
+CODE:
+openbookqa_non_reasoning_qwen_rpo10_gradpo_tune_s5_t1_c7_g300_b10_f050
+
+Gain: +0.27 accuracy points (1213 to 1217 correct) and +0.38 stable-score
+points. The selected edit changes `multiple-choice question` to
+`multiple question`. This is understandable but grammatically weaker, so it
+should be treated as the best numerical result rather than an unquestionably
+good final prompt.
+
+Qwen phrase-expansion and candidate-count matrix (completed)
+-------------------------------------------------------------
+These ten runs used S=5, G=300, B=10, F=0.50, and seed 42. Values are
+accuracy / stable score in percent. The source scores are 80.27 / 79.12 for
+RPO-5 and 80.87 / 80.13 for RPO-10.
+
+| T | H | C | RPO-5 final | RPO-5 gain | RPO-10 final | RPO-10 gain | Audit |
+|---|---|---|---|---|---|---|---|
+| 3 | 0.45 | 7 | 80.13 / 79.61 | -0.13 / +0.49 | 81.07 / 80.54 | +0.20 / +0.41 | Stable improves for both; RPO-5 loses two correct examples |
+| 5 | 0.45 | 7 | 80.47 / 79.20 | +0.20 / +0.08 | 80.87 / 80.13 | +0.00 / +0.00 | RPO-5 only |
+| 5 | 0.30 | 7 | 80.40 / 79.69 | +0.13 / +0.57 | 80.87 / 80.13 | +0.00 / +0.00 | Reject RPO-5 prompt: ends with `Choose the answer that best matches` |
+| 5 | 0.45 | 10 | 80.87 / 80.04 | +0.60 / +0.93 | 80.87 / 80.13 | +0.00 / +0.00 | Best clean RPO-5 result |
+| 5 | 0.30 | 10 | 80.27 / 79.12 | +0.00 / +0.00 | 80.87 / 80.13 | +0.00 / +0.00 | Neither source improved |
+
+This statement applied before the subsequent matched G=200/G=300 matrix. The
+later S=3/T=3/H=0.45/C=10 setting increases both raw accuracy and stable score
+for both Qwen sources; see the current-selection section below.
+
+Qwen matched G=200/G=300 matrix (completed)
+-------------------------------------------
+The following five matched shapes are prepared at both G=300 and G=200, with
+each configuration applied to both RPO-5 and RPO-10. This is ten
+configurations and twenty source-prompt runs. B=10, F=0.50, and seed=42 are
+fixed.
+
+| S | T | H | C | G values |
+|---|---|---|---|---|
+| 5 | 3 | 0.45 | 10 | 300, 200 |
+| 4 | 3 | 0.45 | 10 | 300, 200 |
+| 3 | 3 | 0.45 | 10 | 300, 200 |
+| 4 | 4 | 0.45 | 10 | 300, 200 |
+| 4 | 3 | 0.50 | 10 | 300, 200 |
+
+All twenty source-prompt runs completed. Commands:
+codes/run_openbookqa_gradpo_tuning_qwen.sh
+
+The G=200 and G=300 samples currently use the same seed but are not guaranteed
+to be nested, so this is a matched-configuration comparison rather than a pure
+sample-size ablation.
+
+Gemma completed matrix
+----------------------
+All listed RPO-5 and RPO-10 runs below accidentally used the same actual RPO
+iteration-4 prompt: saved iterations 5 and 10 were byte-identical. Therefore,
+the paired columns are repeated evaluations of one source, not evidence from
+two distinct first-stage prompts. Seed-42 source score: 70.33 accuracy / 69.58
+stable. Seed-43 source score: 70.13 / 69.38.
+
+| Configuration | RPO-5-labelled final | RPO-10-labelled final | Audit |
+|---|---|---|---|
+| S3/T1/C7/G300/B10/F0.50 | 71.20 / 69.90 | 70.73 / 69.98 | T changed little because regions remained one token |
+| S3/T3/C7/G300/B10/F0.50 | 71.20 / 69.90 | 70.73 / 69.98 | Duplicate source; stochastic result difference |
+| S3/T5/C7/G300/B10/F0.50 | 71.20 / 69.90 | 71.20 / 69.90 | Same effective regions |
+| S5/T1/C7/G300/B10/F0.50 | 70.80 / 70.37 | 70.80 / 70.37 | Stable gain +0.79 |
+| S5/T3/C7/G300/B10/F0.50 | 70.80 / 70.37 | 70.80 / 70.37 | Stable gain +0.79 |
+| S5/T5/C7/G300/B10/F0.50 | 70.73 / 69.96 | 70.80 / 70.37 | RPO-5-labelled prompt corrupted D to E |
+| S5/T3/C7/G200/B10/F0.50 | 72.20 / 71.18 | 72.20 / 71.18 | Best numeric result: +1.87 accuracy, +1.60 stable |
+| S5/T3/C5/G300/B10/F0.50 | 70.60 / 69.58 | 70.60 / 69.74 | Corrupted label list to end in B |
+| S5/T3/C7/G300/B5/F0.50 | 70.80 / 70.37 | 70.80 / 70.37 | Same result as B=10 |
+| S5/T3/C7/G300/B10/F0.50/seed43 | 70.67 / 69.72 | 70.40 / 69.41 | Weak and seed-sensitive |
+| S5/T5/C7/G300/B10/F0.25 | 70.73 / 69.96 | not run | Same corrupted D-to-E result as F=0.50 |
+
+Gemma source-slot correction
+-----------------------------
+The distinct lower source now assigned to the experimental RPO-5 slot is the
+actual RPO iteration-3 candidate. The higher source assigned to RPO-10 is the
+actual iteration-4 candidate, which was retained through iterations 5-10.
+
+| Experimental slot | Actual source | Original 900-example accuracy / stable | Prompt file |
+|---|---|---|---|
+| Gemma RPO-5 | RPO iteration 3 | 70.78 / 69.28 | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_3.txt |
+| Gemma RPO-10 | RPO iteration 4 | 71.33 / 70.09 | outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1/prompt_iteration_10.txt |
+
+Both improve over the original 900-example baseline of 69.33 accuracy / 68.61
+stable, and the RPO-10 source is higher. They have now also been evaluated as
+second-stage sources on the current 1,500 examples: iteration 3 scores
+70.40 / 69.26 and iteration 4 scores 70.33 / 69.58. Thus, iteration 4 remains
+higher by the stable-score selection criterion, although its raw accuracy is
+one example lower.
+
+Gemma iteration-3/RPO-5 tuning results (completed)
+--------------------------------------------------
+All ten runs use the distinct actual RPO iteration-3 source, 1,500 validation
+examples in three fixed folds of 500, B=10, F=0.50, and seed=42. The source
+scores 70.40 accuracy / 69.26 stable.
+
+| S | T | H | C | G | Final accuracy | Final stable | Accuracy gain | Stable gain | Audit |
+|---|---|---|---|---|----------------|--------------|---------------|-------------|-------|
+| 3 | 3 | 0.60 | 7  | 200 | 71.60 | 70.95 | +1.20 | +1.69 | Best numeric result; complete prompt, but `multiple quiz questions` is slightly awkward |
+| 4 | 3 | 0.45 | 7  | 200 | 71.20 | 70.18 | +0.80 | +0.92 | Complete, but changes task wording to `short-answer questions` |
+| 4 | 3 | 0.60 | 7  | 200 | 70.53 | 69.76 | +0.13 | +0.50 | Reject: leaked replacement tags into the final prompt |
+| 5 | 1 | 0.60 | 7  | 200 | 71.33 | 70.56 | +0.93 | +1.30 | Best clean runner-up; complete and task-preserving |
+| 5 | 3 | 0.45 | 7  | 200 | 70.40 | 69.26 | +0.00 | +0.00 | No improvement; source retained |
+| 5 | 3 | 0.60 | 10 | 200 | 70.67 | 69.60 | +0.27 | +0.35 | Small improvement |
+| 5 | 3 | 0.60 | 7  | 200 | 70.60 | 69.46 | +0.20 | +0.20 | Small improvement; wording is awkward (`capable at`) |
+| 5 | 3 | 0.60 | 7  | 300 | 71.07 | 70.66 | +0.67 | +1.40 | Strong runner-up; complete, but says `short-answer questions` |
+| 5 | 5 | 0.30 | 7  | 200 | 71.27 | 70.43 | +0.87 | +1.17 | Complete, but contains redundant `accurately and accurately` |
+| 5 | 5 | 0.60 | 7  | 200 | 71.00 | 70.57 | +0.60 | +1.31 | Complete, but wording is ungrammatical (`a skilled at`) |
+
+Completed commands are retained in:
+codes/run_openbookqa_gradpo_tuning_gemma.sh
+
+Current best settings (2026-09-15)
+----------------------------------
+All scores below use 1,500 validation examples in three fixed folds of 500.
+
+Qwen tuning status: COMPLETE for both RPO-5 and RPO-10.
+
+Selected shared Qwen setting:
+S=3, T=3, H=0.45, C=10, G=200, B=10, F=0.50.
+
+| Source | Original accuracy / stable | Final accuracy / stable | Gain |
+|---|---|---|---|
+| Qwen RPO-5 | 80.27 / 79.12 | 80.47 / 79.81 | +0.20 / +0.69 |
+| Qwen RPO-10 | 80.87 / 80.13 | 81.53 / 80.71 | +0.67 / +0.58 |
+
+G=300 produced the same selected region texts, region candidates, final
+prompts, and validation scores for this setting. G=200 is selected because it
+uses fewer gradient examples. The selected region texts for both sources are
+`multiple-choice question`, `You are given`, and `a`. The resulting prompts
+are complete and contain no leaked optimizer tags.
+
+Best source-specific Qwen setting for RPO-5:
+S=5, T=5, H=0.45, C=10, G=300, B=10, F=0.50.
+It changes 80.27 / 79.12 to 80.87 / 80.04 (+0.60 / +0.93).
+
+Best source-specific Qwen setting for RPO-10 is the selected shared setting
+above: S=3, T=3, H=0.45, C=10, G=200, B=10, F=0.50.
+
+Selected shared Gemma setting:
+S=5, T=3, H=0.60, C=7, G=200, B=10, F=0.50.
+
+This is the same tested configuration on both distinct Gemma sources and it
+improves both by the stable-score criterion.
+
+| Source | Original accuracy / stable | Final accuracy / stable | Gain |
+|---|---|---|---|
+| Gemma RPO-5 (actual iteration 3) | 70.40 / 69.26 | 70.60 / 69.46 | +0.20 / +0.20 |
+| Gemma RPO-10 (actual iteration 4) | 70.33 / 69.58 | 72.20 / 71.18 | +1.87 / +1.60 |
+
+This shared setting is the appropriate choice when one configuration must be
+transferred across both Gemma source prompts. The source-specific optima below
+remain useful for reporting the upper result obtained for each source.
+
+Gemma RPO-10 tuning status: COMPLETE for the actual iteration-4 source.
+Best numeric setting:
+S=5, T=3, H=0.60, C=7, G=200, B=10, F=0.50.
+It changes 70.33 / 69.58 to 72.20 / 71.18 (+1.87 / +1.60).
+This result is provisional for final reporting because the editable source
+contains a duplicated answer-format clause and the selected edits primarily
+simplify that clause.
+
+Gemma RPO-5 tuning status: COMPLETE for the actual iteration-3 source.
+Best numeric setting:
+S=3, T=3, H=0.60, C=7, G=200, B=10, F=0.50.
+It changes 70.40 / 69.26 to 71.60 / 70.95 (+1.20 / +1.69).
+The final wording is understandable but uses the slightly awkward phrase
+`multiple quiz questions`. It is nevertheless complete, contains no leaked
+optimizer tags, and preserves the multiple-choice task. The best cleaner
+runner-up is S=5, T=1, H=0.60, C=7, G=200, B=10, F=0.50, which changes
+70.40 / 69.26 to 71.33 / 70.56 (+0.93 / +1.30).
+
+Final remaining-variant command matrices
+----------------------------------------
+The next GradPO-Prob, GradPO-Gen-Random, LPO, GreaTer, and GreaTer-TG commands
+for both models are currently restricted to RPO-5 and RPO-10 and stored
+together in:
+
+- codes/run_openbookqa_remaining_second_stage.sh
+
+Both model families use an initial pool of 800 (Qwen) or 600 (Gemma), the same
+G=200 correctness-balanced gradient subset, seed 42, and 1,500 validation
+examples. GreaTer and GreaTer-TG retain the relation-extraction baseline
+settings K=25, top-mu=10, fluency weight 0.2, and now evaluate top-u=10 prompts
+on validation to match the GradPO beam width of 10.
+
+GradPO-Prob and GradPO-Gen-Random use the selected shared model-specific
+settings. Qwen uses S=3, T=3, H=0.45, C=10, G=200, B=10, F=0.50. Gemma uses
+S=5, T=3, H=0.60, C=7, G=200, B=10, F=0.50. The random baseline changes only
+region selection; its remaining generation, search, scoring, seed, and data
+settings match GradPO-Gen. The Gemma matrix correctly uses actual RPO iteration
+3 as the experimental RPO-5 source and iteration 4 retained through iteration
+10 as the RPO-10 source.
+
+LPO uses 512 training examples, three incorrect feedback examples, at most five
+editable locations and three words per location, and one batch of ten rewrite
+requests. It performs no retry. Every distinct non-empty parsed rewrite is
+evaluated directly on validation; the source prompt is handled separately by
+the shared source-validation cache.
+
+This RPO-only matrix contains 20 runs: two models x two RPO source prompts x
+five remaining second-stage methods. EvoPrompt and ETGPO were deferred when
+this matrix was created; their active command matrices are documented below.
+
+
+Remaining EvoPrompt and ETGPO second-stage matrices (2026-09-15)
+================================================================
+
+The model-specific scripts now activate three remaining first-stage source
+slots per target model: EvoPrompt-5, EvoPrompt-10, and ETGPO-1. Each source is
+run through GradPO-Gen, GradPO-Prob, GradPO-Gen-Random, LPO, GreaTer, and
+GreaTer-TG. This gives 18 active runs per script and 36 runs total.
+
+- Qwen script: codes/run_openbookqa_second_stage_qwen.sh
+- Gemma script: codes/run_openbookqa_second_stage_gemma.sh
+
+The completed older matrices remain below `exit 0` in both scripts as an
+inactive command archive.
+
+Qwen EvoPrompt source adjustment
+--------------------------------
+The original saved iteration-5 and iteration-10 prompts were identical: both
+were the actual iteration-4 winner. To preserve two distinct, progressively
+stronger first-stage sources, the experimental slots are assigned as follows:
+
+| Experimental slot | Actual iteration | Raw / stable | Gain from initial | Source file |
+|---|---:|---:|---:|---|
+| EvoPrompt-5 | 1 | 79.89 / 79.01 | +1.22 / +1.07 | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_experimental_iteration_5_from_actual_iteration_1.txt |
+| EvoPrompt-10 | 4 | 80.56 / 80.24 | +1.89 / +2.29 | outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_experimental_iteration_10_from_actual_iteration_4.txt |
+
+Gemma needs no reassignment: its actual iteration-5 and iteration-10 prompts
+are distinct and improve from 68.61 stable to 70.03 and 70.16, respectively.
+
+Transferred configurations
+--------------------------
+- Qwen GradPO variants: S=3, T=3, H=0.45, C=10, G=200, B=10, F=0.50.
+- Gemma GradPO variants: S=5, T=3, H=0.60, C=7, G=200, B=10, F=0.50.
+- LPO: ten requested rewrites, no retry, with all distinct valid rewrites sent
+  directly to validation.
+- GreaTer/GreaTer-TG: G=200, top-mu=10, top-u=10, fluency weight 0.20, and the
+  original same-total-token-count candidate filter.
+
+
+Final RPO-source second-stage prompt selections (2026-09-15)
+=============================================================
+
+Purpose
+-------
+This section is the canonical handoff for later test-set evaluation. A row
+marked FINAL identifies the exact method-specific `final_prompt.txt` that must
+be used. When `Changed` is No, that file deliberately contains the retained
+first-stage source prompt. Scores are percentages on the same 1,500-example
+validation set (three fixed folds of 500), and Stable uses lambda=1.0.
+
+GreaTer status
+--------------
+The first GreaTer and GreaTer-TG matrix used an exact token-ID round-trip
+filter that was stricter than the original method and removed many valid Qwen
+candidates. Those eight results are superseded. All eight corrected reruns
+completed using only the original same-total-token-count requirement. The
+corrected files below are the FINAL selections for later test evaluation.
+
+For Qwen, the correction increased the proposal sets from only the unchanged
+source token to 16-17 valid candidates. GreaTer-TG then improved both sources.
+Sequential GreaTer selected the malformed `To are given` edit for RPO-5 based
+on a very small stable-score gain and retained the source for RPO-10. These are
+reported exactly as selected; prompt-quality concerns are not hidden. For
+Gemma, corrected scores and prompts match the superseded runs because its
+selected candidates already survived the earlier filter.
+
+Final score table
+-----------------
+
+| Model | Source | Method | Source acc/stable | Final acc/stable | Stable gain | Changed | Selection |
+|---|---|---|---|---|---|---|---|
+| Qwen | RPO-5 | GradPO-Gen | 80.27 / 79.12 | 80.47 / 79.81 | +0.69 | Yes | FINAL |
+| Qwen | RPO-5 | GradPO-Prob | 80.27 / 79.12 | 80.47 / 79.48 | +0.36 | Yes | FINAL |
+| Qwen | RPO-5 | GradPO-Gen-Random | 80.27 / 79.12 | 80.80 / 80.09 | +0.97 | Yes | FINAL |
+| Qwen | RPO-5 | LPO | 80.27 / 79.12 | 80.60 / 79.89 | +0.77 | Yes | FINAL |
+| Qwen | RPO-5 | GreaTer | 80.27 / 79.12 | 80.07 / 79.17 | +0.05 | Yes | FINAL; malformed wording |
+| Qwen | RPO-5 | GreaTer-TG | 80.27 / 79.12 | 80.73 / 79.78 | +0.66 | Yes | FINAL |
+| Qwen | RPO-10 | GradPO-Gen | 80.87 / 80.13 | 81.53 / 80.71 | +0.58 | Yes | FINAL |
+| Qwen | RPO-10 | GradPO-Prob | 80.87 / 80.13 | 81.07 / 80.33 | +0.20 | Yes | FINAL |
+| Qwen | RPO-10 | GradPO-Gen-Random | 80.87 / 80.13 | 80.87 / 80.13 | +0.00 | No | FINAL: source retained |
+| Qwen | RPO-10 | LPO | 80.87 / 80.13 | 81.20 / 80.21 | +0.08 | Yes | FINAL |
+| Qwen | RPO-10 | GreaTer | 80.87 / 80.13 | 80.87 / 80.13 | +0.00 | No | FINAL: source retained |
+| Qwen | RPO-10 | GreaTer-TG | 80.87 / 80.13 | 80.87 / 80.29 | +0.16 | Yes | FINAL; punctuation artifact |
+| Gemma | RPO-5 (actual iteration 3) | GradPO-Gen | 70.40 / 69.26 | 70.60 / 69.46 | +0.20 | Yes | FINAL |
+| Gemma | RPO-5 (actual iteration 3) | GradPO-Prob | 70.40 / 69.26 | 70.80 / 69.95 | +0.69 | Yes | FINAL |
+| Gemma | RPO-5 (actual iteration 3) | GradPO-Gen-Random | 70.40 / 69.26 | 70.47 / 69.51 | +0.25 | Yes | FINAL |
+| Gemma | RPO-5 (actual iteration 3) | LPO | 70.40 / 69.26 | 71.13 / 70.79 | +1.54 | Yes | FINAL |
+| Gemma | RPO-5 (actual iteration 3) | GreaTer | 70.40 / 69.26 | 70.53 / 69.45 | +0.19 | Yes | FINAL; malformed wording |
+| Gemma | RPO-5 (actual iteration 3) | GreaTer-TG | 70.40 / 69.26 | 71.13 / 70.15 | +0.89 | Yes | FINAL |
+| Gemma | RPO-10 (actual iteration 4) | GradPO-Gen | 70.33 / 69.58 | 72.20 / 71.18 | +1.60 | Yes | FINAL |
+| Gemma | RPO-10 (actual iteration 4) | GradPO-Prob | 70.33 / 69.58 | 70.60 / 70.01 | +0.43 | Yes | FINAL |
+| Gemma | RPO-10 (actual iteration 4) | GradPO-Gen-Random | 70.33 / 69.58 | 70.73 / 69.80 | +0.23 | Yes | FINAL |
+| Gemma | RPO-10 (actual iteration 4) | LPO | 70.33 / 69.58 | 70.33 / 69.58 | +0.00 | No | FINAL: source retained |
+| Gemma | RPO-10 (actual iteration 4) | GreaTer | 70.33 / 69.58 | 70.40 / 69.81 | +0.23 | Yes | FINAL; malformed wording |
+| Gemma | RPO-10 (actual iteration 4) | GreaTer-TG | 70.33 / 69.58 | 71.00 / 69.98 | +0.40 | Yes | FINAL |
+
+Exact FINAL prompt files for test evaluation
+--------------------------------------------
+
+Qwen RPO-5
+~~~~~~~~~~~
+- GradPO-Gen [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_qwen_rpo5_gradpo_tune_s3_t3_h045_c10_g200_b10_f050/final_prompt.txt
+- GradPO-Prob [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_prob/openbookqa_non_reasoning_qwen_rpo5_gradpo_prob_bestcfg_lambda1_vs1500/final_prompt.txt
+- GradPO-Gen-Random [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen_random/openbookqa_non_reasoning_qwen_rpo5_gradpo_gen_random_bestcfg_lambda1_vs1500/final_prompt.txt
+- LPO [FINAL]: outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_qwen_rpo5_lpo_c10_lambda1_vs1500/final_prompt.txt
+- GreaTer [FINAL; malformed wording]: outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_qwen_rpo5_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- GreaTer-TG [FINAL]: outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_qwen_rpo5_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+
+Qwen RPO-10
+~~~~~~~~~~~~
+- GradPO-Gen [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_qwen_rpo10_gradpo_tune_s3_t3_h045_c10_g200_b10_f050/final_prompt.txt
+- GradPO-Prob [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_prob/openbookqa_non_reasoning_qwen_rpo10_gradpo_prob_bestcfg_lambda1_vs1500/final_prompt.txt
+- GradPO-Gen-Random [FINAL; source retained]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen_random/openbookqa_non_reasoning_qwen_rpo10_gradpo_gen_random_bestcfg_lambda1_vs1500/final_prompt.txt
+- LPO [FINAL]: outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_qwen_rpo10_lpo_c10_lambda1_vs1500/final_prompt.txt
+- GreaTer [FINAL; source retained]: outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_qwen_rpo10_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- GreaTer-TG [FINAL; punctuation artifact]: outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_qwen_rpo10_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+
+Gemma RPO-5 (actual iteration 3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- GradPO-Gen [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_gemma_rpo5_from_itr3_gradpo_tune_s5_t3_h060_c7_g200_b10_f050/final_prompt.txt
+- GradPO-Prob [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_prob/openbookqa_non_reasoning_gemma_rpo5_gradpo_prob_bestcfg_lambda1_vs1500/final_prompt.txt
+- GradPO-Gen-Random [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen_random/openbookqa_non_reasoning_gemma_rpo5_gradpo_gen_random_bestcfg_lambda1_vs1500/final_prompt.txt
+- LPO [FINAL]: outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_gemma_rpo5_lpo_c10_lambda1_vs1500/final_prompt.txt
+- GreaTer [FINAL; malformed wording]: outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo5_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- GreaTer-TG [FINAL]: outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo5_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+
+Gemma RPO-10 (actual iteration 4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- GradPO-Gen [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_gemma_rpo10_gradpo_tune_s5_t3_c7_g200_b10_f050/final_prompt.txt
+- GradPO-Prob [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_prob/openbookqa_non_reasoning_gemma_rpo10_gradpo_prob_bestcfg_lambda1_vs1500/final_prompt.txt
+- GradPO-Gen-Random [FINAL]: outputs/qa_prompt_optimization/non_reasoning/gradpo_gen_random/openbookqa_non_reasoning_gemma_rpo10_gradpo_gen_random_bestcfg_lambda1_vs1500/final_prompt.txt
+- LPO [FINAL; source retained]: outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_gemma_rpo10_lpo_c10_lambda1_vs1500/final_prompt.txt
+- GreaTer [FINAL; malformed wording]: outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo10_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- GreaTer-TG [FINAL]: outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo10_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+
+Corrected GreaTer run outputs (completed)
+-----------------------------------------
+- outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_qwen_rpo5_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_qwen_rpo5_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_qwen_rpo10_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_qwen_rpo10_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo5_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo5_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo10_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+- outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo10_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt

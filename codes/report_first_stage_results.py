@@ -13,6 +13,10 @@ from typing import Any, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT_DIR = PROJECT_ROOT / "experiment_tracking" / "first_stage"
+GEMMA_OPENBOOK_RPO_CODE = "openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1"
+QWEN_OPENBOOK_EVOPROMPT_CODE = (
+    "openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1"
+)
 
 
 @dataclass(frozen=True)
@@ -206,6 +210,18 @@ MANUAL_PROMPT_NOTES = {
         "Valid full prompts, but some retained advice is domain-specific, including "
         "ecological, geographical, and scientific principles."
     ),
+    GEMMA_OPENBOOK_RPO_CODE: (
+        "For distinct second-stage sources, the experimental RPO-5 slot uses the "
+        "actual iteration-3 candidate and RPO-10 uses the actual iteration-4 "
+        "candidate retained through iteration 10. Their current 1,500-example "
+        "second-stage source validations are 69.26 and 69.58 stable, respectively."
+    ),
+    QWEN_OPENBOOK_EVOPROMPT_CODE: (
+        "For distinct second-stage sources, the experimental EvoPrompt-5 slot "
+        "uses the actual iteration-1 prompt (79.01 stable), while EvoPrompt-10 "
+        "uses the actual iteration-4 prompt retained through iteration 10 "
+        "(80.24 stable). Both improve over the 77.95-stable initial prompt."
+    ),
 }
 
 
@@ -231,7 +247,43 @@ def load_summary(spec: RunSpec) -> dict[str, Any] | None:
     path = absolute_path(spec.run_dir) / "summary.json"
     if not path.is_file():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    if spec.code == GEMMA_OPENBOOK_RPO_CODE:
+        candidates_path = absolute_path(spec.run_dir) / "candidates.jsonl"
+        if candidates_path.is_file():
+            for line in candidates_path.read_text(encoding="utf-8").splitlines():
+                candidate = json.loads(line)
+                if int(candidate.get("iteration", -1)) == 3:
+                    summary.setdefault("snapshots", {})["5"] = {
+                        "iteration": 3,
+                        "node_id": 3,
+                        "prompt": candidate["prompt"],
+                        "metrics": candidate["metrics"],
+                    }
+                    break
+    if spec.code == QWEN_OPENBOOK_EVOPROMPT_CODE:
+        events_path = absolute_path(spec.run_dir) / "events.jsonl"
+        if events_path.is_file():
+            for line in events_path.read_text(encoding="utf-8").splitlines():
+                event = json.loads(line)
+                if (
+                    event.get("event") == "evoprompt_iteration_completed"
+                    and int(event.get("iteration", -1)) == 1
+                ):
+                    summary.setdefault("snapshots", {})["5"] = {
+                        "iteration": 1,
+                        "prompt": event["train_best_prompt"],
+                        "metrics": {
+                            "accuracy": event["validation_accuracy"],
+                            "accuracy_percent": 100.0 * event["validation_accuracy"],
+                            "stable_accuracy": event["validation_selection_score"],
+                            "stable_accuracy_percent": (
+                                100.0 * event["validation_selection_score"]
+                            ),
+                        },
+                    }
+                    break
+    return summary
 
 
 def read_text(path: Path) -> str | None:
@@ -297,6 +349,22 @@ def snapshot_metrics(
 
 def expected_prompt_entries(spec: RunSpec) -> list[tuple[str, str]]:
     """Return the report labels and prompt filenames expected from one method."""
+    if spec.code == GEMMA_OPENBOOK_RPO_CODE:
+        return [
+            ("RPO-5", "prompt_iteration_3.txt"),
+            ("RPO-10", "prompt_iteration_10.txt"),
+        ]
+    if spec.code == QWEN_OPENBOOK_EVOPROMPT_CODE:
+        return [
+            (
+                "EvoPrompt-DE-5",
+                "prompt_experimental_iteration_5_from_actual_iteration_1.txt",
+            ),
+            (
+                "EvoPrompt-DE-10",
+                "prompt_experimental_iteration_10_from_actual_iteration_4.txt",
+            ),
+        ]
     if spec.method in {"RPO", "EvoPrompt-DE"}:
         return [
             (f"{spec.method}-5", "prompt_iteration_5.txt"),

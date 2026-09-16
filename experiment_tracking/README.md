@@ -31,6 +31,8 @@ python -u codes/report_first_stage_results.py
 - `second_stage/gradient_sampling_configuration.txt`: task/model-specific
   random-pool sizes, the fixed 100-correct plus 100-incorrect gradient subset,
   and controlled-comparison requirements.
+- `second_stage/openbookqa_gradpo_tuning_results.txt`: Qwen GradPO tuning table,
+  selected OpenBookQA configuration, run path, and staged Gemma tuning status.
 - `../gradpo_gen_vs_random_all_20_results.txt`: complete GradPO-Gen versus
   random-span result table used for the rebuttal.
 - `../random_mode_results.txt`: raw random-span experiment results.

@@ -944,13 +944,13 @@ def _allowed_candidate_token(
     return text.isascii() and "\n" not in text and "\r" not in text
 
 
-def stable_single_token_replacement_prompt(
+def same_length_single_token_replacement_prompt(
     tokenizer,
     source_token_ids: Sequence[int],
     token_index: int,
     candidate_token_id: int,
 ) -> str | None:
-    """Return a prompt only when one token replacement retokenizes identically."""
+    """Return a prompt when one-token replacement preserves total token count."""
     candidate_token_ids = [int(value) for value in source_token_ids]
     candidate_token_ids[token_index] = int(candidate_token_id)
     candidate_prompt = tokenizer.decode(
@@ -962,7 +962,7 @@ def stable_single_token_replacement_prompt(
         candidate_prompt,
         add_special_tokens=False,
     )
-    if retokenized_ids != candidate_token_ids:
+    if len(retokenized_ids) != len(candidate_token_ids):
         return None
     return candidate_prompt
 
@@ -1039,7 +1039,7 @@ def proposal_token_candidates(
                     check_isalnum,
                 ):
                     continue
-                if stable_single_token_replacement_prompt(
+                if same_length_single_token_replacement_prompt(
                     tokenizer,
                     source_token_ids,
                     token_index,

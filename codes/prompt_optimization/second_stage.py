@@ -72,7 +72,7 @@ from prompt_optimization.sequence_gradients import (
     replace_selected_regions,
     score_combined_objectives,
     select_gradient_regions,
-    stable_single_token_replacement_prompt,
+    same_length_single_token_replacement_prompt,
     tensor_free_gradient_summary,
 )
 
@@ -941,7 +941,7 @@ def run_greater(context: QAOptimizationContext, args) -> dict[str, Any]: #aunabi
         candidate_prompt = (
             context.initial_prompt
             if bool(item["is_original"])
-            else stable_single_token_replacement_prompt(
+            else same_length_single_token_replacement_prompt(
                 tokenizer,
                 source_token_ids,
                 token_index,
@@ -1066,6 +1066,7 @@ def _parse_gradpo_gen_candidates(
     raw_output: str,
     regions: Sequence[dict[str, Any]],
     candidate_count: int,
+    mode: QAMode,
 ) -> list[dict[str, Any]]:
     """Parse per-region GradPO-Gen replacements and retain each source span."""
     parsed = extract_json_object(raw_output) or {}
@@ -1076,18 +1077,66 @@ def _parse_gradpo_gen_candidates(
         values = region_payload.get("candidates", []) if isinstance(region_payload, dict) else []
         if not isinstance(values, list):
             values = []
-        candidates = unique_nonempty(
-            [str(region["region_text"]), *[str(value) for value in values]]
-        )[: candidate_count + 1]
+        candidates, rejected_candidates = _filter_gradpo_region_candidates(
+            str(region["region_text"]),
+            [str(value) for value in values],
+            candidate_count,
+            mode,
+        )
         output.append(
             {
                 "region_rank": rank,
                 "region_text": region["region_text"],
                 "candidate_source": "target_model_generation",
                 "candidates": candidates,
+                "rejected_candidates": rejected_candidates,
             }
         )
     return output
+
+
+def _normalized_gradpo_candidate(text: str) -> str:
+    """Normalize a replacement for comparison with task-specific restrictions."""
+    normalized = text.strip().casefold().replace("–", "-").replace("—", "-")
+    return re.sub(r"\s*-\s*", "-", normalized)
+
+
+def _gradpo_candidate_restriction_reason(
+    candidate: str,
+    source_text: str,
+    mode: QAMode,
+) -> str | None:
+    """Explain why one new GradPO replacement is forbidden for the current task."""
+    if candidate == source_text:
+        return None
+    if (
+        mode.task_name == "openbookqa"
+        and _normalized_gradpo_candidate(candidate) == "true-false"
+    ):
+        return "restricted OpenBookQA replacement: true-false"
+    return None
+
+
+def _filter_gradpo_region_candidates(
+    source_text: str,
+    proposed_candidates: Sequence[str],
+    candidate_count: int,
+    mode: QAMode,
+) -> tuple[list[str], list[dict[str, str]]]:
+    """Keep the source and allowed unique replacements up to the requested count."""
+    candidates = [source_text]
+    rejected = []
+    for candidate in unique_nonempty([str(value) for value in proposed_candidates]):
+        if candidate == source_text or candidate in candidates:
+            continue
+        reason = _gradpo_candidate_restriction_reason(candidate, source_text, mode)
+        if reason is not None:
+            rejected.append({"candidate": candidate, "reason": reason})
+            continue
+        candidates.append(candidate)
+        if len(candidates) >= candidate_count + 1:
+            break
+    return candidates, rejected
 
 
 def _top_p_first_token_ids(
@@ -1156,6 +1205,7 @@ def _gradpo_probability_candidates(
     instruction_prompt: str,
     regions: Sequence[dict[str, Any]],
     *,
+    mode: QAMode,
     candidate_count: int,
     model,
     tokenizer,
@@ -1205,6 +1255,7 @@ def _gradpo_probability_candidates(
         )[:candidate_count]
         candidates = [str(region["region_text"])]
         candidate_details = []
+        rejected_candidates = []
         first_token_ids = [
             int(first_id) for first_id in top_ids if int(first_id) not in special_ids
         ]
@@ -1255,6 +1306,16 @@ def _gradpo_probability_candidates(
                 or not any(character.isalnum() for character in text)
             ):
                 continue
+            restriction_reason = _gradpo_candidate_restriction_reason(
+                text,
+                str(region["region_text"]),
+                mode,
+            )
+            if restriction_reason is not None:
+                rejected_candidates.append(
+                    {"candidate": text, "reason": restriction_reason}
+                )
+                continue
             candidates = unique_nonempty([*candidates, text])
             candidate_details.append(
                 {
@@ -1275,6 +1336,7 @@ def _gradpo_probability_candidates(
                 "lm_probability_top_p": probability_top_p,
                 "candidates": candidates,
                 "candidate_details": candidate_details,
+                "rejected_candidates": rejected_candidates,
             }
         )
     return output
@@ -1366,7 +1428,8 @@ def _beam_search_replacements(
             "prompt": context.initial_prompt,
             "meta_prompt": None,
             "raw_output": None,
-            "used_fallback": False,
+            "rejected": False,
+            "rejection_reason": None,
             "no_op": True,
         }
     }
@@ -1436,18 +1499,20 @@ def _beam_search_replacements(
                     raw_outputs,
                 ):
                     revised = _normalize_synthesized_prompt(raw_output)
-                    used_fallback = not bool(revised)
-                    if used_fallback:
-                        revised = replace_selected_regions(
-                            context.initial_prompt,
-                            regions,
-                            dict(key),
+                    rejection_reason = None
+                    if not revised:
+                        rejection_reason = "missing complete <prompt> block"
+                        context.logger.event(
+                            "gradpo_synthesis_rejected",
+                            replacements=dict(key),
+                            reason=rejection_reason,
                         )
                     synthesis_cache[key] = {
                         "prompt": revised,
                         "meta_prompt": meta_prompt,
                         "raw_output": raw_output,
-                        "used_fallback": used_fallback,
+                        "rejected": rejection_reason is not None,
+                        "rejection_reason": rejection_reason,
                         "no_op": False,
                     }
         elif replacement_mode != "direct":
@@ -1458,12 +1523,15 @@ def _beam_search_replacements(
             key = tuple(sorted(spec["replacements"].items()))
             if replacement_mode == "llm_synthesis":
                 synthesis = synthesis_cache[key]
+                if synthesis["rejected"]:
+                    continue
                 prompt = synthesis["prompt"]
                 replacement_metadata = {
                     "replacement_mode": replacement_mode,
                     "meta_prompt": synthesis["meta_prompt"],
                     "raw_output": synthesis["raw_output"],
-                    "used_fallback": synthesis["used_fallback"],
+                    "rejected": synthesis["rejected"],
+                    "rejection_reason": synthesis["rejection_reason"],
                     "no_op": synthesis["no_op"],
                 }
             else:
@@ -1476,7 +1544,8 @@ def _beam_search_replacements(
                     "replacement_mode": replacement_mode,
                     "meta_prompt": None,
                     "raw_output": None,
-                    "used_fallback": False,
+                    "rejected": False,
+                    "rejection_reason": None,
                     "no_op": not bool(spec["replacements"]),
                 }
             expansions.setdefault(
@@ -1635,16 +1704,36 @@ def run_gradpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             raw_candidate_output,
             selected_regions,
             args.num_region_candidates,
+            context.mode,
         )
     else:
         region_candidates = _gradpo_probability_candidates(
             context.initial_prompt,
             selected_regions,
+            mode=context.mode,
             candidate_count=args.num_region_candidates,
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=args.candidate_max_new_tokens,
             generation_batch_size=args.synthesis_batch_size,
+        )
+    rejected_candidates = [
+        {
+            "region_rank": int(region_candidates_item["region_rank"]),
+            **rejected,
+        }
+        for region_candidates_item in region_candidates
+        for rejected in region_candidates_item.get("rejected_candidates", [])
+    ]
+    if rejected_candidates:
+        log_progress(
+            context,
+            "restricted GradPO candidates removed | "
+            f"count={len(rejected_candidates)} | candidates={rejected_candidates!r}",
+        )
+        context.logger.event(
+            "gradpo_candidates_rejected",
+            rejected_candidates=rejected_candidates,
         )
     log_progress(
         context,

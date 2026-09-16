@@ -428,9 +428,10 @@ def _tokenize_instruction(tokenizer, instruction_prompt: str) -> List[int]:
     return list(token_ids)
 
 
-def _stable_retokenizes(tokenizer, instruction_token_ids: Sequence[int]) -> bool:
+def _preserves_token_count(tokenizer, instruction_token_ids: Sequence[int]) -> bool:
+    """Check that decoded candidate text retokenizes to the original length."""
     decoded = _decode_instruction(tokenizer, instruction_token_ids)
-    return _tokenize_instruction(tokenizer, decoded) == list(instruction_token_ids)
+    return len(_tokenize_instruction(tokenizer, decoded)) == len(instruction_token_ids)
 
 
 def _is_allowed_token(tokenizer, token_id: int, allow_non_ascii: bool) -> bool:
@@ -507,7 +508,7 @@ def _proposal_candidate_set_for_example(
             continue
         test_ids = list(instruction_token_ids)
         test_ids[position] = token_id
-        if not _stable_retokenizes(tokenizer, test_ids):
+        if not _preserves_token_count(tokenizer, test_ids):
             continue
         deduped.append(token_id)
         if len(deduped) >= top_k + 1:

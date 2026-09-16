@@ -43,6 +43,7 @@ from prompt_optimization.qa_task import (
 from prompt_optimization.second_stage import (
     _balance_gradient_pairs,
     _beam_search_replacements,
+    _filter_gradpo_region_candidates,
     _gradpo_synthesis_prompt,
     _normalize_synthesized_prompt,
     run_lpo,
@@ -51,7 +52,7 @@ from prompt_optimization.sequence_gradients import (
     _label_loss_from_logits,
     qa_proposal_header,
     render_teacher_forced_qa,
-    stable_single_token_replacement_prompt,
+    same_length_single_token_replacement_prompt,
 )
 
 
@@ -67,16 +68,22 @@ class _PlainChatTokenizer:
 
 
 class _RoundTripTokenizer:
-    """Expose one stable and one unstable decoded replacement for testing."""
+    """Expose equal-length and length-changing retokenization for testing."""
 
     def decode(self, token_ids, **_kwargs):
         """Decode integer IDs as a whitespace-separated prompt."""
         return " ".join(str(token_id) for token_id in token_ids)
 
     def encode(self, text, **_kwargs):
-        """Retokenize ID 9 differently to simulate a boundary-unstable edit."""
-        token_ids = [int(value) for value in text.split()]
-        return [99 if token_id == 9 else token_id for token_id in token_ids]
+        """Change ID 9 but expand ID 8 to distinguish IDs from token count."""
+        token_ids = []
+        for value in text.split():
+            token_id = int(value)
+            if token_id == 8:
+                token_ids.extend([8, 88])
+            else:
+                token_ids.append(99 if token_id == 9 else token_id)
+        return token_ids
 
 
 class _NoGenerationPool:
@@ -476,6 +483,21 @@ class MathPromptOptimizationTests(unittest.TestCase):
 
         self.assertEqual(prompt, "")
 
+    def test_gradpo_rejects_openbookqa_true_false_candidate(self) -> None:
+        """Remove the task-changing true-false replacement only for OpenBookQA."""
+        openbookqa_mode = resolve_mode("non_reasoning", "openbookqa")
+
+        candidates, rejected = _filter_gradpo_region_candidates(
+            "choice",
+            ["true-false", "selection", "option"],
+            2,
+            openbookqa_mode,
+        )
+
+        self.assertEqual(candidates, ["choice", "selection", "option"])
+        self.assertEqual(rejected[0]["candidate"], "true-false")
+        self.assertIn("restricted", rejected[0]["reason"])
+
     def test_greater_proposal_uses_math_task_description(self) -> None:
         """Keep GreaTer's token proposal context task-correct for Math."""
         prompt = qa_proposal_header(self.record, self.mode)
@@ -486,15 +508,21 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertNotIn("multiple-choice", prompt)
         self.assertNotIn("Choices:", prompt)
 
-    def test_greater_rejects_boundary_unstable_token_replacements(self) -> None:
-        """Filter invalid one-token edits before GreaTer's top-mu ranking cutoff."""
+    def test_greater_requires_same_token_count_after_retokenization(self) -> None:
+        """Follow GreaTer by checking token count rather than exact token IDs."""
         tokenizer = _RoundTripTokenizer()
 
-        stable = stable_single_token_replacement_prompt(tokenizer, [1, 2, 3], 1, 4)
-        unstable = stable_single_token_replacement_prompt(tokenizer, [1, 2, 3], 1, 9)
+        stable = same_length_single_token_replacement_prompt(tokenizer, [1, 2, 3], 1, 4)
+        changed_ids = same_length_single_token_replacement_prompt(
+            tokenizer, [1, 2, 3], 1, 9
+        )
+        changed_length = same_length_single_token_replacement_prompt(
+            tokenizer, [1, 2, 3], 1, 8
+        )
 
         self.assertEqual(stable, "1 4 3")
-        self.assertIsNone(unstable)
+        self.assertEqual(changed_ids, "1 9 3")
+        self.assertIsNone(changed_length)
 
     @patch("prompt_optimization.second_stage._score_objective_candidates")
     def test_gradpo_no_op_branch_preserves_the_exact_source_prompt(
@@ -604,14 +632,13 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertFalse(generate.call_args.kwargs["do_sample"])
 
     @patch("prompt_optimization.second_stage._score_objective_candidates")
-    def test_gradpo_beam_synthesis_falls_back_after_truncated_output(
+    def test_gradpo_beam_synthesis_discards_truncated_output(
         self,
         mock_score,
     ) -> None:
-        """Apply replacements directly when synthesis lacks a closing prompt tag."""
+        """Discard a synthesis candidate that lacks a closing prompt tag."""
         mock_score.return_value = [
             {"task_loss": 1.0, "fluency_loss": 1.0, "combined_score": 1.0},
-            {"task_loss": 2.0, "fluency_loss": 1.0, "combined_score": 2.0},
         ]
         context = SimpleNamespace(
             initial_prompt="Solve carefully.",
@@ -654,9 +681,71 @@ class MathPromptOptimizationTests(unittest.TestCase):
             reasoning_traces=["Reasoning. <answer>2</answer>"],
         )
 
+        self.assertEqual(len(beam), 1)
+        self.assertEqual(beam[0]["prompt"], context.initial_prompt)
+        self.assertEqual(beam[0]["replacements"], {})
+
+    @patch("prompt_optimization.second_stage._score_objective_candidates")
+    def test_gradpo_beam_accepts_complete_tagged_synthesis(
+        self,
+        mock_score,
+    ) -> None:
+        """Use the complete tagged synthesis without comparing it to direct edits."""
+        mock_score.return_value = [
+            {"task_loss": 1.0, "fluency_loss": 1.0, "combined_score": 1.0},
+            {"task_loss": 2.0, "fluency_loss": 1.0, "combined_score": 2.0},
+        ]
+        context = SimpleNamespace(
+            initial_prompt="Solve carefully.",
+            mode=self.mode,
+            model_pool=SimpleNamespace(
+                generate=MagicMock(
+                    return_value=[
+                        "<prompt>Please solve systematically and verify.</prompt>"
+                    ]
+                )
+            ),
+            optimizer_name="gradpo_gen",
+            started_at=time.monotonic(),
+            logger=SimpleNamespace(event=lambda *_args, **_kwargs: None),
+        )
+
+        beam, _trace = _beam_search_replacements(
+            context,
+            [
+                {
+                    "region_rank": 1,
+                    "region_text": "carefully",
+                    "start_char": 6,
+                    "end_char": 15,
+                }
+            ],
+            [
+                {
+                    "region_rank": 1,
+                    "candidates": ["carefully", "systematically"],
+                }
+            ],
+            [self.record],
+            model=object(),
+            tokenizer=object(),
+            beam_width=2,
+            selection_batch_size=1,
+            fluency_lambda=0.5,
+            replacement_mode="llm_synthesis",
+            synthesis_max_new_tokens=100,
+            synthesis_batch_size=1,
+            reasoning_traces=["Reasoning. <answer>2</answer>"],
+        )
+
         synthesized = next(item for item in beam if item["replacements"])
-        self.assertEqual(synthesized["prompt"], "Solve systematically.")
-        self.assertTrue(synthesized["replacement_metadata"]["used_fallback"])
+        metadata = synthesized["replacement_metadata"]
+        self.assertEqual(
+            synthesized["prompt"],
+            "Please solve systematically and verify.",
+        )
+        self.assertFalse(metadata["rejected"])
+        self.assertIsNone(metadata["rejection_reason"])
 
     @unittest.skipIf(torch is None, "PyTorch is not installed in this test environment.")
     def test_answer_loss_weights_problems_not_answer_token_counts(self) -> None:
