@@ -23,11 +23,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "codes"))
 
 from math_inference_common import ANSWER_INSTRUCTION_PROMPT
+from prompt_optimization.first_stage import run_rpo
 from prompt_optimization.meta_prompts import (
     etgpo_first_taxonomy_prompt,
     evoprompt_de_prompt,
     qa_task_description,
     rpo_feedback_prompt,
+    rpo_rewrite_prompt,
 )
 from prompt_optimization.qa_evoprompt_seeds import QA_EVOPROMPT_SEEDS
 from prompt_optimization.qa_task import (
@@ -161,6 +163,112 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertNotIn("<answer>", example)
         self.assertNotIn("After you finish reasoning", example)
 
+    def test_rpo_failure_types_use_actual_generated_token_counts(self) -> None:
+        """Distinguish exhausted, missing, and wrong answers without blaming tags."""
+        for answer, tokens, expected in (
+            (None, 8192, "reasoning token limit exceeded"),
+            (None, 4000, "missing final answer"),
+            (None, None, "missing final answer"),
+            ("", 8192, "reasoning token limit exceeded"),
+            ("2", 8192, "incorrect final answer"),
+        ):
+            with self.subTest(answer=answer, tokens=tokens):
+                prediction = {
+                    "predicted_answer": answer,
+                    "correct": False,
+                    "raw_response": "Working through the calculation...",
+                    "token_usage": {"output_tokens": tokens},
+                }
+                example = rpo_feedback_example(
+                    self.record, prediction, 1, self.mode,
+                    output_token_limit=8192,
+                )
+                self.assertIn(f"Failure type: {expected}", example)
+                self.assertIn("Output-token limit: 8192", example)
+                self.assertNotIn(ANSWER_INSTRUCTION_PROMPT, example)
+
+    def test_rpo_correct_answer_at_limit_is_not_a_completion_failure(self) -> None:
+        """Do not label a correct boxed or tagged answer as token exhaustion."""
+        example = rpo_feedback_example(
+            self.record,
+            {
+                "predicted_answer": "1",
+                "correct": True,
+                "raw_response": "The result is one.",
+                "token_usage": {"output_tokens": 8192},
+            },
+            1, self.mode, output_token_limit=8192,
+        )
+        self.assertNotIn("Failure type:", example)
+
+    def test_rpo_shorter_reasoning_guidance_is_math_only(self) -> None:
+        """Keep original QA wording and the fixed-answer restriction unchanged."""
+        math_feedback = rpo_feedback_prompt(self.mode, "Task 1")
+        math_rewrite = rpo_rewrite_prompt("Solve carefully.", ["Feedback"], self.mode)
+        self.assertIn("reasoning token limit exceeded", math_feedback)
+        self.assertIn("concise, focused reasoning", math_rewrite)
+        self.assertIn("Do not add answer-format instructions", math_rewrite)
+        for task in ("openbookqa", "hotpotqa"):
+            mode = resolve_mode("reasoning", task)
+            self.assertNotIn("reasoning token limit exceeded", rpo_feedback_prompt(mode, "Task 1"))
+            self.assertNotIn("For token-limit failures", rpo_rewrite_prompt("Solve.", ["Feedback"], mode))
+
+    def test_math_rpo_selects_only_errors_and_preserves_shortage_snapshots(self) -> None:
+        """Use available errors without correct fillers or empty-feedback rewrites."""
+        for failure_count in (0, 2, 3):
+            with self.subTest(failure_count=failure_count), tempfile.TemporaryDirectory() as folder:
+                records = [{**self.record, "id": f"math-{i}"} for i in range(4)]
+                predictions = [
+                    {
+                        "correct": i >= failure_count,
+                        "predicted_answer": None if i < failure_count else "1",
+                        "raw_response": "Reasoning still in progress...",
+                        "token_usage": {"output_tokens": 8192},
+                    }
+                    for i in range(4)
+                ]
+                evaluation = {
+                    "metrics": {"accuracy": 0.8, "stable_accuracy": 0.7},
+                    "predictions": predictions,
+                }
+                context = SimpleNamespace(
+                    mode=self.mode, initial_prompt="Solve carefully.",
+                    train_records=records, validation_records=records,
+                    rng=random.Random(42), run_dir=Path(folder),
+                    evaluator=SimpleNamespace(
+                        max_new_tokens=8192,
+                        evaluate=lambda *_args, **_kwargs: evaluation,
+                    ),
+                    model_pool=SimpleNamespace(ensure=lambda _role: (None, None)),
+                    logger=MagicMock(),
+                )
+                args = SimpleNamespace(
+                    iterations=1, population_sampling_temperature=1.0,
+                    feedback_sample_size=100, feedback_examples=3,
+                    optimizer_feedback_max_tokens=2000,
+                    snapshot_iterations=[1], population_size=10,
+                )
+                with (
+                    patch("prompt_optimization.first_stage.log_progress") as log,
+                    patch("prompt_optimization.first_stage.generate_optimizer_texts",
+                          side_effect=lambda _context, prompts, **_kwargs: ["<feedback>Be concise.</feedback>"] * len(prompts)) as generate,
+                    patch("prompt_optimization.first_stage.generate_tagged_candidates", return_value=([], [])) as rewrite,
+                    patch("prompt_optimization.first_stage.finalize_run", return_value={}) as finalize,
+                ):
+                    run_rpo(context, args)
+                trace = next(
+                    call.kwargs for call in context.logger.event.call_args_list
+                    if call.args[0] == "rpo_optimizer_trace"
+                )
+                self.assertEqual(len(trace["feedback_examples"]), failure_count)
+                self.assertTrue(all("Outcome: incorrect" in x for x in trace["feedback_examples"]))
+                self.assertTrue(all("Failure type: reasoning token limit exceeded" in x for x in trace["feedback_examples"]))
+                self.assertEqual(generate.call_count, int(failure_count > 0))
+                self.assertEqual(rewrite.call_count, int(failure_count > 0))
+                self.assertIn("1", finalize.call_args.kwargs["extra_summary"]["snapshots"])
+                if failure_count < 3:
+                    self.assertTrue(any("feedback shortage" in call.args[1] for call in log.call_args_list))
+
     def test_lpo_feedback_keeps_the_full_reasoning_trace(self) -> None:
         """Show LPO every part of a reasoning trace and the answer separately."""
         prediction = {
@@ -248,6 +356,10 @@ class MathPromptOptimizationTests(unittest.TestCase):
                 "raw_response": "Incorrect reasoning. <answer>2</answer>",
             }
             with (
+                patch(
+                    "prompt_optimization.second_stage._get_shared_training_pool",
+                    return_value=([self.record], [prediction], {"pool_cache_hit": True}, {}),
+                ),
                 patch(
                     "prompt_optimization.second_stage.select_incorrect_feedback",
                     return_value=[(self.record, prediction)],

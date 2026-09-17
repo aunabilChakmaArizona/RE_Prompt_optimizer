@@ -42,8 +42,8 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help=(
-            "Number of mixed correct/incorrect examples that receive separate "
-            "feedback each iteration."
+            "Number of examples receiving separate feedback each iteration: "
+            "incorrect only for Math, mixed correct/incorrect for other tasks."
         ),
     )
     parser.add_argument(

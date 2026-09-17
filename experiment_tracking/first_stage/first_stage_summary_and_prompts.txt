@@ -1,7 +1,7 @@
 FIRST-STAGE STABLE-SCORE SUMMARY AND PROMPTS
 ============================================
 
-Generated: 2026-09-15T19:17:10-07:00
+Generated: 2026-09-16T09:33:06-07:00
 Scores are percentages. Gains are calculated within each canonical run.
 Different validation sizes are retained and shown rather than mixed.
 
@@ -22,7 +22,7 @@ STABLE-SCORE SUMMARY
 | HotpotQA | reasoning | Gemma3-4B | RPO | 1500 | 41.57 | 47.44 | +5.87 | IMPROVED | hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/rpo/hotpotqa_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 |
 | HotpotQA | reasoning | Gemma3-4B | EvoPrompt-DE | 1500 | 41.83 | 51.37 | +9.53 | IMPROVED | hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500 |
 | HotpotQA | reasoning | Gemma3-4B | ETGPO | 1500 | 41.83 | 43.46 | +1.63 | IMPROVED | hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 | outputs/qa_prompt_optimization/reasoning/etgpo/hotpotqa_reasoning_gemma_etgpo_gemma12opt_lambda1_vs1500 |
-| MATH-500 | reasoning | Qwen3-4B | RPO | 900 | 87.36 | 87.36 | +0.00 | UNCHANGED | math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900 | outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900 |
+| MATH-500 | reasoning | Qwen3-4B | RPO | 900 | 85.27 | 89.54 | +4.28 | IMPROVED | math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit | outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit |
 | MATH-500 | reasoning | Qwen3-4B | EvoPrompt-DE | 900 | 85.48 | 89.12 | +3.64 | IMPROVED | math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900 | outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900 |
 | MATH-500 | reasoning | Qwen3-4B | ETGPO | 900 | 86.55 | 87.53 | +0.98 | IMPROVED | math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900 | outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900 |
 | MATH-500 | reasoning | Gemma3-4B | RPO | 1500 | 61.26 | 67.24 | +5.98 | IMPROVED | math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 | outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500 |
@@ -284,42 +284,42 @@ Qwen3-4B
 ^^^^^^^^
 
 RPO-5
-CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
-Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
-Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt
-Stable score: 87.36
-Stable gain: +0.00
-Audit: same as initial prompt
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit/prompt_experimental_iteration_5_from_actual_iteration_2.txt
+Stable score: 87.95
+Stable gain: +2.68
+Audit: OK
 Prompt:
-Solve the following math problem. Think step by step carefully before answering.
+Solve the following math problem. Use clear, concise reasoning that focuses on key steps and avoids redundant verification to stay within the token limit. Apply appropriate mathematical techniques directly, and ensure your final answer is in the required format (e.g., simplified radical form, list of numbers separated by commas). Double-check that your answer matches the problem's specific requirements, such as order or format, before concluding.
 
 RPO-10
-CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
-Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900
-Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt
-Stable score: 87.36
-Stable gain: +0.00
-Audit: same as initial prompt; duplicate of RPO-5
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Prompt file: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit/prompt_experimental_iteration_10_from_actual_iteration_5.txt
+Stable score: 89.54
+Stable gain: +4.28
+Audit: OK
 Prompt:
-Solve the following math problem. Think step by step carefully before answering.
+Solve the following math problem. Think step by step, but be concise and focused. Once you derive the solution, state the final answer clearly and succinctly without unnecessary repetition or verification.
 
 EvoPrompt-DE-5
 CODE: math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
 Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
-Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_5.txt
-Stable score: 89.12
-Stable gain: +3.64
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_5_from_actual_iteration_1.txt
+Stable score: 87.37
+Stable gain: +1.89
 Audit: OK
 Prompt:
-Identify the type of mathematical reasoning required (e.g., algebra, geometry, probability, etc.), derive the solution logically from the provided information, write out each reasoning step in detail, apply only the most effective and relevant mathematical tools, provide the final answer in the specified format, maintain clarity and brevity in the explanation, and clearly box or highlight the final answer.
+Determine the core mathematical concepts involved, construct the solution from the given data, document each logical step clearly, use only essential techniques, and present the final answer in the required format. Keep the explanation concise and state the final answer clearly.
 
 EvoPrompt-DE-10
 CODE: math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
 Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
-Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_iteration_10.txt
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_10_from_actual_iteration_2.txt
 Stable score: 89.12
 Stable gain: +3.64
-Audit: duplicate of EvoPrompt-DE-5
+Audit: OK
 Prompt:
 Identify the type of mathematical reasoning required (e.g., algebra, geometry, probability, etc.), derive the solution logically from the provided information, write out each reasoning step in detail, apply only the most effective and relevant mathematical tools, provide the final answer in the specified format, maintain clarity and brevity in the explanation, and clearly box or highlight the final answer.
 
@@ -359,20 +359,20 @@ Solve the following math problem. Break down the solution into small, manageable
 EvoPrompt-DE-5
 CODE: math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
 Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
-Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_5.txt
-Stable score: 68.07
-Stable gain: +7.57
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_experimental_iteration_5_from_actual_iteration_1.txt
+Stable score: 67.82
+Stable gain: +7.32
 Audit: OK
 Prompt:
-Solve the following math problem. Prioritize a direct approach and efficient calculations. First, identify the type of mathematical reasoning required. Break down the problem into smaller, manageable components. Establish a clear plan before starting calculations. Then, derive the answer carefully, clearly articulating each step with logical justification, maintaining clarity and accuracy throughout. Avoid unnecessary detours or overly complicated methods. Focus on a streamlined and understandable process and state the final result with appropriate units, providing a well-structured solution.
+Solve the following math problem. Prioritize a direct approach and efficient calculations. Think step by step carefully, demonstrating each step with logical justification, and focus on a streamlined and understandable process. Clearly state the final result.
 
 EvoPrompt-DE-10
 CODE: math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
 Directory: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
-Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_iteration_10.txt
+Prompt file: outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_experimental_iteration_10_from_actual_iteration_2.txt
 Stable score: 68.07
 Stable gain: +7.57
-Audit: duplicate of EvoPrompt-DE-5
+Audit: OK
 Prompt:
 Solve the following math problem. Prioritize a direct approach and efficient calculations. First, identify the type of mathematical reasoning required. Break down the problem into smaller, manageable components. Establish a clear plan before starting calculations. Then, derive the answer carefully, clearly articulating each step with logical justification, maintaining clarity and accuracy throughout. Avoid unnecessary detours or overly complicated methods. Focus on a streamlined and understandable process and state the final result with appropriate units, providing a well-structured solution.
 

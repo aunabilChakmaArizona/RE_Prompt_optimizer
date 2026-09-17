@@ -447,6 +447,7 @@ def rpo_feedback_example(
     mode: QAMode,
     optimizer_tokenizer: Any | None = None,
     reasoning_max_tokens: int = MATH_OPTIMIZER_REASONING_MAX_TOKENS,
+    output_token_limit: int | None = None,
 ) -> str:
     """Format RPO feedback with reasoning only when the QA mode produces it."""
     predicted = prediction.get("predicted_answer") or "INVALID"
@@ -498,6 +499,24 @@ def rpo_feedback_example(
             f"Outcome: {outcome}",
         ]
     )
+    if mode.task_name == "math500":
+        output_tokens = prediction.get("token_usage", {}).get("output_tokens")
+        if output_tokens is not None:
+            lines.append(f"Generated output tokens: {output_tokens}")
+        if output_token_limit is not None:
+            lines.append(f"Output-token limit: {output_token_limit}")
+        if not prediction.get("correct"):
+            if prediction.get("predicted_answer") not in (None, ""):
+                failure_type = "incorrect final answer"
+            elif (
+                output_tokens is not None
+                and output_token_limit is not None
+                and output_tokens >= output_token_limit
+            ):
+                failure_type = "reasoning token limit exceeded"
+            else:
+                failure_type = "missing final answer"
+            lines.append(f"Failure type: {failure_type}")
     return "\n".join(lines)
 
 

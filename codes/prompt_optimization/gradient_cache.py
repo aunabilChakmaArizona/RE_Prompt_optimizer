@@ -1,4 +1,4 @@
-"""Shared on-disk cache for gradient-pool target-model responses."""
+"""Shared on-disk training-response cache for LPO and gradient refiners."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from prompt_optimization.qa_task import REPO_ROOT
 
@@ -145,6 +145,79 @@ def load_gradient_cache(
         raise ValueError(f"Gradient cache has invalid balanced_subsets: {cache_path}")
     payload.setdefault("balanced_subsets", {})
     return payload
+
+
+def find_compatible_pool_cache(
+    cache_root: str | Path,
+    expected_identity: dict[str, Any],
+    training_records: Sequence[dict[str, Any]],
+    render_prompt: Callable[[dict[str, Any]], str],
+) -> tuple[Path, dict[str, Any]] | None:
+    """Find an exact or larger matching pool, verifying current record contents."""
+    exact_path, _ = gradient_pool_cache_path(cache_root, expected_identity)
+    size_fields = {
+        "requested_pool_size", "actual_pool_size", "record_ids",
+        "record_content_hash", "rendered_prompts_hash",
+    }
+    fixed_identity = {
+        key: value for key, value in expected_identity.items() if key not in size_fields
+    }
+    records_by_id = {str(record["id"]): record for record in training_records}
+    if len(records_by_id) != len(training_records):
+        raise ValueError("Training records must have unique IDs for shared caching.")
+    compatible = []
+    for path in sorted(exact_path.parent.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            if path == exact_path:
+                raise
+            continue
+        if not isinstance(payload, dict):
+            continue
+        identity = payload.get("metadata", {})
+        if not isinstance(identity, dict):
+            continue
+        if {key: value for key, value in identity.items() if key not in size_fields} != fixed_identity:
+            continue
+        ids = identity.get("record_ids", [])
+        if (
+            len(ids) < expected_identity["actual_pool_size"]
+            or len(ids) != identity.get("actual_pool_size")
+            or len(set(ids)) != len(ids)
+            or any(str(record_id) not in records_by_id for record_id in ids)
+        ):
+            continue
+        records = [records_by_id[str(record_id)] for record_id in ids]
+        reconstructed = build_gradient_pool_identity(
+            model_id=identity["model_id"],
+            generation_backend=identity["generation_backend"],
+            task_name=identity["task_name"],
+            mode_name=identity["mode_name"],
+            source_prompt=identity["source_prompt"],
+            pool_records=records,
+            rendered_prompts=[render_prompt(record) for record in records],
+            pool_seed=identity["pool_seed"],
+            requested_pool_size=identity["requested_pool_size"],
+            max_new_tokens=identity["generation_settings"]["max_new_tokens"],
+            enable_thinking=identity["generation_settings"]["enable_thinking"],
+        )
+        if reconstructed != identity:
+            continue
+        rows = payload.get("pool_results", [])
+        if not isinstance(rows, list) or len(rows) != len(ids):
+            continue
+        if any(not isinstance(row, dict) for row in rows):
+            continue
+        if [str(row.get("record_id")) for row in rows] != [str(record_id) for record_id in ids]:
+            continue
+        if any(not isinstance(row.get("raw_response"), str) for row in rows):
+            continue
+        compatible.append((path != exact_path, len(ids), str(path), path, identity))
+    if not compatible:
+        return None
+    selected = min(compatible, key=lambda item: item[:3])
+    return selected[3], selected[4]
 
 
 def save_gradient_cache(cache_path: Path, payload: dict[str, Any]) -> None:

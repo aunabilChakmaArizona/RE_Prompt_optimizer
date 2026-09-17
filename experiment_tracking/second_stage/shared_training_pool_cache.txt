@@ -1,0 +1,71 @@
+SHARED SECOND-STAGE TRAINING-RESPONSE CACHE
+==========================================
+Updated: 2026-09-16
+Scope: LPO, GreaTer/GreaTer-TG, and all GradPO variants for QA and Math.
+Implementation: codes/prompt_optimization/gradient_cache.py and second_stage.py.
+Default directory: outputs/shared_gradient_cache
+Historical directory/CLI names retain "gradient" for compatibility.
+
+Stored JSON
+-----------
+Metadata includes model, task/mode, source instruction, generation backend
+and installed library version, seed, output limit/thinking/greedy settings,
+ordered record IDs, content hash, and rendered-prompt hash.
+pool_results stores complete raw responses plus extracted/graded answers.
+balanced_subsets stores gradient selection IDs and balance metadata; LPO does
+not need or create a balanced gradient subset. Gradients are not cached.
+Responses are regraded on reuse, so changed graders do not reuse stale grades.
+
+Reuse rule
+----------
+1. Prefer an exact compatible cache; otherwise choose the smallest compatible
+   cache containing at least the requested number of examples.
+2. Require matching model, source text, task/mode, seed, backend/library version,
+   decoding/output settings, and unchanged cached records/rendered prompts.
+   A larger SIZE alone is not enough. CODE/method names do not prevent sharing.
+3. A smaller request uses the first N saved examples/responses from the larger
+   randomly sampled pool. This is deterministic nested selection, not a fresh
+   independent random.sample(N). Log the actual IDs and cache path.
+4. Preserve unused responses and existing balanced subsets in the larger JSON.
+   Never truncate the larger pool because LPO needs fewer examples.
+5. A miss generates/saves the requested pool. A smaller cache is not
+   automatically extended to a larger pool.
+
+Example: a compatible Qwen Math RPO5 cache has 1600 responses. LPO requests
+512: use its first 512, preserving all 1600. GradPO requests 1600: use all.
+RPO10 needs a separate cache unless its actual source text is identical.
+For shared gradient subsets, keep requested pool, subset size, seed, and outcomes
+identical. Different pool sizes get separate balanced-subset keys.
+
+Training decoding change
+------------------------
+LPO previously used sampled training-feedback inference. It now uses GREEDY
+training source inference, matching GreaTer/GradPO and making sharing valid.
+Validation decoding, meta-prompts, candidate generation, and final selection
+are unchanged. Historical LPO runs/scores are not rewritten or rerun.
+Future LPO runs are not assumed bit-identical to historical sampled runs.
+The initial pool uses args.seed and an independent RNG so candidate-generation
+calls cannot change the training-pool seed.
+
+Flags available to all second-stage runners
+------------------------------------------
+--gradient-cache-root outputs/shared_gradient_cache : shared directory.
+--refresh-gradient-cache : bypass reuse and regenerate the requested exact pool;
+                           other larger-cache files remain intact.
+--disable-gradient-cache : neither read nor write training caches.
+Refresh and disable cannot be combined. Sharing is enabled by default.
+Writes are atomic and protected by a per-file lock; concurrent same-key users
+do not regenerate an already saved matching pool.
+
+Artifacts
+---------
+LPO optimizer_trace.json and summary.json include training_cache metadata.
+Gradient methods include shared-pool details with gradient-cache metadata.
+Logs show hit/miss, available/used sizes, and any balanced shortfall.
+Exact source-validation caching remains separate at
+outputs/shared_source_validation_cache. A larger TRAINING cache never supplies
+validation results from a different validation size or setting.
+
+New Qwen Math tuning uses pool=1600 per source and G=200. Use the same pool
+for future Math Qwen gradient-method comparisons. No experiments are launched
+or real model-output caches generated in advance by this code update.

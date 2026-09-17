@@ -108,6 +108,10 @@ def rpo_feedback_prompt(
 - If the answer is correct, explain what likely supported the decision.
 - If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error."""
 
+    if mode.task_name == "math500":
+        analysis_instruction += """
+- If reasoning reaches the output-token limit without a final answer, classify it as "reasoning token limit exceeded" and identify unnecessary repetition, checking, or detours that could be shortened. Distinguish this from an incorrect final answer or a missing final answer below the limit; do not assume that the ground-truth answer or outcome is mislabeled."""
+
     return f"""You are an expert feedback model for a {task_label} task. You specialize in explaining why a question-answering system arrived at a particular answer, for both correct and incorrect predictions.
 
 {task_description}
@@ -134,6 +138,14 @@ def rpo_rewrite_prompt(
     """Ask RPO to revise one QA instruction from separate example feedback."""
     task_description = qa_task_description(mode)
     task_label = qa_task_label(mode)
+    math_guidance = ""
+    if mode.task_name == "math500":
+        math_guidance = (
+            "\nFor token-limit failures, encourage concise, focused reasoning that "
+            "reaches a final answer within the available budget; avoid unnecessary "
+            "repeated verification. Keep guidance general rather than specific to "
+            "the example problems."
+        )
 
     return f"""You are an expert prompt generator for a {task_label} task. You specialize in revising and improving prompts based on feedback from previous model predictions.
 
@@ -152,7 +164,7 @@ Using this prompt, another LLM was tested on {len(feedback_examples)} task insta
 Carefully read the inputs, outputs, and feedback to identify problems with the current prompt.
 Your task is to generate a revised version of the prompt that helps the other LLM generalize better when using it.
 You may modify, add to, or remove any instructions or content in the current prompt to improve prediction and generalization.
-Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, input placeholders, or a model-response template; these are handled separately from the prompt being optimized.
+Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, input placeholders, or a model-response template; these are handled separately from the prompt being optimized.{math_guidance}
 
 Please reason through the problem, but output only the revised prompt inside <prompt> and </prompt>."""
 

@@ -14,8 +14,15 @@ from typing import Any, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT_DIR = PROJECT_ROOT / "experiment_tracking" / "first_stage"
 GEMMA_OPENBOOK_RPO_CODE = "openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1"
+QWEN_MATH_RPO_CODE = (
+    "math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit"
+)
 QWEN_OPENBOOK_EVOPROMPT_CODE = (
     "openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1"
+)
+MATH_EVOPROMPT_CODES = (
+    "math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900",
+    "math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500",
 )
 
 
@@ -145,9 +152,9 @@ RUN_SPECS = (
         "reasoning",
         "Qwen3-4B",
         "RPO",
-        "math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900",
+        QWEN_MATH_RPO_CODE,
         "outputs/math_prompt_optimization/reasoning/rpo/"
-        "math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900",
+        + QWEN_MATH_RPO_CODE,
     ),
     RunSpec(
         "MATH-500",
@@ -198,6 +205,13 @@ RUN_SPECS = (
 
 
 MANUAL_PROMPT_NOTES = {
+    QWEN_MATH_RPO_CODE: (
+        "Experimental RPO-5 uses actual iteration 2, randomly selected with "
+        "seed 42 among nine candidates strictly between initial and best stable "
+        "scores (87.95 stable). RPO-10 uses the best actual iteration-5 prompt "
+        "(89.54 stable). Both improve over the 85.27-stable initial prompt. "
+        "These are assigned source slots, not literal 5/10-iteration results."
+    ),
     "math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500": (
         "Valid full prompts, but the retained instructions are long and include "
         "specialized advice about rotations, geometry, and diagrams."
@@ -221,6 +235,18 @@ MANUAL_PROMPT_NOTES = {
         "uses the actual iteration-1 prompt (79.01 stable), while EvoPrompt-10 "
         "uses the actual iteration-4 prompt retained through iteration 10 "
         "(80.24 stable). Both improve over the 77.95-stable initial prompt."
+    ),
+    MATH_EVOPROMPT_CODES[0]: (
+        "The experimental EvoPrompt-5 slot uses actual iteration 1 "
+        "(87.37 stable); EvoPrompt-10 uses actual iteration 2 (89.12 stable), "
+        "retained through iteration 10. Original iterations 5 and 10 were "
+        "identical. Both assigned sources improve over 85.48 initial stable."
+    ),
+    MATH_EVOPROMPT_CODES[1]: (
+        "The experimental EvoPrompt-5 slot uses actual iteration 1 "
+        "(67.82 stable); EvoPrompt-10 uses actual iteration 2 (68.07 stable), "
+        "retained through iteration 10. Original iterations 5 and 10 were "
+        "identical. Both assigned sources improve over 60.50 initial stable."
     ),
 }
 
@@ -248,20 +274,24 @@ def load_summary(spec: RunSpec) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     summary = json.loads(path.read_text(encoding="utf-8"))
-    if spec.code == GEMMA_OPENBOOK_RPO_CODE:
+    if spec.code in {GEMMA_OPENBOOK_RPO_CODE, QWEN_MATH_RPO_CODE}:
+        source_iteration = 2 if spec.code == QWEN_MATH_RPO_CODE else 3
         candidates_path = absolute_path(spec.run_dir) / "candidates.jsonl"
         if candidates_path.is_file():
             for line in candidates_path.read_text(encoding="utf-8").splitlines():
                 candidate = json.loads(line)
-                if int(candidate.get("iteration", -1)) == 3:
+                if int(candidate.get("iteration", -1)) == source_iteration:
                     summary.setdefault("snapshots", {})["5"] = {
-                        "iteration": 3,
-                        "node_id": 3,
+                        "iteration": source_iteration,
+                        "node_id": source_iteration,
                         "prompt": candidate["prompt"],
                         "metrics": candidate["metrics"],
                     }
                     break
-    if spec.code == QWEN_OPENBOOK_EVOPROMPT_CODE:
+    if (
+        spec.code == QWEN_OPENBOOK_EVOPROMPT_CODE
+        or spec.code in MATH_EVOPROMPT_CODES
+    ):
         events_path = absolute_path(spec.run_dir) / "events.jsonl"
         if events_path.is_file():
             for line in events_path.read_text(encoding="utf-8").splitlines():
@@ -349,6 +379,11 @@ def snapshot_metrics(
 
 def expected_prompt_entries(spec: RunSpec) -> list[tuple[str, str]]:
     """Return the report labels and prompt filenames expected from one method."""
+    if spec.code == QWEN_MATH_RPO_CODE:
+        return [
+            ("RPO-5", "prompt_experimental_iteration_5_from_actual_iteration_2.txt"),
+            ("RPO-10", "prompt_experimental_iteration_10_from_actual_iteration_5.txt"),
+        ]
     if spec.code == GEMMA_OPENBOOK_RPO_CODE:
         return [
             ("RPO-5", "prompt_iteration_3.txt"),
@@ -363,6 +398,17 @@ def expected_prompt_entries(spec: RunSpec) -> list[tuple[str, str]]:
             (
                 "EvoPrompt-DE-10",
                 "prompt_experimental_iteration_10_from_actual_iteration_4.txt",
+            ),
+        ]
+    if spec.code in MATH_EVOPROMPT_CODES:
+        return [
+            (
+                "EvoPrompt-DE-5",
+                "prompt_experimental_iteration_5_from_actual_iteration_1.txt",
+            ),
+            (
+                "EvoPrompt-DE-10",
+                "prompt_experimental_iteration_10_from_actual_iteration_2.txt",
             ),
         ]
     if spec.method in {"RPO", "EvoPrompt-DE"}:

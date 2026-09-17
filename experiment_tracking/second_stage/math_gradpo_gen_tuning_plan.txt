@@ -1,0 +1,107 @@
+QWEN MATH GradPO-Gen: approved adaptive tuning plan
+==================================================
+Updated: 2026-09-16
+Status: commands prepared; experiments not launched.
+Supersedes the earlier proposed both-model, ten-attempt plan.
+Scope: Math reasoning, Qwen only, selected RPO5/RPO10 sources only.
+No test evaluation. Gemma tuning will be planned separately.
+Script: codes/run_math_gradpo_tuning_qwen.sh
+Shared-cache note: experiment_tracking/second_stage/shared_training_pool_cache.txt
+
+Reference and fixed settings
+-----------------------------
+Start with the selected shared OpenBookQA Qwen configuration:
+S=3, T=3, H=0.45, C=10, G=200, B=10, F=0.5.
+S: maximum selected regions; T: maximum source tokens per region;
+H: relative neighboring-gradient expansion threshold;
+C: requested new replacements per region, plus the unchanged candidate;
+G: correctness-balanced gradient subset; B: beam width;
+F: fluency penalty, not the stable-score lambda.
+Actual region lengths and valid candidate counts may be lower than requested.
+
+Math random training pool: 1600 per source prompt; seed=42.
+Target reasoning output limit: 8192; candidate/synthesis output limits: 10000.
+Validation: deterministic 3 x 300 from the existing 3 x 500 file.
+Stable-score lambda=1; no test runs.
+Dual backend on the same logical GPU: vLLM ratio=0.4, HF device=cuda:0.
+Reduced from 0.5 after attempt 1 ran out of memory during HF gradients.
+The 1600 training responses and balanced subset were saved before the failure.
+Default physical GPU=3; override using MATH_TUNING_GPU.
+vLLM generates text; HF computes gradients, answer-token loss, and fluency.
+Gradient and objective microbatches=1 for long reasoning inputs: memory
+controls, not additional quality-tuning parameters.
+Gold-answer loss is conditioned on generated reasoning and averaged across
+answer tokens; generated reasoning is not supervised as a gold trace.
+The fixed answer instruction remains uneditable. Synthesis is greedy and
+uses the existing prompt-tag parsing; no synthesis fallback is added.
+
+Approved sources (original iteration snapshots remain untouched)
+----------------------------------------------------------------
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Directory: outputs/math_prompt_optimization/reasoning/rpo/<CODE>/
+RPO5 experimental slot = actual iteration 2:
+prompt_experimental_iteration_5_from_actual_iteration_2.txt
+Reference validation accuracy/stable: 88.67% / 87.95%.
+RPO10 experimental slot = actual iteration 5:
+prompt_experimental_iteration_10_from_actual_iteration_5.txt
+Reference validation accuracy/stable: 90.11% / 89.54%.
+Second-stage source scores must come from exact shared source-validation
+cache matching, not from these rounded historical reference scores.
+
+Eight adaptive attempts maximum
+-------------------------------
+| Attempt | Source | S | T          | H          | C  | G   | B  | F   |
+|---------|--------|---|------------|------------|----|-----|----|-----|
+| 1       | RPO5   | 3 | 3          | 0.45       | 10 | 200 | 10 | 0.5 |
+| 2       | RPO10  | 3 | 3          | 0.45       | 10 | 200 | 10 | 0.5 |
+| 3       | RPO5   | 3 | 5          | 0.45       | 10 | 200 | 10 | 0.5 |
+| 4       | RPO10  | 3 | 5          | 0.45       | 10 | 200 | 10 | 0.5 |
+| 5       | RPO5   | 3 | selected T | 0.30       | 10 | 200 | 10 | 0.5 |
+| 6       | RPO10  | 3 | selected T | 0.30       | 10 | 200 | 10 | 0.5 |
+| 7       | RPO5   | 5 | selected T | selected H | 10 | 200 | 10 | 0.5 |
+| 8       | RPO10  | 5 | selected T | selected H | 10 | 200 | 10 | 0.5 |
+
+Default script: attempts 1-4 only, sequentially.
+Next: MATH_TUNING_STAGE=expansion and MATH_TUNING_T=3 or 5 for attempts 5-6.
+Finally: MATH_TUNING_STAGE=count, MATH_TUNING_T=3 or 5, and
+MATH_TUNING_H=0.30 or 0.45 for attempts 7-8.
+Later phases reject missing selections. Launch commands are script comments.
+Select one shared T/H across BOTH sources, not separate source-specific winners.
+Prefer configurations improving both sources; then compare mean stable gain.
+If none improves both, report that fact and inspect candidate quality and
+surrogate ranking instead of relabeling a failure as an improvement.
+
+Caching and balance
+-------------------
+Each source has its own 1600-response cache. Identical source text can share
+regardless of CODE/method; different source text cannot share responses.
+LPO and all gradient refiners can reuse compatible larger pools. A smaller
+request uses the requested prefix, while the full cache remains intact.
+Keep pool=1600 across Math Qwen gradient methods for a controlled comparison;
+LPO may request fewer examples, without requiring gradients or balancing.
+Training source inference is greedy for all cache users; validation unchanged.
+Balanced subsets use the shared seed and outcome IDs.
+G=200 means up to 100 correct + 100 incorrect. If fewer failures exist, log and
+use the largest balanced subset; do not claim that all 200 were used.
+At roughly 90% accuracy, 1600 may give around 160 failures, but this is only an
+estimate: inspect actual training counts and selected counts.
+Only responses/subset selections/source-validation results are cached;
+gradients and candidate HF objective scores are not cached as gradients.
+
+Cost and interpretation
+------------------------
+Full final validation can generate up to 10 x 900 = 9000 responses per attempt,
+plus source evaluation if uncached. Reasoning and HF candidate scoring are
+expensive; benchmark the first attempt before forecasting total GPU hours.
+No measured runtime exists for this new tuning script.
+Beam scoring reuses source reasoning; fresh candidate reasoning is generated
+in validation. Training-loss gains alone do not prove accuracy gains.
+Record actual regions/text/lengths, valid replacements, bucket sizes, parsing
+failures, stable/raw gains, token usage, and phase timings using existing
+artifacts. Dedicated edit_tracking remains disabled.
+
+Preparation caveat
+-------------------
+Older Math full-matrix generator/scripts still refer to old Qwen RPO sources
+and duplicate original EvoPrompt snapshots. Do not run them as this plan;
+update their sources/settings before the later full matrix.

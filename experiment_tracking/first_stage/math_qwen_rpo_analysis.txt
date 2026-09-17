@@ -98,9 +98,10 @@ Proposed next fix
 -----------------
 For reasoning-prompt optimization, prioritize incorrect training examples that
 have a valid extracted final answer. These are more likely to represent genuine
-reasoning mistakes. INVALID, truncated, and answer-format-only failures should
-be excluded when the editable prompt does not include the fixed answer-format
-instruction.
+reasoning mistakes, although answer representation can also cause a grading
+failure. Handle INVALID and incomplete responses separately: unfinished
+reasoning is still a useful optimization signal, but it must not be presented
+as a completed mathematical answer that disagrees with the ground truth.
 
 The feedback prompt should also distinguish a genuine mathematical error from
 a missing or malformed final answer. Revised instructions should remain concise
@@ -113,7 +114,152 @@ Source artifacts
 - candidates.jsonl
 - events.jsonl
 - population.json
-- initial_validation_summary.json
-- final_validation_summary.json
+- evaluations/initial_validation_summary.json
+- evaluations/final_validation_summary.json
 
 All source artifacts are stored in the output directory listed above.
+
+Follow-up analysis and proposed controlled trial (2026-09-16)
+------------------------------------------------------------
+This section records the earlier diagnostic proposal. Its recommended trial
+is superseded by the user-approved implemented update at the end of this file.
+
+1. Feedback quality, not the stable-score penalty, is the main issue.
+   Seventeen of twenty incorrect feedback examples had no extracted final
+   answer (85%). Nineteen of twenty incorrect examples also had their reasoning
+   compacted to a 2,000-token head/tail excerpt. Compaction may hide an important
+   intermediate step; it is not the same thing as generation truncation.
+
+2. Missing final answers are common even for the initial validation prompt.
+   Of 110 incorrect validation outcomes, 88 had no extracted final answer and
+   22 had an extracted but incorrect final answer. The latter is about 2.44%
+   of the 900 validation examples. As a sampling heuristic only, a random
+   feedback pool of 100 would yield about 2.4 such errors, whereas 300 would
+   yield about 7.3. Training error rates and individual pools may differ.
+
+3. The optimizer sometimes distrusted the supplied outcomes instead of using
+   them. Examples include incorrect/INVALID cases whose reasoning reached the
+   gold answer but never completed the final response. Feedback described some
+   as correct but mislabeled or as external errors. At least one feedback
+   explanation also incorrectly challenged the valid half-angle identity
+   tan(a/2)tan(b/2) = ((1-cos(a))(1-cos(b)))/(sin(a)sin(b)), when defined.
+   Generated feedback is therefore not a reliable mathematical oracle.
+
+4. Longer, topic-specific rewrites encouraged more work, not better completion.
+   They added repeated verification or techniques suggested by the few examples.
+   All ten rewrites lost both raw and stable accuracy. This is evidence against
+   reducing lambda alone as the fix. Longer outputs correlate with poorer
+   completion here; this does not establish that length caused every failure.
+
+5. Answer-format constraints were already present in the rewrite meta-prompt.
+   It explicitly says not to add answer-format instructions or answer tags.
+   Several candidates nevertheless added boxed-answer directions. Do not report
+   this as a missing constraint or alter the separate fixed answer instruction.
+
+Recommended first trial, subject to user confirmation:
+- Keep lambda = 1, target max_new_tokens = 8192, validation = 3 x 300,
+  the existing seed, and the original RPO search procedure.
+- Increase the randomized training feedback pool from 100 to about 300.
+- Select three incorrect examples preferentially with extracted final answers,
+  instead of blindly selecting three INVALID responses. Log shortages and use
+  an informative incomplete response as a clearly identified fallback.
+- Add one feedback clarification: "If no final answer was extracted,
+  distinguish unfinished reasoning from a mathematical error; do not assume
+  that the ground-truth answer or outcome is mislabeled."
+- Add one rewrite clarification: "Use concise, task-general guidance drawn
+  from these examples; avoid topic-specific methods and unnecessary repeated
+  verification." Preserve the rest of the original wording and the existing
+  no-answer-format constraint.
+- If this fails, compare one correct + two incorrect examples using the same
+  quality filter. Consider a larger reasoning excerpt or a stronger parent
+  preference only as subsequent trials, not simultaneous changes.
+
+Using all three examples as mistakes is reasonable to test, but it is not a
+guarantee of improvement. The key change is providing actionable feedback.
+Do not relabel unchanged Qwen RPO sources as improvements.
+
+Gemma comparison:
+Math Gemma RPO did improve: initial stable 61.26%, iteration-5 stable 66.34%,
+and iteration-10 stable 67.24%, on 3 x 500 validation examples. Therefore this
+diagnosis concerns the Qwen run, not a universal failure of the RPO method.
+CODE: math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+
+Implementation locations:
+- codes/prompt_optimization/first_stage.py: run_rpo
+- codes/prompt_optimization/evaluation.py: select_mixed_feedback
+- codes/prompt_optimization/qa_task.py: compact_math_reasoning, rpo_feedback_example
+- codes/prompt_optimization/meta_prompts.py: rpo_feedback_prompt, rpo_rewrite_prompt
+
+Implemented Math RPO update (2026-09-16; experiments not yet rerun)
+----------------------------------------------------------------
+User-approved changes supersede the earlier proposal to exclude incomplete
+answers or increase the feedback pool to 300:
+
+- Math RPO now selects only incorrect examples, default three, from the existing
+  randomized 100-example feedback pool. It uses available errors and logs any
+  shortage; it does not fill remaining slots with correct examples. With zero
+  errors, no feedback/rewrite generation is performed and snapshots are retained.
+- Feedback examples include actual generated output-token count and configured
+  output limit. Incorrect outcomes are marked as:
+  * reasoning token limit exceeded: no extracted answer and generated count
+    reaches the configured limit;
+  * missing final answer: no extracted answer without a confirmed limit hit;
+  * incorrect final answer: an extracted answer failed the primary grader.
+  Correct answers are not assigned a failure category, even at the token limit.
+- The Math feedback meta-prompt asks the optimizer to identify repetition,
+  unnecessary checking, and detours behind token-limit failures instead of
+  treating the provided outcome or ground truth as mislabeled.
+- The Math rewrite meta-prompt asks for concise, focused reasoning that reaches
+  a final answer within budget, with task-general rather than example-specific
+  guidance. The original no-answer-format restriction remains unchanged.
+- The separate fixed answer instruction, target limit 8192, optimizer limit
+  10000, feedback reasoning excerpt 2000, lambda 1, and search are unchanged.
+- Other tasks keep mixed correct/incorrect RPO selection and their original
+  feedback/rewrite wording. EvoPrompt, ETGPO, and second-stage flows are unchanged.
+- Existing run outputs and historical scores were not changed or rerun. Use a
+  new CODE for this trial; do not overwrite the canonical historical RPO run.
+
+Token-limit evidence checked from saved initial Qwen validation predictions:
+All 88 outcomes with answer_extraction_source = missing used exactly 8192 output
+tokens. The 17 missing-answer feedback excerpts end unfinished, but individual
+token counts for those historical excerpts are not saved in rpo_optimizer_trace;
+do not claim exact token-limit verification for all 17. New feedback logging
+includes the counts, budget, and classification to remove this ambiguity.
+
+Verified canonical Math first-stage validation sizes:
+| Model | RPO | EvoPrompt-DE | ETGPO |
+|---|---|---|---|
+| Qwen3-4B | 3 x 300 = 900 | 3 x 300 = 900 | 3 x 300 = 900 |
+| Gemma3-4B | 3 x 500 = 1500 | 3 x 500 = 1500 | 3 x 500 = 1500 |
+These counts were checked in summary.json validation.initial.validation_folds,
+not inferred only from CODE names. The update does not change validation sizes.
+
+Verification:
+python -m unittest discover -s tests -p test_math_prompt_optimization.py -v
+29 tests: 28 passed, one pre-existing PyTorch-dependent test skipped because
+PyTorch is unavailable in the lightweight test environment. New tests cover
+failure categories, task-specific meta-prompts, incorrect-only selection,
+feedback shortages, and retained snapshots with zero available errors.
+
+Prepared Qwen retry command (not launched by the assistant):
+Script: codes/run_math_first_stage_qwen.sh
+Only the revised RPO command is active; previous RPO/EvoPrompt/ETGPO commands
+are commented out, not removed.
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+GPU: CUDA_VISIBLE_DEVICES=3, target and optimizer logical cuda:0
+Validation: 3 x 300; feedback pool: 100; incorrect examples: 3; seed: 42
+Log: codes/nohup_outs/math_rpo_qwen_error3_tokenlimit.log
+Expected output directory:
+outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+
+Retry completed and sources assigned (2026-09-16)
+------------------------------------------------
+The prepared retry above has now completed. Initial accuracy/stable score:
+86.56 / 85.27%; selected best: 90.11 / 89.54%, generated at actual iteration 5.
+All ten candidate prompts improved both metrics over this retry's initial.
+Original iteration-5/10 retained snapshots are identical. User-approved source
+assignment uses actual iteration 2 (random seed 42) as experimental RPO5 and
+actual iteration 5 (best) as experimental RPO10. See
+experiment_tracking/first_stage/math_qwen_rpo_source_adjustments.txt for the
+selection rule, scores, and exact paths. This supersedes the earlier pending
+retry status; historical results of the original failed run remain unchanged.

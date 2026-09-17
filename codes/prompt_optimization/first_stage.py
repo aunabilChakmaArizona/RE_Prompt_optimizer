@@ -12,6 +12,7 @@ from prompt_optimization.cli_common import QAOptimizationContext
 from prompt_optimization.evaluation import (
     metric_accuracy,
     metric_selection_score,
+    select_incorrect_feedback,
     select_mixed_feedback,
 )
 from prompt_optimization.meta_prompts import (
@@ -144,13 +145,26 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             split_name="train_feedback",
             log_label="qa_rpo_feedback_inference",
         )
-        selected = select_mixed_feedback(
+        feedback_selector = (
+            select_incorrect_feedback
+            if context.mode.task_name == "math500"
+            else select_mixed_feedback
+        )
+        selected = feedback_selector(
             feedback_records,
             feedback_evaluation,
             args.feedback_examples,
         )
+        if context.mode.task_name == "math500" and len(selected) < args.feedback_examples:
+            log_progress(
+                context,
+                f"Math RPO feedback shortage | requested={args.feedback_examples} "
+                f"incorrect examples | available={len(selected)}",
+            )
+        if not selected:
+            log_progress(context, "No feedback examples available; skipping rewrite.")
         optimizer_tokenizer = None
-        if context.mode.task_name == "math500": #aunabil: why only for math
+        if context.mode.task_name == "math500" and selected: #aunabil: why only for math
             _, optimizer_tokenizer = context.model_pool.ensure(OPTIMIZER_ROLE)
         feedback_example_texts = [
             rpo_feedback_example(
@@ -160,6 +174,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
                 context.mode,
                 optimizer_tokenizer=optimizer_tokenizer,
                 reasoning_max_tokens=args.optimizer_feedback_max_tokens,
+                output_token_limit=context.evaluator.max_new_tokens,
             )
             for index, (record, prediction) in enumerate(selected, start=1)
         ]
@@ -171,7 +186,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             context,
             feedback_meta_prompts,
             log_label="qa_rpo_feedback_generation",
-        )
+        ) if selected else []
         feedback_texts = [
             extract_feedback(raw_output) for raw_output in feedback_raw_outputs
         ]
@@ -191,7 +206,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             context,
             [rewrite_meta_prompt],
             log_label="qa_rpo_prompt_rewrite",
-        )
+        ) if selected else ([], [])
         context.logger.event(
             "rpo_optimizer_trace",
             iteration=iteration,
@@ -207,7 +222,7 @@ def run_rpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         child = None
         if not candidates:
             context.logger.event(
-                "rpo_generation_failed",
+                "rpo_generation_failed" if selected else "rpo_feedback_unavailable",
                 iteration=iteration,
                 parent_node_id=parent["node_id"],
                 raw_output=rewrite_outputs,

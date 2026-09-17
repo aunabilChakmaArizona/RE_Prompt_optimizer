@@ -1,0 +1,42 @@
+Light LPO and GreaTer tuning follow-ups
+=======================================
+Status: TODO; no commands or experiments launched by this note.
+
+Motivation
+----------
+OpenBookQA GradPO received substantially more tuning than the other baselines.
+Current baseline settings are reasonable, but do not establish their best
+attainable performance. Training batch size is not their only tunable setting.
+
+Current OpenBookQA configurations
+--------------------------------
+LPO: training pool 512; three incorrect feedback examples; requested five edit
+locations and three words per location; ten rewrite requests, no retries.
+The edit sizes are prompt requests, not hidden hard extraction limits.
+All distinct valid rewrites are directly validated; duplicates can reduce the
+actual number below ten. More training examples alone do not expose more
+feedback if the feedback-example count remains three.
+
+GreaTer/TG: Qwen training pool 800, Gemma 600; balanced gradient subset 200;
+gradient batch size four; proposal top-k 25, proposal examples 50;
+top-mu ten, top-u ten; fluency weight 0.2; single-token replacement.
+All eight corrected OpenBookQA RPO-source runs obtained 100 correct and 100
+incorrect gradient examples. The earlier exact token-ID filter runs were
+superseded by the same-total-token-count reruns.
+
+Minimal proposed checks (await confirmation)
+--------------------------------------------
+1. GreaTer and GreaTer-TG: compare fluency weight 0.5 against current 0.2,
+   keeping the same gradient examples and candidate budgets.
+2. LPO: compare three requested locations against five, with three words
+   per location and the same feedback and candidate settings.
+3. LPO: separately compare five feedback mistakes against three, keeping
+   edit requests and ten rewrite requests unchanged.
+Use both RPO source prompts and select one shared setting per model using
+validation only. No large cross-product search is needed initially.
+
+Keep microbatch sizes as memory/runtime controls, not as the main quality
+tuning axis. Preserve original baseline wording apart from necessary task
+substitutions. Record tuning budget and do not call defaults optimally tuned.
+For Math, keep final candidate budgets comparable across methods; the proposed
+GradPO cost-limited plan uses beam five, not the OpenBookQA beam ten by default.

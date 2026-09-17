@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import re
 import time
+from pathlib import Path
 from typing import Any, Sequence
 
 try:
@@ -20,8 +21,10 @@ from prompt_optimization.evaluation import (
     select_incorrect_feedback,
 )
 from prompt_optimization.gradient_cache import (
+    DEFAULT_GRADIENT_CACHE_ROOT,
     balanced_subset_cache_key,
     build_gradient_pool_identity,
+    find_compatible_pool_cache,
     gradient_pool_cache_path,
     load_gradient_cache,
     lock_gradient_cache,
@@ -92,14 +95,6 @@ def _source_scored_item(
         "metrics": evaluation["metrics"],
         "evaluation": evaluation,
     }
-
-
-def _sample_second_stage_records(
-    context: QAOptimizationContext,
-    sample_size: int,
-) -> list[dict[str, Any]]:
-    """Randomly sample training records for non-gradient second-stage methods."""
-    return sample_records(context.train_records, sample_size, context.rng)
 
 
 def _balance_gradient_pairs(
@@ -223,54 +218,45 @@ def _restore_balanced_pairs(
     return selected_pairs, counts
 
 
-def _build_balanced_gradient_subset(
+def _get_shared_training_pool(
     context: QAOptimizationContext,
     instruction_prompt: str,
     sample_size: int,
-    gradient_sample_size: int,
     *,
     log_label: str,
-) -> tuple[list[dict[str, Any]], list[str] | None, dict[str, Any]]:
-    """Reuse or create a shared pool, then restore one seeded balanced subset."""
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Restore a matching greedy pool, using only the requested part of larger caches."""
     pool_seed = int(context.args.seed)
-    balance_seed = int(context.args.seed)
-    pool_rng = random.Random(pool_seed)
-    pool_records = sample_records(context.train_records, sample_size, pool_rng)
+    records = sample_records(context.train_records, sample_size, random.Random(pool_seed))
     rendered_prompts = [
-        render_qa_prompt(instruction_prompt, record, context.mode)
-        for record in pool_records
+        render_qa_prompt(instruction_prompt, record, context.mode) for record in records
     ]
-    pool_started_at = time.monotonic()
     generation_backend = (
         "vllm" if context.model_pool.uses_vllm_generation else "transformers"
     )
-    cache_identity = build_gradient_pool_identity(
+    identity = build_gradient_pool_identity(
         model_id=context.args.model,
         generation_backend=generation_backend,
         task_name=context.mode.task_name,
         mode_name=context.mode.name,
         source_prompt=instruction_prompt,
-        pool_records=pool_records,
+        pool_records=records,
         rendered_prompts=rendered_prompts,
         pool_seed=pool_seed,
         requested_pool_size=sample_size,
         max_new_tokens=context.evaluator.max_new_tokens,
         enable_thinking=context.mode.enable_thinking,
     )
-    cache_path, cache_key = gradient_pool_cache_path(
-        context.args.gradient_cache_root,
-        cache_identity,
-    )
-    cache_enabled = not context.args.disable_gradient_cache
-    pool_cache_hit = False
-    balanced_subset_cache_hit = False
+    cache_root = getattr(context.args, "gradient_cache_root", DEFAULT_GRADIENT_CACHE_ROOT)
+    cache_enabled = not getattr(context.args, "disable_gradient_cache", False)
+    refresh = getattr(context.args, "refresh_gradient_cache", False)
+    cache_path, cache_key = gradient_pool_cache_path(cache_root, identity)
+    requested_count = len(records)
+    cache_hit = False
 
-    def generate_pool_responses() -> list[str]:
-        """Run the one expensive greedy inference used by every gradient refiner."""
-        log_progress(
-            context,
-            f"gradient pool inference started | examples={len(pool_records)}",
-        )
+    def generate_responses() -> list[str]:
+        """Generate the shared greedy source responses only on a cache miss."""
+        log_progress(context, f"training pool inference started | examples={len(records)}")
         return context.model_pool.generate(
             TARGET_ROLE,
             rendered_prompts,
@@ -284,86 +270,118 @@ def _build_balanced_gradient_subset(
         )
 
     if cache_enabled:
-        log_progress(context, f"gradient cache lookup | path={cache_path}")
+        if not refresh:
+            compatible = find_compatible_pool_cache(
+                cache_root, identity, context.train_records,
+                lambda record: render_qa_prompt(instruction_prompt, record, context.mode),
+            )
+            if compatible is not None:
+                cache_path, identity = compatible
+                _, cache_key = gradient_pool_cache_path(cache_root, identity)
+        log_progress(context, f"training cache lookup | path={cache_path}")
         with lock_gradient_cache(cache_path):
-            cache_payload = None
-            if not context.args.refresh_gradient_cache:
-                cache_payload = load_gradient_cache(cache_path, cache_identity)
-            if cache_payload is None:
-                responses = generate_pool_responses()
-                cache_payload = {
-                    "metadata": cache_identity,
-                    "pool_results": [],
-                    "balanced_subsets": {},
-                }
-                log_progress(context, "gradient pool cache miss | generated responses")
+            payload = None if refresh else load_gradient_cache(cache_path, identity)
+            if payload is None:
+                responses = generate_responses()
+                payload = {"metadata": identity, "pool_results": [], "balanced_subsets": {}}
+                log_progress(context, "training pool cache miss | generated responses")
             else:
-                responses = _responses_from_gradient_cache(
-                    cache_payload,
-                    pool_records,
-                )
+                records_by_id = {str(record["id"]): record for record in context.train_records}
+                full_records = [
+                    records_by_id[str(record_id)] for record_id in identity["record_ids"]
+                ]
+                full_responses = _responses_from_gradient_cache(payload, full_records)
+                records = full_records[:requested_count]
+                responses = full_responses[:requested_count]
                 context.model_pool.record_cached_generation()
-                pool_cache_hit = True
-                log_progress(context, "gradient pool cache hit | restored raw responses")
-
+                cache_hit = True
+                log_progress(
+                    context,
+                    f"training pool cache hit | cached={len(full_records)} | "
+                    f"using={len(records)}",
+                )
             predictions = [
                 score_qa_response(record, response, context.mode)
-                for record, response in zip(pool_records, responses)
+                for record, response in zip(records, responses)
             ]
-            cache_payload["pool_results"] = _gradient_pool_cache_rows(
-                pool_records,
-                responses,
-                predictions,
-            )
-            outcome_hash = prediction_outcome_hash(predictions)
-            subset_key = balanced_subset_cache_key(
-                gradient_sample_size=gradient_sample_size,
-                balance_seed=balance_seed,
-                outcome_hash=outcome_hash,
-            )
-            subset_entry = cache_payload["balanced_subsets"].get(subset_key)
-            if subset_entry is None:
+            updated_rows = _gradient_pool_cache_rows(records, responses, predictions)
+            if cache_hit:
+                # Keep the unrequested responses and all other subset entries intact.
+                payload["pool_results"][:requested_count] = updated_rows
+            else:
+                payload["pool_results"] = updated_rows
+            save_gradient_cache(cache_path, payload)
+    else:
+        responses = generate_responses()
+        predictions = [
+            score_qa_response(record, response, context.mode)
+            for record, response in zip(records, responses)
+        ]
+    metadata = {
+        "enabled": cache_enabled,
+        "path": str(cache_path) if cache_enabled else None,
+        "cache_key": cache_key if cache_enabled else None,
+        "pool_cache_hit": cache_hit,
+        "cache_pool_size": identity["actual_pool_size"],
+        "requested_pool_size": sample_size,
+        "used_pool_size": len(records),
+        "pool_seed": pool_seed,
+        "decoding_mode": "greedy",
+    }
+    return records, predictions, metadata, identity
+
+
+def _build_balanced_gradient_subset(
+    context: QAOptimizationContext,
+    instruction_prompt: str,
+    sample_size: int,
+    gradient_sample_size: int,
+    *,
+    log_label: str,
+) -> tuple[list[dict[str, Any]], list[str] | None, dict[str, Any]]:
+    """Reuse the shared raw pool and restore its exact seeded balanced subset."""
+    pool_started_at = time.monotonic()
+    pool_records, predictions, cache_info, identity = _get_shared_training_pool(
+        context, instruction_prompt, sample_size, log_label=log_label,
+    )
+    balance_seed = int(context.args.seed)
+    outcome_hash = prediction_outcome_hash(predictions)
+    subset_key = balanced_subset_cache_key(
+        gradient_sample_size=gradient_sample_size,
+        balance_seed=balance_seed,
+        outcome_hash=outcome_hash,
+    )
+    balanced_subset_cache_hit = False
+
+    if cache_info["enabled"]:
+        cache_path = Path(cache_info["path"])
+        with lock_gradient_cache(cache_path):
+            payload = load_gradient_cache(cache_path, identity)
+            if payload is None:
+                raise RuntimeError("Shared training cache disappeared before balancing.")
+            entry = payload["balanced_subsets"].get(subset_key)
+            if entry is None:
                 selected_pairs, counts = _balance_gradient_pairs(
-                    pool_records,
-                    predictions,
-                    random.Random(balance_seed),
+                    pool_records, predictions, random.Random(balance_seed),
                     gradient_sample_size,
                 )
-                subset_entry = _balanced_subset_entry(
-                    selected_pairs,
-                    counts,
+                payload["balanced_subsets"][subset_key] = _balanced_subset_entry(
+                    selected_pairs, counts,
                     gradient_sample_size=gradient_sample_size,
                     balance_seed=balance_seed,
                     outcome_hash=outcome_hash,
                 )
-                cache_payload["balanced_subsets"][subset_key] = subset_entry
+                save_gradient_cache(cache_path, payload)
                 log_progress(context, "balanced gradient subset cache miss | selected")
             else:
                 selected_pairs, counts = _restore_balanced_pairs(
-                    subset_entry,
-                    pool_records,
-                    predictions,
+                    entry, pool_records, predictions,
                 )
                 balanced_subset_cache_hit = True
                 log_progress(context, "balanced gradient subset cache hit | restored")
-            save_gradient_cache(cache_path, cache_payload)
     else:
-        log_progress(context, "gradient cache disabled")
-        responses = generate_pool_responses()
-        predictions = [
-            score_qa_response(record, response, context.mode)
-            for record, response in zip(pool_records, responses)
-        ]
-        outcome_hash = prediction_outcome_hash(predictions)
-        subset_key = balanced_subset_cache_key(
-            gradient_sample_size=gradient_sample_size,
-            balance_seed=balance_seed,
-            outcome_hash=outcome_hash,
-        )
         selected_pairs, counts = _balance_gradient_pairs(
-            pool_records,
-            predictions,
-            random.Random(balance_seed),
+            pool_records, predictions, random.Random(balance_seed),
             gradient_sample_size,
         )
 
@@ -379,21 +397,17 @@ def _build_balanced_gradient_subset(
     selected_records = [record for record, _prediction in selected_pairs]
     reasoning_traces = (
         [prediction["raw_response"] for _record, prediction in selected_pairs]
-        if context.mode.enable_thinking
-        else None
+        if context.mode.enable_thinking else None
     )
     metadata = {
         "strategy": "random_pool_then_equal_correct_incorrect",
-        "pool_seed": pool_seed,
+        "pool_seed": int(context.args.seed),
         "balance_seed": balance_seed,
         "initial_pool_size": len(pool_records),
         **counts,
         "cache": {
-            "enabled": cache_enabled,
-            "path": str(cache_path) if cache_enabled else None,
-            "cache_key": cache_key if cache_enabled else None,
-            "balanced_subset_key": subset_key if cache_enabled else None,
-            "pool_cache_hit": pool_cache_hit,
+            **cache_info,
+            "balanced_subset_key": subset_key,
             "balanced_subset_cache_hit": balanced_subset_cache_hit,
         },
         "initial_pool_record_ids": [str(record["id"]) for record in pool_records],
@@ -653,16 +667,15 @@ def _lpo_candidate_prompts_from_outputs(
 def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
     """Run one reasoning-based local prompt optimization step for QA."""
     log_progress(context, "run started | iterations=1")
-    train_records = _sample_second_stage_records(context, args.train_sample_size)
-    train_evaluation = context.evaluator.evaluate(
+    train_records, train_predictions, training_cache, _identity = _get_shared_training_pool(
+        context,
         context.initial_prompt,
-        train_records,
-        split_name="train_selection",
+        args.train_sample_size,
         log_label="qa_lpo_train_selection",
     )
     feedback_pairs = select_incorrect_feedback(
         train_records,
-        train_evaluation,
+        {"predictions": train_predictions},
         args.feedback_examples,
     )
     log_progress(
@@ -748,6 +761,7 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
             "tagged_prompt": tagged_prompt,
             "parsed_locations": locations,
             "feedback_examples": feedback_texts,
+            "training_cache": training_cache,
             "rewrite_meta_prompt": rewrite_meta_prompt,
             "rewrite_raw_outputs": rewrite_outputs,
             "parsed_candidate_prompts": candidate_prompts,
@@ -773,6 +787,7 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         final_evaluation=selected["evaluation"],
         extra_summary={
             "algorithm": "lpo",
+            "training_cache": training_cache,
             "iterations": 1,
             "improved_on_validation": improved,
             "selected_location_count": len(locations),

@@ -1,0 +1,48 @@
+MATH-500 EvoPrompt experimental source assignments
+==================================================
+Updated: 2026-09-16
+
+Purpose
+-------
+Both models originally retained the same actual iteration-2 winner at the
+iteration-5 and iteration-10 snapshots. For two distinct second-stage source
+prompts, we assign actual iteration 1 to experimental EvoPrompt-5 and actual
+iteration 2 to experimental EvoPrompt-10. These are experimental source-slot
+names, NOT a claim that the prompts were produced at actual iterations 5 and
+10. The original snapshot files and summaries remain unchanged.
+
+Scores use the OpenAI/PRM800K grader. Stable = mean fold accuracy - 1 * fold
+standard deviation. Compare gains within each run only; no test data were used.
+
+| Model | Validation | Initial raw/stable | Experimental slot | Actual iteration | Source raw/stable | Raw/stable gain |
+|---|---|---|---|---:|---|---|
+| Qwen3-4B | 3 x 300 | 86.67 / 85.48 | EvoPrompt-5 | 1 | 89.22 / 87.37 | +2.56 / +1.89 |
+| Qwen3-4B | 3 x 300 | 86.67 / 85.48 | EvoPrompt-10 | 2 | 89.67 / 89.12 | +3.00 / +3.64 |
+| Gemma3-4B | 3 x 500 | 62.13 / 60.50 | EvoPrompt-5 | 1 | 69.07 / 67.82 | +6.93 / +7.32 |
+| Gemma3-4B | 3 x 500 | 62.13 / 60.50 | EvoPrompt-10 | 2 | 69.20 / 68.07 | +7.07 / +7.57 |
+
+Selected first-stage source prompt files
+---------------------------------------
+Qwen CODE: math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900
+Qwen EvoPrompt-5:
+outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_5_from_actual_iteration_1.txt
+Qwen EvoPrompt-10:
+outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_10_from_actual_iteration_2.txt
+
+Gemma CODE: math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500
+Gemma EvoPrompt-5:
+outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_experimental_iteration_5_from_actual_iteration_1.txt
+Gemma EvoPrompt-10:
+outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_gemma_evoprompt_gemma12opt_lambda1_vs1500/prompt_experimental_iteration_10_from_actual_iteration_2.txt
+
+Audit and reproducibility
+-------------------------
+- All four texts match the logged iteration-completed events exactly.
+- Each pair contains two distinct, complete prompts, not parser fragments.
+- The Qwen higher prompt includes a boxed-answer suggestion; it is retained
+  as actually generated, not manually edited. Its interaction with the fixed
+  answer instruction should be kept visible during later evaluation.
+- codes/report_first_stage_results.py preserves these source assignments when
+  regenerating detailed_first_stage_results.txt and first_stage_summary_and_prompts.txt.
+- Future second-stage scripts must use these explicit source files, not the
+  original duplicate prompt_iteration_5.txt and prompt_iteration_10.txt pair.

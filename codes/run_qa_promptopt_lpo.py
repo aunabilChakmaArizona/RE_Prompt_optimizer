@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import argparse
 
-from prompt_optimization.cli_common import add_shared_arguments, build_context
+from prompt_optimization.cli_common import (
+    add_shared_arguments,
+    add_training_cache_arguments,
+    build_context,
+)
 from prompt_optimization.second_stage import run_lpo
 
 
@@ -12,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     """Read the full-scale QA LPO configuration."""
     parser = argparse.ArgumentParser(description=__doc__)
     add_shared_arguments(parser, require_optimizer_model=True)
+    add_training_cache_arguments(parser)
     parser.add_argument(
         "--train-sample-size",
         type=int,

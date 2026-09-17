@@ -273,20 +273,25 @@ def add_gradient_runtime_arguments(parser: argparse.ArgumentParser) -> None:
             "loads vLLM, while dual mode reuses its resident vLLM engine."
         ),
     )
+    add_training_cache_arguments(parser)
+
+
+def add_training_cache_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add shared greedy training-response cache options for every refiner."""
     parser.add_argument(
         "--gradient-cache-root",
         default=str(DEFAULT_GRADIENT_CACHE_ROOT),
-        help="Shared JSON cache for initial gradient-pool responses and balancing.",
+        help="Shared JSON training-response cache for LPO and gradient refiners.",
     )
     parser.add_argument(
         "--refresh-gradient-cache",
         action="store_true",
-        help="Regenerate and replace a matching shared gradient-pool cache.",
+        help="Regenerate the requested training pool rather than reuse a cache.",
     )
     parser.add_argument(
         "--disable-gradient-cache",
         action="store_true",
-        help="Run gradient-pool inference without reading or writing the shared cache.",
+        help="Run training-pool inference without reading or writing the shared cache.",
     )
 
 

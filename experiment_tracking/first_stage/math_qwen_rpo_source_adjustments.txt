@@ -1,0 +1,43 @@
+Qwen Math RPO source assignments (2026-09-16)
+============================================
+CODE: math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Run directory: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit
+Validation: 3 x 300 = 900. Stable = mean fold accuracy - fold standard deviation.
+Primary grader: OpenAI/PRM800K. These are validation results, not test results.
+
+The experimental RPO5/RPO10 slots are not literal chronological snapshots.
+Original prompt_iteration_5.txt and prompt_iteration_10.txt remain unchanged
+and both contain the actual iteration-5 winner.
+
+RPO10: the best prompt, generated at actual iteration 5.
+RPO5: uniformly selected with random.Random(42).choice from candidates whose
+stable score is strictly above the initial and below the best, and whose text
+differs from the best. Eligible actual iterations: 1, 2, 3, 4, 6, 7, 8, 9, 10.
+Selected actual iteration: 2. The draw was performed once.
+
+| Source | Actual iteration | Accuracy / stable (%) |
+|---|---:|---|
+| Initial | 0 | 86.56 / 85.27 |
+| Experimental RPO5 | 2 | 88.67 / 87.95 |
+| Experimental RPO10 | 5 | 90.11 / 89.54 |
+
+RPO5 prompt file:
+outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit/prompt_experimental_iteration_5_from_actual_iteration_2.txt
+RPO10 prompt file:
+outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit/prompt_experimental_iteration_10_from_actual_iteration_5.txt
+
+RPO5 prompt:
+Solve the following math problem. Use clear, concise reasoning that focuses on key steps and avoids redundant verification to stay within the token limit. Apply appropriate mathematical techniques directly, and ensure your final answer is in the required format (e.g., simplified radical form, list of numbers separated by commas). Double-check that your answer matches the problem's specific requirements, such as order or format, before concluding.
+
+RPO10 prompt:
+Solve the following math problem. Think step by step, but be concise and focused. Once you derive the solution, state the final answer clearly and succinctly without unnecessary repetition or verification.
+
+The canonical reporting script now selects this improved retry rather than
+its earlier unimproved Qwen RPO run. Both source assignments are regenerated
+consistently. Historical run outputs and summary.json were not modified.
+Paper tables must disclose actual iterations and the post-hoc selection rule;
+do not present these sources as literal 5/10-iteration outcomes.
+Runtime: approximately 3h 40m. Correct answers increased 779 -> 811;
+missing answers decreased 99 -> 67; mean output tokens 3297.38 -> 2604.28.
+These observations support improved completion but are not a controlled
+ablation isolating which of the two feedback changes caused the improvement.

@@ -11,7 +11,15 @@ files are intentionally not indexed individually.
 - `first_stage/first_stage_summary_and_prompts.txt`: compact stable-score table
   followed by the complete initial and retained prompts.
 - `first_stage/math_qwen_rpo_analysis.txt`: iteration-by-iteration diagnosis of
-  the Qwen Math RPO run that retained its initial prompt.
+  the Qwen Math RPO run that retained its initial prompt, plus the implemented
+  incorrect-only/token-limit feedback update, completed retry, and verified
+  per-model validation sizes.
+- `first_stage/math_qwen_rpo_source_adjustments.txt`: selected Qwen Math RPO
+  sources, random-selection seed, actual iterations, retry scores, and exact
+  prompt paths; original iteration snapshots are preserved.
+- `first_stage/math_evoprompt_source_adjustments.txt`: explicit Math EvoPrompt
+  experimental source-slot assignments, actual iterations, scores, and prompt
+  files for both models; original snapshot files are preserved.
 - `first_stage/README.md`: scope and interpretation rules for the canonical
   first-stage reports.
 - `qa/first_stage_lambda1_status.txt`: historical OpenBookQA-only tracking.
@@ -25,6 +33,14 @@ python -u codes/report_first_stage_results.py
 
 ## Second-stage experiments
 
+- `second_stage/baseline_tuning_followups.txt`: TODO for limited LPO/GreaTer
+  sensitivity checks and disclosure of unequal OpenBookQA tuning effort.
+- `second_stage/math_gradpo_gen_tuning_plan.txt`: approved Qwen-only eight-attempt
+  adaptive Math GradPO-Gen plan, selected RPO sources, settings, and stopping
+  rules. Commands: `../codes/run_math_gradpo_tuning_qwen.sh`.
+- `second_stage/shared_training_pool_cache.txt`: shared LPO/GreaTer/GradPO raw
+  training-response cache, compatible larger-pool reuse, matching rules, flags,
+  and the LPO greedy training-feedback decoding change.
 - `second_stage/qa_math_second_stage_code_audit.txt`: QA/Math LPO, GreaTer, and
   GradPO flow review; resolved implementation issues; intentional differences
   from relation extraction; and the pending protected-word decision.
