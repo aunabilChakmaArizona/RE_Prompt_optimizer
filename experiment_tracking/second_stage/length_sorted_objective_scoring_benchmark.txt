@@ -1,0 +1,132 @@
+LENGTH-SORTED CANDIDATE OBJECTIVE BENCHMARK
+=========================================
+Date: 2026-09-16
+Scope: standalone Qwen/MATH GPU diagnostic; optimizer scoring flow unchanged.
+Status: sorting-specific benchmark code, arguments, and tests removed at the
+user's request. This note and the raw JSON remain as historical evidence.
+
+Results (seconds, median of two passes)
+--------------------------------------
+Backend  Batch/submission  Original order  Token-length order  Sorting speedup
+HF       4                62.59           28.65               2.18x
+vLLM     32               12.43           12.40               1.00x
+vLLM     128              12.36           12.37               1.00x
+
+Individual passes:
+HF original:       62.2556, 62.9200
+HF length-sorted:  28.7248, 28.5823
+vLLM 32 original:  12.4072, 12.4600
+vLLM 32 sorted:    12.3993, 12.4001
+vLLM 128 original: 12.3621, 12.3676
+vLLM 128 sorted:   12.3766, 12.3711
+
+Conclusion: exact length sorting substantially benefits the existing HF
+full-logit scorer, but gives no meaningful speedup to vLLM in this test.
+Even against length-sorted HF, vLLM is approximately 2.3x faster here.
+Do not generalize this result to Gemma, short non-reasoning QA, further
+optimized HF implementations, or the full optimizer runtime.
+
+Decision: do not add length sorting to vLLM scoring. It benefited only HF
+in this measured comparison. Keep it as a possible future HF optimization,
+not an active optimizer feature. The regular HF/vLLM benchmark is restored.
+
+Inputs, ordering, and score mapping
+----------------------------------
+Qwen/Qwen3-4B; MATH reasoning; two retained RPO instruction prompts.
+The same 64 cached responses selected in the previous 64-example benchmark
+are used, with no new reasoning generation. Restore the selected examples
+to their original cache-pool order for the unsorted baseline.
+64 examples x 2 prompts = 128 unchanged candidate/example sequences.
+Full rendered inputs range from 323 to 8,712 tokens; total actual input
+tokens are 389,430 in every condition. Gold answers and their target-token
+positions are identical across conditions. Fluency weight is 0.5.
+
+1. Render/tokenize each candidate/example sequence with the existing helper.
+2. Give it a source index plus candidate index and example/record ID.
+3. Sort source indices by the full, unpadded input token count.
+4. Submit consecutive sorted slices to each scorer, keeping answer positions
+   paired with their original tokens. HF shifts these positions for left
+   padding within each batch; vLLM receives unchanged unpadded token IDs.
+5. Restore each returned answer NLL to losses[source_index], then average
+   equally across examples for its original candidate prompt.
+
+HF's original order is candidate-major. vLLM's original order interleaves
+candidates per example, matching their respective production scorers.
+With HF batch size 4, total padded token slots drop from 807,528 to 399,588;
+the mean within-batch token-length range drops from 5,379.06 to 158.50.
+These padded-slot counts describe HF, NOT actual vLLM padding allocations.
+The vLLM-32 sorted batches reduce the mean length range from 7,848.50 to
+1,981.25. For vLLM-128 all 128 sequences fit in one submission, so sorting
+only changes request order, not the composition of that submission.
+
+Verification and numerical caveat
+--------------------------------
+At the time of the sorting diagnostic, all 63 regression tests passed,
+including three temporary sorting/mapping tests. Those three tests were
+removed together with the temporary code; regular scoring tests remain.
+After removal, all 60 remaining regression tests pass; no new GPU benchmark
+or inference experiment was launched for the removal.
+vLLM checks returned token IDs against the supplied IDs.
+Both prompts retain the same ranking in every condition and repetition.
+For vLLM submission size 32, sorted and unsorted per-example answer losses
+match exactly in both passes. For size 128, the largest sorted/unsorted
+per-example answer-loss difference is 0.000663936.
+
+HF sorting changes some numerical losses: largest per-example difference
+0.125; mean task-loss differences are +0.005676 and -0.003934 for the two
+prompts. The target/source mapping tests pass; the cause of these real-model
+numerical differences was not isolated. Do not claim bitwise HF parity.
+
+An additional caveat: one vLLM-32 sorted call returned instruction fluencies
+3.166812671 and 3.684134165, while the other measured calls returned
+3.172572492 and 3.721880380 for the exact same instruction token sequences.
+The maximum instruction-NLL difference is 0.037746215 (weighted contribution
+0.018873107 with F=0.5). This did not change the two tested rankings, but
+near-tied beam candidates require further reproducibility checking. This
+observation does NOT establish its cause, and should not be attributed to
+prefix caching: prefix caching was explicitly disabled throughout the test.
+
+Timing, environment, and GPU
+---------------------------
+Torch 2.8.0+cu128, Transformers 4.55.2, vLLM 0.11.0.
+HF batch size 4 keeps the existing full-logit and per-batch CUDA-cache
+clearing policy. vLLM uses prompt_logprobs=0 and discards one output token.
+No cross-request prefix reuse; eager mode; max_num_batched_tokens=4096;
+max_num_seqs=128; context limit 16,384; GPU fraction argument 0.20.
+Timing includes answer scoring and raw-instruction fluency. Shared input
+preparation (0.275 seconds), model loading, and warmup are excluded.
+The six condition orders are reversed on the second repetition.
+
+Requested cuda:3 was actively running the user's long Math tuning job;
+nvidia-smi index 3 was also busy. Used the previous idle-compute GPU instead:
+CUDA_VISIBLE_DEVICES=2, logical cuda:0 inside the benchmark, corresponding
+to nvidia-smi index 0, H100 PCIe, UUID
+GPU-1afb93ae-45f7-e198-7527-091a7f146991. CUDA numeric ordering differs from
+nvidia-smi ordering on this machine. No CUDA_DEVICE_ORDER setting was added.
+Existing jobs were not stopped or modified. Benchmark exited successfully,
+released its two model copies, and restored initial GPU memory usage.
+The NCCL destroy_process_group shutdown warning was nonfatal.
+
+The earlier HF 32.20s / vLLM 12.88s comparison already ordered examples by
+approximate character length. Its HF timing is NOT the unsorted baseline
+in this test; do not interpret the 2.18x sorting benefit as a further 2.18x
+gain over that earlier, already roughly length-ordered HF benchmark.
+
+Saved artifacts and reproducibility
+-----------------------------------
+Full settings, record IDs, source indices, exact token counts, answer
+positions, per-batch source indices, per-sequence losses, objectives, and
+timings:
+outputs/benchmarks/math_qwen_length_sorted_objectives_64.json
+
+Regular benchmark code (sorting-specific additions have been removed):
+codes/benchmark_vllm_objective_scoring.py
+
+The archived JSON contains the historical sorting-test configuration;
+its removed diagnostic flags are no longer supported by the live script.
+See vllm_objective_scoring.txt for the regular benchmark command.
+
+Length sorting was never added to production optimizers. The temporary
+benchmark-only sorting path is now removed too. No existing run commands,
+source prompts, cached responses, validation/test scores, or the production
+vLLM objective scorer were changed by this removal.

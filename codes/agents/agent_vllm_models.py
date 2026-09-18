@@ -12,6 +12,7 @@ from typing import Any
 
 VLLM_REQUIREMENTS_PATH = "requirements_vllm.txt"
 SUPPORTED_VLLM_VERSION = "0.8.5.post1"
+SUPPORTED_VLLM_VERSIONS = (SUPPORTED_VLLM_VERSION, "0.11.0")
 
 
 def _resolve_visible_gpu(device: str | None) -> str | None:
@@ -57,7 +58,7 @@ def _temporary_visible_gpu(device: str | None) -> Iterator[str | None]: #aunabil
 
 
 def _validate_vllm_version() -> str: #note: reduntant
-    """Check that the CUDA-12.4-compatible vLLM version is installed."""
+    """Accept the original environment or the separately pinned v2 environment."""
     try:
         installed_version = importlib.metadata.version("vllm")
     except importlib.metadata.PackageNotFoundError as error:
@@ -66,10 +67,11 @@ def _validate_vllm_version() -> str: #note: reduntant
             f"python -m pip install -r {VLLM_REQUIREMENTS_PATH}"
         ) from error
 
-    if installed_version != SUPPORTED_VLLM_VERSION:
+    if installed_version not in SUPPORTED_VLLM_VERSIONS:
         raise RuntimeError(
-            f"Expected vllm=={SUPPORTED_VLLM_VERSION}, but found vllm=={installed_version}. "
-            f"Install the pinned dependencies from {VLLM_REQUIREMENTS_PATH}."
+            f"Supported vLLM versions are {SUPPORTED_VLLM_VERSIONS}, "
+            f"but found vllm=={installed_version}. Install requirements_vllm.txt "
+            "for the original environment or requirements_vllm_v2.txt for v2."
         )
     return installed_version
 

@@ -1,0 +1,389 @@
+DELTA AI: SIMPLE SSH, CONDA, UPLOAD, AND GEMMA MATH RUN GUIDE
+===========================================================
+Prepared: 2026-09-17. Follow the numbered steps in order.
+This guide contains commands for YOU to run; no remote setup was performed.
+Central index: experiment_tracking/README.md.
+
+Important before starting
+-------------------------
+Your allocation is NCSA DeltaAI, NOT NCSA Delta.
+DeltaAI has ARM/aarch64 CPUs and GH200 superchips (H100-class GPU, 96GB).
+Use partition ghx4. Do not request Delta's gpuH200x8 with this allocation.
+Use a fresh native ARM environment; do NOT copy your old x86 Conda environment.
+
+Our versions: Python3.11, vLLM0.11.0, PyTorch2.8.0, Transformers4.55.2.
+IMPORTANT CORRECTION: ARM PyTorch2.8/vLLM0.11 prebuilt wheels are available
+with CUDA12.9 (cu129). Use cu129 below, NOT the old server's cu128 recipe.
+A source build is not our first choice. Wheel availability was verified on
+official release/index pages; installation/GPU execution on DeltaAI is not
+yet verified. Stop at the failing step if an installation/check fails.
+
+Replace these items when needed:
+- achakma: use this only if it is your NCSA login username. Your ACCESS profile
+  lists the NCSA username under Resource Provider Site Usernames.
+- YOUR_SLURM_ACCOUNT: your allocation charge account, shown by accounts.
+- YOUR_PROJECT: your actual writable project directory under /projects.
+The Slurm account and the project-directory name may be different.
+Do not assume the displayed username "achakma" is also the charge account.
+
+STEP 1 -- SSH into DeltaAI [YOUR LAPTOP OR CURRENT SERVER]
+--------------------------------------------------------
+Open a terminal and run:
+
+ssh achakma@dtai-login.delta.ncsa.illinois.edu
+
+Enter your NCSA password, then complete NCSA Duo MFA when prompted.
+The password is invisible while typing. This is normal.
+On first connection, check the host fingerprint against NCSA's login page
+before accepting it. Do not disable host-key checking.
+General DeltaAI logins use password + Duo, not an SSH-key-only login.
+
+If authentication has problems, try:
+
+ssh -o PreferredAuthentications=keyboard-interactive,password \
+  achakma@dtai-login.delta.ncsa.illinois.edu
+
+After this, run the following steps INSIDE the DeltaAI terminal unless a
+step explicitly says CURRENT SERVER. Login nodes have no GPUs; do not start
+training or model inference on the login node.
+
+STEP 2 -- Find your allocation and storage [DELTA AI LOGIN NODE]
+--------------------------------------------------------------
+whoami
+uname -m
+accounts
+quota
+ls /projects
+sinfo
+
+Expected architecture: aarch64. Save the account you can charge from accounts.
+Find your accessible project directory from quota or your allocation details.
+If no writable project directory is available, ask NCSA support before using
+a large model cache. Do not guess a project name or use this server's /storage2.
+
+Replace the two placeholders below, then run:
+
+export SLURM_ACCOUNT=YOUR_SLURM_ACCOUNT
+export PROJECT_DIR=/projects/YOUR_PROJECT
+export BASE_DIR="$PROJECT_DIR/$USER/promptopt"
+mkdir -p "$BASE_DIR"
+
+BASE_DIR holds code, the Conda environment, and downloaded model weights.
+Use your project's assigned storage and check its quota; project/work files
+are not automatically backed up. Keep important results elsewhere too.
+
+STEP 3 -- Get the latest project [DELTA AI LOGIN NODE]
+----------------------------------------------------
+Before cloning, upload your latest LOCAL project changes to GitHub, including
+the Gemma tuning scripts, source prompt copies, and vLLM scoring implementation.
+Cloning an older GitHub revision will NOT include uncommitted local changes.
+
+cd "$BASE_DIR"
+git clone https://github.com/aunabilChakmaArizona/RE_Prompt_optimizer.git
+export REPO_DIR="$BASE_DIR/RE_Prompt_optimizer"
+cd "$REPO_DIR"
+
+If this is a private repository, use GitHub's supported HTTPS authentication.
+Do not put a GitHub token in the clone URL or commit it in a file.
+If you already cloned the project, enter its existing directory and update it
+normally; do not delete it or blindly clone over existing work.
+
+Check that these files exist:
+
+ls codes/run_math_gradpo_tuning_gemma.sh
+ls codes/run_math_gradpo_tuning_gemma.slurm
+ls codes/prompt_optimization/vllm_scoring.py
+ls requirements_vllm_v2.txt
+ls experiment_tracking/second_stage/math_gemma_sources/rpo5.txt
+ls experiment_tracking/second_stage/math_gemma_sources/rpo10.txt
+
+STEP 4 -- Transfer and extract processed data
+--------------------------------------------
+If promptopt_data.zip was included in GitHub, it is already in the cloned root.
+Otherwise open a SECOND terminal on your CURRENT SERVER and run this command,
+replacing YOUR_PROJECT and the username if necessary:
+
+scp /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer/promptopt_data.zip \
+  achakma@dtai-login.delta.ncsa.illinois.edu:/projects/YOUR_PROJECT/achakma/promptopt/RE_Prompt_optimizer/
+
+Complete password/Duo prompts. This archive is about36.6MiB.
+Return to the DELTA AI terminal:
+
+cd "$REPO_DIR"
+unzip promptopt_data.zip
+mkdir -p codes/nohup_outs
+ls data/processed/math500/train.jsonl
+ls data/processed/math500/validation.jsonl
+ls data/processed/math500/test.jsonl
+
+The archive also contains OpenBookQA and HotpotQA. Raw downloads and old
+output/cache directories do not need to be transferred for this tuning run.
+Both required source prompts are already included in the new tracked files.
+
+STEP 5 -- Load Conda [DELTA AI LOGIN NODE]
+----------------------------------------
+module spider python/miniforge3_pytorch
+
+The currently documented stable default is 2.10.0. Use it as a Conda
+initializer, NOT as our experiment's PyTorch version:
+
+export CONDA_MODULE=python/miniforge3_pytorch/2.10.0
+module load "$CONDA_MODULE"
+source "$(conda info --base)/etc/profile.d/conda.sh"
+export CONDA_SH="$(conda info --base)/etc/profile.d/conda.sh"
+
+If 2.10.0 is unavailable, choose a listed module and update CONDA_MODULE to
+that exact name. We create a separate environment in the next step; this
+does NOT modify the system module or inherit its Python packages.
+
+STEP 6 -- Create your own named environment [DELTA AI LOGIN NODE]
+---------------------------------------------------------------
+mkdir -p "$BASE_DIR/conda_envs" "$BASE_DIR/conda_pkgs" "$BASE_DIR/pip_cache"
+export CONDA_PKGS_DIRS="$BASE_DIR/conda_pkgs"
+export PIP_CACHE_DIR="$BASE_DIR/pip_cache"
+conda config --prepend envs_dirs "$BASE_DIR/conda_envs"
+
+conda create -n re_prompt_optimization_vllm_v2 python=3.11 pip -y
+conda activate re_prompt_optimization_vllm_v2
+export CONDA_ENV="$CONDA_PREFIX"
+
+echo "$CONDA_PREFIX"
+conda env list
+python --version
+
+The environment should be under:
+<BASE_DIR>/conda_envs/re_prompt_optimization_vllm_v2
+Adding envs_dirs lets you activate it by name. Existing environments are not
+deleted or moved. If that name already exists, inspect it rather than recreate
+or overwrite it blindly. CONDA_ENV stores the exact path for our Slurm launcher.
+
+STEP 7 -- Install the matching ARM CUDA packages [DELTA AI LOGIN NODE]
+--------------------------------------------------------------------
+These commands install prebuilt wheels; no GPU is needed to install them.
+Do not run a large source compilation on the login node.
+
+cd "$REPO_DIR"
+python -m pip install --upgrade pip setuptools wheel
+
+# First install the CUDA-enabled ARM PyTorch stack from the cu129 index.
+python -m pip install --only-binary=:all: \
+  "torch==2.8.0" \
+  "torchvision==0.23.0" \
+  "torchaudio==2.8.0" \
+  --index-url https://download.pytorch.org/whl/cu129
+
+# Then install vLLM and our project dependencies, retaining that torch build.
+# --only-binary=vllm prevents accidentally starting a vLLM source build.
+python -m pip install --only-binary=vllm \
+  -r requirements_vllm_v2.txt \
+  --extra-index-url https://download.pytorch.org/whl/cu129
+
+python -m pip check
+
+Expect torch2.8.0+cu129, vLLM0.11.0, Transformers4.55.2.
+Do NOT install the ordinary CPU torch wheel, switch to a nightly version,
+upgrade to the site's torch2.10 stack, or use requirements_vllm.txt instead.
+You do not need to install/update the NVIDIA driver yourself. It is managed
+by NCSA. If a wheel/driver check fails, stop and keep the error message.
+
+STEP 8 -- Check versions and run CPU tests [DELTA AI LOGIN NODE]
+--------------------------------------------------------------
+python -c 'import platform, torch, transformers, vllm; print("CPU:", platform.machine()); print("torch:", torch.__version__); print("CUDA build:", torch.version.cuda); print("transformers:", transformers.__version__); print("vLLM:", vllm.__version__)'
+
+Expected: aarch64, torch2.8.0+cu129, CUDA12.9, transformers4.55.2, vLLM0.11.0.
+torch.cuda.is_available() may be False on the LOGIN node: it has no GPUs.
+
+python -m unittest discover -s tests
+MATH_TUNING_DRY_RUN=1 bash codes/run_math_gradpo_tuning_gemma.sh
+
+The dry run prints eight commands; it does NOT load a model or start inference.
+Do not run the tuning script without DRY_RUN on the login node.
+
+STEP 9 -- Get access to Gemma and download it [DELTA AI LOGIN NODE]
+----------------------------------------------------------------
+In your browser, sign into Hugging Face and accept the access terms for:
+https://huggingface.co/google/gemma-3-4b-it
+Create a read token with permission to download that gated model.
+
+export HF_HOME="$BASE_DIR/huggingface_cache"
+mkdir -p "$HF_HOME"
+hf auth login
+hf download google/gemma-3-4b-it
+
+Paste your token ONLY into the authentication prompt. Do not put it in a
+script, log, GitHub commit, or message. HF_HOME is exported so Slurm uses the
+same model/token cache. Downloading here avoids network delays during a job.
+GradPO-Gen uses the target Gemma3-4B for proposals/synthesis; these eight
+commands do not require downloading Gemma3-12B.
+
+STEP 10 -- Check a real allocated GPU [DELTA AI LOGIN NODE -> COMPUTE NODE]
+-------------------------------------------------------------------------
+Request a short interactive allocation:
+
+srun --account="$SLURM_ACCOUNT" \
+  --partition=ghx4 \
+  --nodes=1 \
+  --ntasks=1 \
+  --gpus-per-node=1 \
+  --cpus-per-task=8 \
+  --mem=64G \
+  --time=00:30:00 \
+  --pty bash -l
+
+This may wait in the queue. Once it opens, you are on a COMPUTE node.
+Reload/activate your environment if your shell startup changed it:
+
+module load "$CONDA_MODULE"
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+cd "$REPO_DIR"
+nvidia-smi
+
+python -c 'import torch; assert torch.cuda.is_available(), "CUDA unavailable"; print(torch.__version__, torch.version.cuda); print(torch.cuda.get_device_name(0)); x=torch.ones(4, device="cuda:0"); print(x.sum().item())'
+python -c 'import torch; from vllm import _C; print("vLLM CUDA extension import OK")'
+
+Expect a working GPU and tensor sum4.0. These are basic checks, not proof
+that Gemma generation, gradients, and prompt-logprob scoring all work.
+Slurm owns CUDA_VISIBLE_DEVICES. Do NOT set it to physical GPU3/1/etc.
+Our code uses cuda:0 INSIDE the GPU assigned to this job.
+
+When finished, release the interactive allocation and return to the login node:
+
+exit
+
+STEP 11 -- Submit ONE real Gemma tuning attempt first [DELTA AI LOGIN NODE]
+-------------------------------------------------------------------------
+cd "$REPO_DIR"
+mkdir -p codes/nohup_outs
+unset MATH_TUNING_GPU MATH_TUNING_START MATH_TUNING_END
+
+MATH_TUNING_END=1 sbatch \
+  --account="$SLURM_ACCOUNT" \
+  --partition=ghx4 \
+  codes/run_math_gradpo_tuning_gemma.slurm
+
+Save the printed JOBID. This runs the first complete tuning attempt, not a
+tiny benchmark: it verifies the real generation/gradient/scoring pipeline.
+The launcher uses exported CONDA_MODULE, CONDA_SH, CONDA_ENV, and HF_HOME.
+Do NOT add nohup or '&'; sbatch already submits a background batch job.
+Default request: one GPU, eight CPU cores, 64GB HOST RAM, walltime24h.
+GPU memory is NOT the --mem value. Both HF/vLLM copies share the assigned GPU,
+with vLLM ratio0.50 and gradient microbatch1. Actual peaks must be checked.
+
+STEP 12 -- Watch the first attempt [DELTA AI LOGIN NODE]
+------------------------------------------------------
+squeue -u "$USER"
+scontrol show job JOBID
+tail -c 6000 codes/nohup_outs/math_gradpo_gemma_JOBID.log | tr '\r' '\n' | tail -n 20
+
+Replace JOBID with your numeric job ID in all commands/filenames.
+The log should eventually say Saved QA gradpo_gen run and show validation gains.
+Check the saved summary and full retained prompt before launching the rest.
+A GPU job finishing does NOT necessarily mean it improved; compare the scores.
+
+STEP 13 -- Submit the remaining seven attempts [DELTA AI LOGIN NODE]
+------------------------------------------------------------------
+After attempt1 finishes successfully:
+
+MATH_TUNING_START=2 sbatch \
+  --account="$SLURM_ACCOUNT" \
+  --partition=ghx4 \
+  codes/run_math_gradpo_tuning_gemma.slurm
+
+Only attempts2-8 run, sequentially on one GPU. Cached matching training/source
+results from attempt1 can be reused. If you prefer all eight at once instead
+of checking attempt1 first, submit with no START/END override.
+No automatic mid-attempt resume. If a later attempt fails, resume starting at
+that attempt number after fixing the issue. --overwrite replaces an existing
+run folder with the same CODE, so avoid rerunning already-completed attempts.
+
+Fixed: pool600, G200 (100correct+100incorrect if available), C7 plus unchanged,
+beamB5, fluencyF0.5, validation3x300, stable lambda1, outputcap4096, seed42.
+Tuning pairs (each on RPO5 and RPO10):
+Attempts1/2: S5 T3 H0.60
+Attempts3/4: S5 T5 H0.60
+Attempts5/6: S5 T5 H0.45
+Attempts7/8: S7 T5 H0.45
+No test evaluation. This is not a full factorial grid.
+
+STEP 14 -- Reconnect another day [DELTA AI LOGIN NODE]
+----------------------------------------------------
+SSH again as in step1, then restore these variables with your actual values:
+
+export SLURM_ACCOUNT=YOUR_SLURM_ACCOUNT
+export PROJECT_DIR=/projects/YOUR_PROJECT
+export BASE_DIR="$PROJECT_DIR/$USER/promptopt"
+export REPO_DIR="$BASE_DIR/RE_Prompt_optimizer"
+export CONDA_MODULE=python/miniforge3_pytorch/2.10.0
+module load "$CONDA_MODULE"
+source "$(conda info --base)/etc/profile.d/conda.sh"
+export CONDA_SH="$(conda info --base)/etc/profile.d/conda.sh"
+conda activate re_prompt_optimization_vllm_v2
+export CONDA_ENV="$CONDA_PREFIX"
+export HF_HOME="$BASE_DIR/huggingface_cache"
+export PIP_CACHE_DIR="$BASE_DIR/pip_cache"
+cd "$REPO_DIR"
+
+Change CONDA_MODULE above if you selected a different initializer in step5.
+Already-submitted sbatch jobs continue after SSH disconnects.
+
+STEP 15 -- Stop a job or find its saved results
+----------------------------------------------
+To stop one of YOUR jobs and its subprocesses:
+
+scancel JOBID
+
+Do not use killall python. On Slurm, scancel is the correct cancellation tool.
+
+Saved tuning run directories:
+outputs/math_prompt_optimization/reasoning/gradpo_gen/<CODE>/
+Each contains summary.json (initial/final accuracy and stable scores) and
+final_prompt.txt (retained prompt). Pool/source caches live under outputs/.
+Copy important outputs to another server/storage location after completion;
+they are Git-ignored and not automatically included in the code repository.
+Detailed tuning/deployment note:
+experiment_tracking/second_stage/math_gradpo_gemma_slurm_guidelines.txt
+
+If something fails
+------------------
+- SSH failure: confirm NCSA username/password and NCSA Duo enrollment.
+- accounts empty/access denied: contact NCSA about allocation membership.
+- Missing script/scorer: latest LOCAL changes were not uploaded to GitHub.
+- Missing data: extract promptopt_data.zip in the repository root.
+- No matching ARM wheel: save pip output; do not switch blindly to newer pins.
+- CUDA unavailable on LOGIN node: normal; repeat on a Slurm COMPUTE node.
+- CUDA unavailable on COMPUTE node or extension import fails: stop; save
+  uname -m, nvidia-smi, pip check, package versions, and full traceback.
+- Gemma403: accept model terms and use a token for the approved HF account.
+- GPU OOM: save the error; consider ratio0.40 without shrinking G/validation:
+  MATH_TUNING_VLLM_RATIO=0.40 MATH_TUNING_START=FAILED_ATTEMPT sbatch \
+    --account="$SLURM_ACCOUNT" --partition=ghx4 \
+    codes/run_math_gradpo_tuning_gemma.slurm
+  This still reruns the failed attempt from its beginning, using valid caches.
+- A job pending is not necessarily broken: inspect squeue/scontrol reasons.
+
+NCSA support: help@ncsa.illinois.edu or https://help.ncsa.illinois.edu
+Tell them this is DeltaAI ARM/GH200 and include text errors, not just screenshots.
+Do not send passwords or tokens. No SSH/installation/job submission was done
+by the assistant when this guide was prepared.
+
+Official sources checked for this guide
+-------------------------------------
+SSH/password/Duo/hostname:
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/login.html
+Architecture:
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/architecture.html
+Storage/transfers:
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/data-mgmt.html
+Conda/site modules and native PyTorch:
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/software.html
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/python/pytorch.html
+Slurm:
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/running-jobs.html
+vLLM0.11 ARM release uses CUDA12.9:
+https://github.com/vllm-project/vllm/blob/v0.11.0/.buildkite/release-pipeline.yaml
+https://pypi.org/project/vllm/0.11.0/#files
+Pinned CUDA12.9 ARM wheels:
+https://download.pytorch.org/whl/cu129/torch/
+https://download.pytorch.org/whl/cu129/torchvision/
+https://download.pytorch.org/whl/cu129/torchaudio/

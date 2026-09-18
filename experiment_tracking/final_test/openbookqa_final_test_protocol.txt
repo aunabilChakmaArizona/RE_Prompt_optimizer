@@ -1,0 +1,152 @@
+OpenBookQA final-test protocol (2026-09-17)
+=========================================
+
+CURRENT UPDATE: use the EXISTING evaluator only
+---------------------------------------------
+Both launch scripts now call codes/run_qa_final_test_evaluation.py with
+--runs 1, --backend vllm, --qa-mode non_reasoning, and --max-new-tokens 10.
+Physical GPU 3 is the default (CUDA_VISIBLE_DEVICES=3, logical --device cuda:0).
+RUN_GPU can override it. Run Qwen and Gemma scripts SEQUENTIALLY on this GPU.
+All three final-test shell scripts now default to GPU memory utilization 0.8;
+the batch evaluator also defaults to 0.8 when called directly. The failed
+startup log reported 69.11 GiB free versus 71.19 GiB requested at 0.9. At 0.8,
+the request is about 63.28 GiB. FINAL_TEST_GPU_RATIO can override the scripts;
+ensure it is not still set to 0.9 in the environment before retrying.
+There are 36 separate single-prompt invocations per model, with unique CODEs:
+openbookqa_non_reasoning_<family>_<manifest row_id>_test_once
+Each call reloads its target model; identical prompts are evaluated separately.
+Prompt paths/hash checks and the selected 72-row manifest remain unchanged.
+
+Current outputs (one directory per labeled prompt):
+outputs/qa_final_test/non_reasoning/final_test/<CODE>/
+These contain results.txt, summary.json, config.json, prompt.txt, and evaluation
+predictions with raw generated outputs and per-question token counts.
+
+Run both sequentially:
+bash codes/run_openbookqa_final_test_qwen.sh && bash codes/run_openbookqa_final_test_gemma.sh
+The existing Python evaluator was NOT edited for this switch.
+
+The new batch runner and combined report helper are no longer invoked by these
+scripts. The helper expects the earlier batch-output format and does NOT yet
+combine the current per-prompt output directories. Do not use its old command
+below for this protocol.
+
+ADDITIONAL BATCH OPTION (requested after the existing-evaluator switch)
+---------------------------------------------------------------------
+codes/run_openbookqa_final_test_batched.sh reuses the already-prepared batch
+evaluator. No Python files or the two single-prompt launch scripts were edited.
+This alternative loads each target model once for all selected prompts.
+The manifest contains 36 rows per model, NOT 32; all rows remain included.
+Identical instruction texts share predictions. One decoding run, max 10 tokens,
+official 500-question test only, and physical GPU 3 by default.
+
+By default Qwen then Gemma run sequentially in one shell job:
+nohup bash codes/run_openbookqa_final_test_batched.sh > codes/nohup_outs/openbookqa_final_test_batched.log 2>&1 &
+Pass qwen or gemma after the script filename to run just that target model.
+CPU-only checks: FINAL_TEST_DRY_RUN=1 bash codes/run_openbookqa_final_test_batched.sh
+
+Batched artifacts:
+outputs/qa_final_test/non_reasoning/selected_prompts/<CODE>/
+After BOTH models finish, the script invokes the compatible combined helper
+and writes experiment_tracking/final_test/openbookqa_final_test_results.txt.
+The helper remains incompatible with the separate per-prompt output format
+from the two existing-evaluator scripts.
+
+The remainder of this document archives the earlier batching proposal.
+Its one-model-load, identical-prompt reuse, request-seed derivation, and combined
+report instructions are superseded by the current existing-evaluator mode.
+
+Scope
+-----
+Non-reasoning only, official prepared test.jsonl (500 questions).
+Exactly ONE decoding run, as requested. No optimization, training-source
+generation, gradient scoring, validation folds, or test-based prompt selection.
+Per model: initial baseline + 5 first-stage sources + 6 refiners per source
+= 36 reported rows. Both models together: 72 rows.
+
+Frozen selections
+-----------------
+experiment_tracking/final_test/openbookqa_selected_prompts.tsv
+This lists exact files, optimizer CODEs, SHA-256 file hashes, parent source rows,
+and the original first-stage winning iteration (second-stage rows inherit
+their source's iteration). A changed file
+hash is rejected before loading a model; reselect explicitly rather than
+silently evaluating another prompt. No optimizer-output files were modified.
+
+Slots: RPO-5, RPO-10, EvoPrompt-5, EvoPrompt-10, ETGPO-1.
+Qwen RPO snapshots 5/10 retain winners created at iterations 1/7.
+Gemma experimental RPO-5 uses actual iteration 3, and experimental RPO-10
+uses the actual iteration-4 winner retained through literal iteration 10.
+Qwen experimental EvoPrompt-5/-10 use actual iterations 1/4.
+Gemma literal EvoPrompt snapshots 5/10 retain winners created at iterations 5/8.
+These experimental slot assignments are NOT literal optimization-budget
+comparisons. Preserve their original iteration provenance in the paper.
+
+GradPO-Gen RPO rows use the per-model configurations already selected during
+tuning. Other rows use the recorded completed bestcfg/c10/topu10 selections.
+GreaTer/GreaTer-TG use corrected same_token_count runs, not superseded runs.
+All dev-failures remain as rows with the retained source prompt. Existing
+selected wording artifacts are preserved, not fixed after inspecting test.
+
+Decoding and batching
+---------------------
+Qwen/Qwen3-4B: temperature 0.6, top_p 0.95, top_k 20.
+google/gemma-3-4b-it: temperature 1.0, top_p 0.95, top_k 64.
+Both use existing model-default sampling (do_sample=True), thinking disabled,
+max_new_tokens=10, base seed 42, and the unchanged static answer instruction.
+One run does not establish zero variance; no across-run std/significance claim.
+
+The shared QAEvaluator derives a test seed from the base seed, task, mode,
+split, and ordered test IDs. Request seed = this test seed + question index,
+shared across ALL instructions (including across the two model families).
+One vLLM target model per script; no optimizer/HF model loaded. Submit all
+unique instruction-question pairs together for continuous batching.
+Identical instructions reuse the same predictions/token counts while keeping
+separate labeled rows. This avoids stochastic differences between an unchanged
+refinement and its source. This is fresh test generation, not reuse of dev or
+training caches.
+
+Accuracy uses the existing tagged-option evaluator. Test gains are plain
+accuracy differences in percentage points: first stage vs initial baseline;
+second stage vs its own selected first-stage source. No stable-score penalty
+is applied to the single test set. Missing tags and invalid labels are saved.
+
+Launch (activate the existing vLLM environment first)
+---------------------------------------------------
+Choose UNUSED GPUs; these examples do not assert they are currently free.
+mkdir -p codes/nohup_outs
+RUN_GPU=1 nohup bash codes/run_openbookqa_final_test_qwen.sh > codes/nohup_outs/openbookqa_final_test_qwen.log 2>&1 &
+RUN_GPU=3 nohup bash codes/run_openbookqa_final_test_gemma.sh > codes/nohup_outs/openbookqa_final_test_gemma.log 2>&1 &
+Use one GPU sequentially if needed; each model reserves 90% by default.
+Override the fraction with FINAL_TEST_GPU_RATIO, e.g. 0.8 if GPU sharing.
+RUN_GPU sets physical visibility; --device stays logical cuda:0. If RUN_GPU
+is omitted, the script preserves existing CUDA_VISIBLE_DEVICES.
+Both scripts contain --overwrite: rerunning replaces only their test output
+directory, never first-/second-stage optimizer results. Do not run two copies
+of the same model script concurrently against the same output directory.
+
+CPU-only checks (no model loading, inference, or output creation):
+FINAL_TEST_DRY_RUN=1 bash codes/run_openbookqa_final_test_qwen.sh
+FINAL_TEST_DRY_RUN=1 bash codes/run_openbookqa_final_test_gemma.sh
+
+Artifacts and combined table
+----------------------------
+outputs/qa_final_test/non_reasoning/selected_prompts/
+  openbookqa_non_reasoning_qwen_selected_prompts_test_once/
+  openbookqa_non_reasoning_gemma_selected_prompts_test_once/
+Each directory contains config.json, summary.json, results.txt, tested prompt
+copies, and per-unique-prompt evaluation summaries and predictions.jsonl.
+Predictions retain raw generated output, extracted option, correctness, and
+per-question input/output/total token counts. Summary rows link every method
+to these files, its source prompt, and its optimizer CODE. Identical rows point
+to a shared prediction file rather than duplicate generation.
+
+AFTER BOTH scripts finish:
+python -u codes/report_openbookqa_final_test_results.py
+This checks equal test/seed/output-limit/answer-format protocols and writes:
+experiment_tracking/final_test/openbookqa_final_test_results.txt
+Model-specific temperatures intentionally differ as above.
+
+Scripts were prepared and CPU-tested locally; actual final-test inference has
+not been launched as part of script preparation. Selected prompts live under
+outputs (Git-ignored); uploading these scripts alone does not transfer them.

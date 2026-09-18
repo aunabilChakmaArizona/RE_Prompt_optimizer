@@ -1,0 +1,219 @@
+GEMMA MATH GradPO-Gen: tuning and Slurm deployment guidelines
+============================================================
+Prepared: 2026-09-17. Status: scripts prepared; no experiments submitted here.
+Scope: eight attempts, reasoning only, retained RPO5/RPO10 sources only.
+Central index: experiment_tracking/README.md.
+Runner: codes/run_math_gradpo_tuning_gemma.sh
+Slurm launcher: codes/run_math_gradpo_tuning_gemma.slurm
+
+Approved tuning matrix (NOT a full factorial grid)
+-------------------------------------------------
+| Attempts | Sources     | S | T | H    | C | G   | B | F   |
+|----------|-------------|---|---|------|---|-----|---|-----|
+| 1-2      | RPO5, RPO10 | 5 | 3 | 0.60 | 7 | 200 | 5 | 0.5 |
+| 3-4      | RPO5, RPO10 | 5 | 5 | 0.60 | 7 | 200 | 5 | 0.5 |
+| 5-6      | RPO5, RPO10 | 5 | 5 | 0.45 | 7 | 200 | 5 | 0.5 |
+| 7-8      | RPO5, RPO10 | 7 | 5 | 0.45 | 7 | 200 | 5 | 0.5 |
+
+Only S/T/H vary. S=maximum selected regions, T=maximum SOURCE tokens per
+region, H=neighbor-gradient expansion threshold. Actual counts can be lower.
+C=7 requested new replacements PLUS the unchanged original candidate.
+G=200: up to 100 correct + 100 incorrect; train pool=600; seed=42.
+B=5 beam survivors, not five total candidates across the entire search.
+F=0.5 penalty on editable instruction fluency only.
+All target inference/validation outputs capped at 4096; candidate generation
+and prompt synthesis capped at 10000. Fixed answer instructions remain hidden
+from optimizers and uneditable. No initial prompt or meta-prompt is rewritten
+as part of preparing these deployment files.
+Validation=deterministic 3x300 from data/processed/math500/validation.jsonl,
+which stores 3x500; stable score=mean accuracy - 1.0 x population fold std.
+Primary scorer=OpenAI PRM800K mathematical grader, NOT an OpenAI API call.
+No test evaluation. Select settings on validation, never the MATH-500 test set.
+Prefer one shared setting improving BOTH RPO sources; report failures honestly.
+
+Why pool=600
+------------
+Historical initial MATH-500 test accuracy: 316/500=63.20%, cap8192.
+Historical RPO5/RPO10 validation accuracy: 66.53%/68.07% on 3x500.
+These are planning references, not new 4096-token source baselines.
+At 68% accuracy, 600 examples yield about 408 correct and 192 incorrect on
+average, sufficient for 100 from each. Training greedy accuracy may differ.
+Check the logged actual correct/incorrect counts. If either has <100, code
+logs and uses the largest balanced set; discuss increasing the pool rather
+than silently treating a reduced set as G=200. The eight prepared commands
+keep pool=600 fixed. Compatible caches can be shared with later refiners.
+
+Source prompts INCLUDED for GitHub transfer
+------------------------------------------
+First-stage CODE: math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500
+Original directory: outputs/math_prompt_optimization/reasoning/rpo/<CODE>/
+RPO5 uses actual iteration5; RPO10 uses actual iteration10; no reassignment.
+Original snapshot files were NOT modified.
+Copied verbatim to tracked, portable paths because outputs/ is Git-ignored:
+experiment_tracking/second_stage/math_gemma_sources/rpo5.txt
+  Original: prompt_iteration_5.txt
+  SHA256: 078c8d9274076e9d5ba27bfcffca256f55fe713e0fdc272efea3189d3c6fdcc9
+experiment_tracking/second_stage/math_gemma_sources/rpo10.txt
+  Original: prompt_iteration_10.txt
+  SHA256: b7454bf90b34fbeeed151e59c9fb55924748ee29a09a63851b2148d11cf0cb28
+Source paths refer only to editable instructions, not fixed answer instructions.
+Source validation is recomputed/reused through the exact matching source cache;
+do NOT substitute historical 8192-token/3x500 aggregate scores.
+
+Choose hardware and environment BEFORE submitting
+-------------------------------------------------
+Prefer one exclusive-to-this-job H100 with >=80GB GPU memory, or H200.
+The script keeps two Gemma3-4B copies on logical cuda:0: HF for gradients,
+vLLM for text generation, validation, and forward-only loss/fluency scoring.
+vLLM budget=0.50; HF gradient microbatch=1; HF selection batch=4;
+vLLM objective submission chunk=128 (GPU batching remains dynamic).
+Text-only Gemma: --vllm-disable-images. Optional four conservative engine
+settings are NOT enabled by default. Do not assume 0.50 is a total-process
+cap: HF allocations are additional, and actual GPU peaks must be checked.
+If OOM: reduce vLLM's ratio to 0.40 using MATH_TUNING_VLLM_RATIO=0.40 or move
+to H200; do not reduce G or validation silently. This is deployment advice,
+not evidence that a Gemma GPU run or HF/vLLM numerical comparison passed.
+
+IMPORTANT: NCSA Delta and DeltaAI are different systems.
+- Delta H200 partition: gpuH200x8 (ordinary x86-64 CPU environment).
+- DeltaAI partition: ghx4, GH200 Grace Hopper, ARM/aarch64 CPUs and H100 96GB.
+  Do not transfer the existing x86 Conda environment to DeltaAI.
+  Create a native ARM CUDA-enabled PyTorch/vLLM environment first.
+  Update: official ARM prebuilt vLLM0.11/PyTorch2.8 wheels are available with
+  CUDA12.9. Use the cu129 index, NOT the x86 cu128 installation recipe below.
+  Full SSH/Conda/install/run instructions: experiment_tracking/deltaai_setup_step_by_step.txt.
+  A source build/site assistance is a fallback, not our first installation path.
+  An ordinary PyPI CPU torch wheel is not sufficient for this GPU setup.
+  Do not assume the site's latest PyTorch module matches vLLM0.11/torch2.8.
+  This launcher supports a prepared native environment; it does not build it.
+
+On x86-64 H100/H200, create the separate pinned environment if not present:
+conda create -n re_prompt_optimization_vllm_v2 python=3.11 pip -y
+conda activate re_prompt_optimization_vllm_v2
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements_vllm_v2.txt \
+  --extra-index-url https://download.pytorch.org/whl/cu128
+python -m pip check
+
+Use an allocation-appropriate project/scratch directory for model caches/envs,
+not this machine's /storage2 path. See the site storage policy. GPU/driver and
+CPU architecture compatibility must be checked on the target compute node.
+Keep vLLM=0.11.0 for this objective scorer; log torch/transformers versions.
+Requirements reference: requirements_vllm_v2.txt.
+
+Upload and prepare the repository
+---------------------------------
+Upload/commit these NEW files along with the existing runtime changes:
+codes/run_math_gradpo_tuning_gemma.sh
+codes/run_math_gradpo_tuning_gemma.slurm
+experiment_tracking/second_stage/math_gradpo_gemma_slurm_guidelines.txt
+experiment_tracking/second_stage/math_gemma_sources/rpo5.txt
+experiment_tracking/second_stage/math_gemma_sources/rpo10.txt
+tests/test_math_gradpo_gemma_script.py
+experiment_tracking/README.md (updated index)
+Also ensure current codes/prompt_optimization/vllm_scoring.py,
+codes/prompt_optimization/second_stage.py, cli_common.py, shared model/runtime
+changes, and requirements_vllm_v2.txt are committed. New launchers alone are
+not sufficient for an older GitHub checkout. No git commit/push was made here.
+
+promptopt_data.zip contains processed OpenBookQA, Math, and HotpotQA folders.
+It is ~36.6MiB. It is Git-ignored unless explicitly added with:
+git add -f promptopt_data.zip
+On the target server, from the repository root:
+unzip promptopt_data.zip
+mkdir -p codes/nohup_outs
+The tuning runner requires Math train.jsonl and validation.jsonl; test.jsonl
+is transferred for later evaluation but is NOT read in these attempts.
+Raw downloads, full first-stage output folders, and old caches are unnecessary.
+Gemma is gated: accept google/gemma-3-4b-it access terms with your Hugging Face
+account, then authenticate on the server (huggingface-cli login or HF_TOKEN).
+Never commit tokens or credentials. Download model weights before a long job
+if compute-node network access is restricted. An optional HF_HOME can point
+to your project's persistent model cache directory.
+
+Preview WITHOUT GPUs/models
+---------------------------
+Local verification: Bash syntax checks passed; all 66 regression tests passed
+in re_prompt_optimization_vllm_v2, including five new launcher/matrix/source
+tests. No Slurm submission, model inference, or target-server GPU test was run.
+MATH_TUNING_DRY_RUN=1 bash codes/run_math_gradpo_tuning_gemma.sh
+Prints eight expanded Python commands without inference or dataset access.
+To preview just one: MATH_TUNING_START=1 MATH_TUNING_END=1 \
+  MATH_TUNING_DRY_RUN=1 bash codes/run_math_gradpo_tuning_gemma.sh
+
+Slurm submission (run from repository root)
+-------------------------------------------
+Run accounts/sinfo first to identify YOUR allocation and accessible partition:
+accounts
+sinfo
+mkdir -p codes/nohup_outs
+unset MATH_TUNING_GPU
+
+Set your Conda initializer/environment, using actual server paths:
+export CONDA_SH=/path/to/miniforge3/etc/profile.d/conda.sh
+export CONDA_ENV=re_prompt_optimization_vllm_v2
+# Alternative initializer: export CONDA_MODULE=python/miniforge3_pytorch
+# A site module is only an initializer; activate your compatible environment.
+
+DeltaAI GH200/H100 (only AFTER preparing a native ARM GPU environment):
+sbatch --account=YOUR_ACCOUNT --partition=ghx4 \
+  codes/run_math_gradpo_tuning_gemma.slurm
+
+Delta H200 (use the account valid on Delta, not automatically DeltaAI's):
+sbatch --account=YOUR_ACCOUNT --partition=gpuH200x8 \
+  codes/run_math_gradpo_tuning_gemma.slurm
+
+Another x86 H100/H200 Slurm cluster: replace partition with its actual queue.
+The GPU type is selected through the partition; do not invent a constraint.
+Default request: 1 GPU, 1 task, 8 CPU cores, 64GB HOST RAM, 24h walltime.
+64GB --mem is CPU RAM, NOT GPU VRAM. Override --time if your queue requires it.
+All eight attempts run sequentially in one job; no job array or multi-GPU run.
+Slurm sets CUDA_VISIBLE_DEVICES: preserve it. Both model copies use cuda:0
+within that assigned visible GPU. Do NOT hard-code CUDA_VISIBLE_DEVICES=3.
+No CUDA_DEVICE_ORDER setting is introduced.
+No nohup or trailing '&' is needed with sbatch.
+
+Smoke check and resume
+---------------------
+Submit only attempt1 first if this GPU/environment has never run the code:
+MATH_TUNING_END=1 sbatch --account=YOUR_ACCOUNT --partition=YOUR_PARTITION \
+  codes/run_math_gradpo_tuning_gemma.slurm
+This is a real full first attempt, not a cheap synthetic test.
+After it completes successfully, run the remaining seven:
+MATH_TUNING_START=2 sbatch --account=YOUR_ACCOUNT --partition=YOUR_PARTITION \
+  codes/run_math_gradpo_tuning_gemma.slurm
+Check the saved summary and logs before selecting a resume index. No automatic
+resume of an interrupted attempt; disk training/source-validation caches can
+be reused when identities match. A failure stops the remaining commands.
+Every command includes --overwrite: rerunning an already-completed CODE
+replaces its run folder, so use START/END to avoid unnecessary overwrites.
+
+Monitor/stop
+------------
+squeue -u "$USER"
+tail -c 6000 codes/nohup_outs/math_gradpo_gemma_JOBID.log | tr '\r' '\n' | tail -n 20
+scancel JOBID
+scancel cancels the job and its Slurm step/subprocesses; do not kill random
+python processes. On Slurm the launcher does not submit anything until sbatch.
+
+Results and caches
+------------------
+Run folders: outputs/math_prompt_optimization/reasoning/gradpo_gen/<CODE>/
+CODE template:
+math500_reasoning_gemma_rpo{5|10}_gradpo_tune_s{S}_t{T}_h{060|045}_c7_g200_b5_f050_pool600_vs900_tok4096_v2
+Use summary.json for initial/final raw and stable validation scores, and
+final_prompt.txt for the retained prompt. Check complete prompt quality.
+Shared training cache: outputs/shared_gradient_cache (two source-specific
+600-response pools, greedy decoding, common seed42; not one pool for both).
+Shared source-validation cache: outputs/shared_source_validation_cache.
+Beam objective reuse is exact-text in-memory caching within each search.
+No test results or new score gains are claimed in this deployment note.
+After completion, append results to a centrally indexed Math tuning report.
+
+Official references (checked 2026-09-17)
+--------------------------------------
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/architecture.html
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/running-jobs.html
+https://docs.ncsa.illinois.edu/systems/delta/en/latest/user_guide/running_jobs.html
+https://docs.ncsa.illinois.edu/systems/deltaai/en/latest/user-guide/software.html
+https://docs.vllm.ai/en/v0.11.0/getting_started/installation/gpu.html

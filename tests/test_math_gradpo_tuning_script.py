@@ -1,4 +1,4 @@
-"""Dry-run the adaptive Math tuning shell script without loading a model."""
+"""Dry-run the fast Math tuning shell script without loading a model."""
 
 from __future__ import annotations
 
@@ -38,12 +38,19 @@ class MathGradPOTuningScriptTests(unittest.TestCase):
                 args = parse_args()
             self.assertEqual(args.train_sample_size, 1600)
             self.assertEqual(args.gradient_sample_size, 200)
-            self.assertEqual(args.num_region_candidates, 10)
-            self.assertEqual(args.beam_width, 10)
+            self.assertEqual(args.num_region_candidates, 7)
+            self.assertEqual(args.beam_width, 5)
             self.assertEqual(args.fluency_lambda, 0.5)
-            self.assertEqual(args.target_max_new_tokens, 8192)
+            self.assertEqual(args.target_max_new_tokens, 4096)
+            self.assertEqual(args.gradient_batch_size, 1)
+            self.assertEqual(args.selection_batch_size, 4)
+            self.assertTrue(args.code.endswith("_tok4096_v2"))
             self.assertEqual(args.validation_fold_size, 300)
             self.assertEqual(args.backend, "dual")
+            self.assertEqual(args.gpu_memory_utilization, 0.5)
+            self.assertEqual(args.dual_vllm_gpu_memory_utilization, 0.5)
+            self.assertEqual(args.objective_scoring_backend, "vllm")
+            self.assertEqual(args.objective_scoring_batch_size, 128)
             self.assertEqual(args.hf_device, "cuda:0")
             self.assertFalse(args.disable_gradient_cache)
             self.assertTrue(args.overwrite)
@@ -52,16 +59,24 @@ class MathGradPOTuningScriptTests(unittest.TestCase):
             parsed.append(args)
         return parsed
 
-    def test_default_runs_only_four_width_attempts(self):
-        """Use the transferred configuration and wider cap on both sources."""
+    def test_default_runs_all_eight_fast_attempts(self):
+        """Run four fixed configurations on both sources with the faster budget."""
         result, commands = self.dry_run()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(commands), 8)
+        parsed = self.check_commands(commands)
+        self.assertEqual([a.max_region_tokens for a in parsed], [3, 3, 5, 5, 5, 5, 5, 5])
+        self.assertEqual([a.num_edit_regions for a in parsed], [3, 3, 3, 3, 3, 3, 5, 5])
+        self.assertEqual([a.region_expansion_threshold for a in parsed], [0.45] * 4 + [0.3] * 4)
+        self.assertEqual(len({a.code for a in parsed}), 8)
+
+    def test_width_only_override_runs_four_attempts(self):
+        """Allow the first four fast attempts to be run without later phases."""
+        result, commands = self.dry_run(MATH_TUNING_STAGE="width")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(commands), 4)
         parsed = self.check_commands(commands)
         self.assertEqual([a.max_region_tokens for a in parsed], [3, 3, 5, 5])
-        self.assertTrue(all(a.num_edit_regions == 3 for a in parsed))
-        self.assertTrue(all(a.region_expansion_threshold == 0.45 for a in parsed))
-        self.assertEqual(len({a.code for a in parsed}), 4)
 
     def test_adaptive_phases_require_and_use_selected_values(self):
         """Run two attempts per later phase using the supplied shared T/H."""

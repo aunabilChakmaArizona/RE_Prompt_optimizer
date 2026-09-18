@@ -147,6 +147,23 @@ def build_qa_prompt(
     )
 
 
+def build_context_multiple_choice_prompt(
+    instruction_prompt: str,
+    answer_instruction: str,
+    context: str,
+    question: str,
+    choices: Sequence[dict[str, Any]],
+) -> str:
+    """Place an instruction, passage, question, and labeled choices in order."""
+    return (
+        f"{instruction_prompt.strip()}\n\n"
+        f"{answer_instruction}\n\n"
+        f"Passage:\n{context.strip()}\n\n"
+        f"Question:\n{question.strip()}\n\n"
+        f"Choices:\n{format_choices(choices)}"
+    )
+
+
 def build_open_qa_prompt(
     instruction_prompt: str,
     answer_instruction: str,
@@ -337,6 +354,7 @@ def validate_records(records: Sequence[dict[str, Any]]) -> str:
     task_types = {str(record.get("task_type", "")).strip() for record in records}
     supported_task_types = {
         "multiple_choice_qa",
+        "context_multiple_choice_qa",
         "open_qa",
         "hotpotqa_open_qa",
     }
@@ -354,6 +372,11 @@ def validate_records(records: Sequence[dict[str, Any]]) -> str:
 
         if not str(record.get("question", "")).strip():
             raise ValueError(f"Record {record_id} has no question.")
+
+        if task_type == "context_multiple_choice_qa" and not str(
+            record.get("context", "")
+        ).strip():
+            raise ValueError(f"Context-MCQ record {record_id} has no passage.")
 
         if task_type in {"open_qa", "hotpotqa_open_qa"}:
             answers = record.get("answers")
@@ -427,22 +450,23 @@ def score_multiple_choice_predictions(
             invalid_label_count += 1
         correct_count += int(is_correct)
 
-        results.append(
-            {
-                "id": record["id"],
-                "dataset": record.get("dataset"),
-                "task_type": record.get("task_type"),
-                "question": record["question"],
-                "choices": record["choices"],
-                "gold_answer": gold_label,
-                "gold_answer_text": record.get("answer_text"),
-                "raw_response": response,
-                "token_usage": dict(token_usage),
-                "extracted_answer": extracted_answer,
-                "predicted_answer": predicted_label,
-                "correct": is_correct,
-            }
-        )
+        result = {
+            "id": record["id"],
+            "dataset": record.get("dataset"),
+            "task_type": record.get("task_type"),
+            "question": record["question"],
+            "choices": record["choices"],
+            "gold_answer": gold_label,
+            "gold_answer_text": record.get("answer_text"),
+            "raw_response": response,
+            "token_usage": dict(token_usage),
+            "extracted_answer": extracted_answer,
+            "predicted_answer": predicted_label,
+            "correct": is_correct,
+        }
+        if record.get("context") is not None:
+            result["context"] = record["context"]
+        results.append(result)
 
     total = len(records)
     statistics = {
@@ -811,6 +835,28 @@ def run_qa_test_inference(
             instruction_prompt,
             resolved_answer_instruction,
             "{question}",
+        )
+    elif task_type == "context_multiple_choice_qa":
+        prompts = [
+            build_context_multiple_choice_prompt(
+                instruction_prompt,
+                resolved_answer_instruction,
+                str(record["context"]),
+                str(record["question"]),
+                record["choices"],
+            )
+            for record in records
+        ]
+        template_choices = [
+            {"label": choice["label"], "text": f"{{choice_{choice['label'].lower()}}}"}
+            for choice in records[0]["choices"]
+        ]
+        prompt_template = build_context_multiple_choice_prompt(
+            instruction_prompt,
+            resolved_answer_instruction,
+            "{passage}",
+            "{question}",
+            template_choices,
         )
     else:
         prompts = [

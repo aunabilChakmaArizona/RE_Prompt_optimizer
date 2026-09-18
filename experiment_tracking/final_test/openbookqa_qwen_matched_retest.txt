@@ -1,0 +1,37 @@
+Qwen OpenBookQA fresh matched16 retest
+====================================
+Script: codes/run_openbookqa_qwen_matched_test.sh
+Runs Qwen ONLY: fresh solo initial, then all 36 selected rows (27 unique prompts).
+Reuses existing single-prompt and batched inference runners; no inference
+implementation, optimized prompts, or historical scores are changed.
+
+Shared fresh settings: Qwen/Qwen3-4B, GPU 3, vLLM ratio 0.8, 16 output tokens,
+one run, base seed 42, thinking disabled, model-default sampling (temperature
+0.6, top_p 0.95, top_k 20), unchanged tagged-answer instruction and strict grader.
+Solo uses native context; batch explicitly sets 40960, confirmed from the
+locally cached Qwen3-4B config. Confirm both startup logs match before analysis.
+No Gemma image or eager/cache flags are introduced.
+
+Unique timestamped identities (RUN_TAG may be set explicitly):
+  openbookqa_non_reasoning_qwen_initial_matched16_<RUN_TAG>
+  openbookqa_non_reasoning_qwen_selected_matched16_<RUN_TAG>
+No --overwrite: choose a new RUN_TAG to repeat. Old runs/reports stay unchanged.
+Both source-prompt hashes and official test identity are checked in a CPU
+preflight. FINAL_TEST_DRY_RUN=1 stops before any inference or report writes.
+
+After completion, codes/report_openbookqa_test_rerun.py validates all selected
+row IDs, exact instruction texts, hashes, optimizer CODEs, parents, test identity,
+and sampling settings before saving a fresh comparison table:
+  experiment_tracking/final_test/openbookqa_qwen_matched16_comparison_<RUN_TAG>.txt
+Tables include initial scores, every selected prompt's old/new score, accuracy
+change, old/new gain over its own source, missing tags, and method averages over
+all FIVE sources including unchanged prompts. No test-based prompt selection.
+Fresh predictions and per-problem token counts remain in their run directories:
+  outputs/qa_final_test/non_reasoning/final_test/<SOLO_CODE>/
+  outputs/qa_final_test/non_reasoning/selected_prompts/<BATCH_CODE>/
+
+The previous batch used 10 output tokens and context 16384. The fresh run uses
+16 tokens and native context 40960 to mirror the Gemma retest protocol for this
+model. Changed scores cannot be attributed solely to randomness or batching.
+A three-seed stability experiment is NOT implemented by this single-run script.
+No GPU inference was launched when preparing these commands.

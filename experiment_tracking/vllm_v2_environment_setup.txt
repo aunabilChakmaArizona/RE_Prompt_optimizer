@@ -1,0 +1,70 @@
+VLLM V2 CONDA ENVIRONMENT SETUP
+==============================
+Saved: 2026-09-16
+Environment: re_prompt_optimization_vllm_v2
+Expected path: /storage2/home/aunabilchakma/conda_envs/re_prompt_optimization_vllm_v2
+Run these commands in a terminal; this file does not execute them.
+
+One-time storage configuration
+-----------------------------
+mkdir -p /storage2/home/aunabilchakma/conda_envs
+conda config --prepend envs_dirs /storage2/home/aunabilchakma/conda_envs
+conda config --append envs_dirs /home/aunabilchakma/miniconda3/envs
+
+The second location keeps existing environments discoverable by name.
+Existing environments are not moved or deleted. Avoid duplicate names.
+
+Create and install (skip creation if this environment already exists)
+-------------------------------------------------------------------
+conda create -n re_prompt_optimization_vllm_v2 python=3.11 pip -y
+conda activate re_prompt_optimization_vllm_v2
+
+python -m pip install --upgrade pip setuptools wheel
+
+python -m pip install \
+  "vllm==0.11.0" \
+  "transformers==4.55.2" \
+  --extra-index-url https://download.pytorch.org/whl/cu128
+
+python -m pip install \
+  accelerate \
+  datasets \
+  backoff \
+  "math-verify==0.9.0" \
+  "pylatexenc==2.10"
+
+python -m pip check
+
+Verify location and versions
+---------------------------
+echo "$CONDA_PREFIX"
+conda env list
+python -c "import torch, transformers, vllm; print('PyTorch:', torch.__version__); print('CUDA build:', torch.version.cuda); print('Transformers:', transformers.__version__); print('vLLM:', vllm.__version__)"
+
+Compatibility and remaining work
+--------------------------------
+- This is a controlled upgrade, not the latest vLLM release.
+- Let vLLM resolve its matching PyTorch dependencies (expected torch 2.8.0).
+  Do not independently upgrade torch or use the old requirements_vllm.txt.
+- Optional project packages above are not fully pinned; pip check verifies
+  dependency consistency, not GPU runtime compatibility or exact reproduction.
+- Server NVIDIA driver observed on 2026-09-16: 550.163.01. This default wheel
+  uses CUDA 12.8. Recommend an administrator-approved driver upgrade to 570.26
+  or newer before model runs; older-driver PTX/JIT compatibility is not assured.
+  Conda/pip installation does not upgrade the system driver.
+- Leave the existing environment and currently running experiments untouched.
+- The project model loader now accepts vllm==0.8.5.post1 and vllm==0.11.0.
+  requirements_vllm_v2.txt describes the new environment; old pins are unchanged.
+- Forward-only loss/fluency scoring is implemented as the explicit option
+  --backend dual --objective-scoring-backend vllm. The Qwen Math tuning script
+  enables it. HF still computes gradients. Synthetic parity tests pass;
+  small Qwen/MATH GPU comparisons are now documented in
+  experiment_tracking/second_stage/length_sorted_objective_scoring_benchmark.txt.
+  Gemma, full-beam timing, and near-tie score reproducibility remain open.
+
+References
+----------
+https://docs.vllm.ai/en/v0.11.0/getting_started/installation/gpu.html
+https://raw.githubusercontent.com/vllm-project/vllm/v0.11.0/requirements/cuda.txt
+https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html
+https://docs.conda.io/projects/conda/en/stable/user-guide/configuration/custom-env-and-pkg-locations.html

@@ -263,7 +263,22 @@ def add_shared_arguments(
 
 
 def add_gradient_runtime_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add cache and final-evaluation routing shared by GreaTer and GradPO."""
+    """Add objective scoring, caches, and validation routing for gradient refiners."""
+    parser.add_argument(
+        "--objective-scoring-backend",
+        choices=("transformers", "vllm"),
+        default="transformers",
+        help="Candidate loss/fluency backend; vllm requires dual mode and vLLM 0.11.0.",
+    )
+    parser.add_argument(
+        "--objective-scoring-batch-size",
+        type=int,
+        default=128,
+        help=(
+            "Maximum sequences submitted per vLLM scoring call (not GPU batch size); "
+            "HF scoring still uses --selection-batch-size."
+        ),
+    )
     parser.add_argument(
         "--final-evaluation-backend",
         choices=("vllm", "transformers"),
@@ -301,6 +316,15 @@ def build_context(
 ) -> QAOptimizationContext:
     """Load one QA experiment and initialize its shared runtime services."""
     started_at = time.monotonic()
+    objective_backend = getattr(args, "objective_scoring_backend", "transformers")
+    if getattr(args, "objective_scoring_batch_size", 128) <= 0:
+        raise ValueError("--objective-scoring-batch-size must be positive.")
+    if objective_backend == "vllm":
+        if args.backend != "dual":
+            raise ValueError("--objective-scoring-backend vllm requires --backend dual.")
+        from prompt_optimization.vllm_scoring import validate_vllm_scoring_version
+
+        validate_vllm_scoring_version()
     dual_optimizers = {
         "greater",
         "greater_tg",
@@ -515,6 +539,7 @@ def build_context(
         backend=args.backend,
         vllm_target_device=args.device,
         hf_target_device=resolved_hf_device,
+        objective_scoring_backend=objective_backend,
         initial_prompt=initial_prompt,
     )
     return context

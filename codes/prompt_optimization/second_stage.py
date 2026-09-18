@@ -458,7 +458,41 @@ def _score_objective_candidates(
     fluency_lambda: float,
     reasoning_traces: Sequence[str] | None,
 ) -> list[dict[str, float]]:
-    """Batch candidate task-loss and fluency calculations with HF."""
+    """Route forward-only objectives through HF or the resident target vLLM."""
+    backend = getattr(getattr(context, "args", None), "objective_scoring_backend", "transformers")
+    if backend == "vllm":
+        from agents.agent_vllm_models import vllm_backend_metadata
+        from prompt_optimization.vllm_scoring import score_combined_objectives_vllm
+
+        vllm_model, _ = context.model_pool.ensure_vllm(TARGET_ROLE)
+        started_at = time.monotonic()
+        submission_size = context.args.objective_scoring_batch_size
+        log_progress(
+            context,
+            f"vLLM objective scoring started | candidates={len(prompts)} | "
+            f"examples={len(records)} | submission_size={submission_size}",
+        )
+        objectives = score_combined_objectives_vllm(
+            prompts,
+            records,
+            mode=context.mode,
+            model=vllm_model,
+            tokenizer=tokenizer,
+            batch_size=submission_size,
+            fluency_lambda=fluency_lambda,
+            reasoning_traces=reasoning_traces,
+        )
+        elapsed = time.monotonic() - started_at
+        context.logger.event(
+            "candidate_objective_scoring_completed",
+            backend=vllm_backend_metadata(),
+            candidates=len(prompts),
+            examples=len(records),
+            submission_size=submission_size,
+            elapsed_seconds=elapsed,
+        )
+        log_progress(context, "vLLM objective scoring completed", phase_started_at=started_at)
+        return objectives
     return score_combined_objectives(
         prompts,
         records,
@@ -1438,6 +1472,9 @@ def _beam_search_replacements(
         }
     ]
     trace = []
+    # This search fixes the records, reasoning, target model, and objective weight.
+    # Exact prompt text is therefore a sufficient in-memory key for its lifetime.
+    objective_cache: dict[str, dict[str, float]] = {}
     synthesis_cache: dict[tuple[tuple[int, str], ...], dict[str, Any]] = {
         (): {
             "prompt": context.initial_prompt,
@@ -1573,16 +1610,31 @@ def _beam_search_replacements(
                 },
             )
         expansion_list = list(expansions.values())
-        objectives = _score_objective_candidates(
+        missing_objective_prompts = [
+            item["prompt"] for item in expansion_list
+            if item["prompt"] not in objective_cache
+        ]
+        score_cache_hits = len(expansion_list) - len(missing_objective_prompts)
+        log_progress(
             context,
-            [item["prompt"] for item in expansion_list],
-            train_records,
-            model=model,
-            tokenizer=tokenizer,
-            batch_size=selection_batch_size,
-            fluency_lambda=fluency_lambda,
-            reasoning_traces=reasoning_traces,
+            f"beam region {rank} objective scoring | "
+            f"new_prompts={len(missing_objective_prompts)} | cache_hits={score_cache_hits}",
         )
+        if missing_objective_prompts:
+            new_objectives = _score_objective_candidates(
+                context,
+                missing_objective_prompts,
+                train_records,
+                model=model,
+                tokenizer=tokenizer,
+                batch_size=selection_batch_size,
+                fluency_lambda=fluency_lambda,
+                reasoning_traces=reasoning_traces,
+            )
+            if len(new_objectives) != len(missing_objective_prompts):
+                raise RuntimeError("Objective scorer did not return every beam prompt.")
+            objective_cache.update(zip(missing_objective_prompts, new_objectives))
+        objectives = [objective_cache[item["prompt"]] for item in expansion_list]
         scored_expansions = [
             {"candidate_index": index, **expansion, **objective}
             for index, (expansion, objective) in enumerate(
@@ -1600,6 +1652,9 @@ def _beam_search_replacements(
             {
                 "region_rank": rank,
                 "expansion_count": len(scored_expansions),
+                "objective_scoring_backend": getattr(getattr(context, "args", None), "objective_scoring_backend", "transformers"),
+                "objective_cache_hits": score_cache_hits,
+                "new_objective_prompts": len(missing_objective_prompts),
                 "retained_beam": beam,
             }
         )
@@ -1607,6 +1662,8 @@ def _beam_search_replacements(
             "gradpo_beam_region_completed",
             region_rank=rank,
             expansion_count=len(scored_expansions),
+            objective_cache_hits=score_cache_hits,
+            new_objective_prompts=len(missing_objective_prompts),
             retained_beam=beam,
         )
         best_objective = float(beam[0]["combined_score"]) if beam else float("inf")

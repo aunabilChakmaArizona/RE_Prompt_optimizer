@@ -1,0 +1,278 @@
+OpenBookQA non-reasoning: final test scores
+=========================================
+Accuracy (%), official 500-question test, one decoding run, output limit 10 tokens.
+No stable score: one test split. All selected rows, including unchanged refinements, are included.
+
+| Model        | Initial prompt |
+| ------------ | -------------- |
+| Qwen3-4B     |          80.00 |
+| Gemma3-4B-IT |          0.00* |
+
+Qwen3-4B
+
+| Prompt stage / method | RPO-5 | RPO-10 | EvoPrompt-5 | EvoPrompt-10 | ETGPO-1 |
+| --------------------- | ----- | ------ | ----------- | ------------ | ------- |
+| First stage           | 79.40 |  80.60 |       79.40 |        80.40 |   81.80 |
+| GradPO-Gen            | 79.20 |  80.60 |       79.60 |        80.80 |   81.80 |
+| GradPO-Prob           | 79.20 |  80.40 |       79.60 |        80.40 |   81.60 |
+| GradPO-Gen-Random     | 80.40 |  80.60 |       79.60 |        79.40 |   81.80 |
+| LPO                   | 81.20 |  80.40 |       80.00 |        80.20 |   81.40 |
+| GreaTer               | 80.00 |  80.60 |       78.80 |        80.60 |   81.80 |
+| GreaTer-TG            | 80.60 |  80.20 |       79.20 |        80.60 |   81.80 |
+
+Gemma3-4B-IT
+
+| Prompt stage / method | RPO-5 | RPO-10 | EvoPrompt-5 | EvoPrompt-10 | ETGPO-1 |
+| --------------------- | ----- | ------ | ----------- | ------------ | ------- |
+| First stage           | 73.00 |  72.20 |       73.00 |        73.60 |   71.80 |
+| GradPO-Gen            | 72.60 |  72.60 |       73.00 |        73.60 |   72.20 |
+| GradPO-Prob           | 73.60 |  71.80 |       74.60 |        73.20 |   71.80 |
+| GradPO-Gen-Random     | 73.00 |  72.40 |       73.00 |        74.00 |   72.20 |
+| LPO                   | 73.80 |  72.20 |       73.00 |        72.40 |   72.00 |
+| GreaTer               | 73.40 |  72.80 |       73.00 |        72.80 |   72.20 |
+| GreaTer-TG            | 73.20 |  71.80 |       73.00 |        72.60 |   71.80 |
+
+* Gemma's recorded initial score is 0.00% because all 500 outputs lacked answer tags;
+the log shows malformed/repetitive output. Investigate before using this baseline
+or initial-to-first-stage gains in the paper. No historical baseline was substituted.
+
+RPO/EvoPrompt labels follow the previously tracked experimental source-slot assignments.
+
+Validation stable scores versus the recorded final test
+======================================================
+All scores are percentages; gains are percentage points (pp).
+Validation stable = mean fold accuracy - lambda * population fold std.
+Every listed run uses lambda=1. Validation N is total across three folds.
+First-stage gains compare with that optimizer run's original initial prompt.
+Second-stage gains compare with its own recorded source-prompt validation;
+do not subtract first-stage scores from another validation size or run.
+Test gains compare the same selected parent/child prompts on the 500-question test.
+These test scores are the OLD 10-token batch, not the new matched16 retest.
+Gemma first-stage test gains are N/A because its batched initial score is anomalous.
+All other Gemma test comparisons are provisional pending matched-setting checks.
+No test stable score is calculated, and no results are selected using test scores.
+
+Qwen3-4B comparison
+
+| Source      | Method            | Val N | Val acc | Source stable | Final stable | Val gain | Test acc | Test gain | Transfer  |
+| ----------- | ----------------- | ----- | ------- | ------------- | ------------ | -------- | -------- | --------- | --------- |
+| rpo5        | First stage       |   900 |   79.89 |         77.95 |        78.29 |    +0.35 |    79.40 |     -0.60 | Test loss |
+| rpo5        | GradPO-Gen        |  1500 |   80.47 |         79.12 |        79.81 |    +0.69 |    79.20 |     -0.20 | Test loss |
+| rpo5        | GradPO-Prob       |  1500 |   80.47 |         79.12 |        79.48 |    +0.36 |    79.20 |     -0.20 | Test loss |
+| rpo5        | GradPO-Gen-Random |  1500 |   80.80 |         79.12 |        80.09 |    +0.97 |    80.40 |     +1.00 |  Improved |
+| rpo5        | LPO               |  1500 |   80.60 |         79.12 |        79.89 |    +0.77 |    81.20 |     +1.80 |  Improved |
+| rpo5        | GreaTer           |  1500 |   80.07 |         79.12 |        79.17 |    +0.05 |    80.00 |     +0.60 |  Improved |
+| rpo5        | GreaTer-TG        |  1500 |   80.73 |         79.12 |        79.78 |    +0.66 |    80.60 |     +1.20 |  Improved |
+| rpo10       | First stage       |   900 |   80.44 |         77.95 |        78.63 |    +0.69 |    80.60 |     +0.60 |  Improved |
+| rpo10       | GradPO-Gen        |  1500 |   81.53 |         80.13 |        80.71 |    +0.58 |    80.60 |     +0.00 |  Test tie |
+| rpo10       | GradPO-Prob       |  1500 |   81.07 |         80.13 |        80.33 |    +0.20 |    80.40 |     -0.20 | Test loss |
+| rpo10       | GradPO-Gen-Random |  1500 |   80.87 |         80.13 |        80.13 |    +0.00 |    80.60 |     +0.00 |  Retained |
+| rpo10       | LPO               |  1500 |   81.20 |         80.13 |        80.21 |    +0.08 |    80.40 |     -0.20 | Test loss |
+| rpo10       | GreaTer           |  1500 |   80.87 |         80.13 |        80.13 |    +0.00 |    80.60 |     +0.00 |  Retained |
+| rpo10       | GreaTer-TG        |  1500 |   80.87 |         80.13 |        80.29 |    +0.16 |    80.20 |     -0.40 | Test loss |
+| evoprompt5  | First stage       |   900 |   79.89 |         77.95 |        79.01 |    +1.07 |    79.40 |     -0.60 | Test loss |
+| evoprompt5  | GradPO-Gen        |  1500 |   79.27 |         78.10 |        78.28 |    +0.19 |    79.60 |     +0.20 |  Improved |
+| evoprompt5  | GradPO-Prob       |  1500 |   79.27 |         78.10 |        78.28 |    +0.19 |    79.60 |     +0.20 |  Improved |
+| evoprompt5  | GradPO-Gen-Random |  1500 |   79.20 |         78.10 |        78.38 |    +0.29 |    79.60 |     +0.20 |  Improved |
+| evoprompt5  | LPO               |  1500 |   79.40 |         78.10 |        78.65 |    +0.55 |    80.00 |     +0.60 |  Improved |
+| evoprompt5  | GreaTer           |  1500 |   79.60 |         78.10 |        78.10 |    +0.01 |    78.80 |     -0.60 | Test loss |
+| evoprompt5  | GreaTer-TG        |  1500 |   79.47 |         78.10 |        78.66 |    +0.56 |    79.20 |     -0.20 | Test loss |
+| evoprompt10 | First stage       |   900 |   80.56 |         77.95 |        80.24 |    +2.29 |    80.40 |     +0.40 |  Improved |
+| evoprompt10 | GradPO-Gen        |  1500 |   80.47 |         78.33 |        79.11 |    +0.78 |    80.80 |     +0.40 |  Improved |
+| evoprompt10 | GradPO-Prob       |  1500 |   79.40 |         78.33 |        78.33 |    +0.00 |    80.40 |     +0.00 |  Retained |
+| evoprompt10 | GradPO-Gen-Random |  1500 |   79.67 |         78.33 |        78.36 |    +0.03 |    79.40 |     -1.00 | Test loss |
+| evoprompt10 | LPO               |  1500 |   79.27 |         78.33 |        78.65 |    +0.32 |    80.20 |     -0.20 | Test loss |
+| evoprompt10 | GreaTer           |  1500 |   79.67 |         78.33 |        78.52 |    +0.19 |    80.60 |     +0.20 |  Improved |
+| evoprompt10 | GreaTer-TG        |  1500 |   79.67 |         78.33 |        78.52 |    +0.19 |    80.60 |     +0.20 |  Improved |
+| etgpo1      | First stage       |  1500 |   79.60 |         78.17 |        78.85 |    +0.68 |    81.80 |     +1.80 |  Improved |
+| etgpo1      | GradPO-Gen        |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+| etgpo1      | GradPO-Prob       |  1500 |   79.60 |         78.86 |        78.95 |    +0.09 |    81.60 |     -0.20 | Test loss |
+| etgpo1      | GradPO-Gen-Random |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+| etgpo1      | LPO               |  1500 |   79.93 |         78.86 |        79.18 |    +0.32 |    81.40 |     -0.40 | Test loss |
+| etgpo1      | GreaTer           |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+| etgpo1      | GreaTer-TG        |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+
+Gemma3-4B-IT comparison
+
+| Source      | Method            | Val N | Val acc | Source stable | Final stable | Val gain | Test acc | Test gain | Transfer  |
+| ----------- | ----------------- | ----- | ------- | ------------- | ------------ | -------- | -------- | --------- | --------- |
+| rpo5        | First stage       |   900 |   70.78 |         68.61 |        69.28 |    +0.67 |    73.00 |       N/A |       N/A |
+| rpo5        | GradPO-Gen        |  1500 |   70.60 |         69.26 |        69.46 |    +0.20 |    72.60 |     -0.40 | Test loss |
+| rpo5        | GradPO-Prob       |  1500 |   70.80 |         69.26 |        69.95 |    +0.69 |    73.60 |     +0.60 |  Improved |
+| rpo5        | GradPO-Gen-Random |  1500 |   70.47 |         69.26 |        69.51 |    +0.25 |    73.00 |     +0.00 |  Test tie |
+| rpo5        | LPO               |  1500 |   71.13 |         69.26 |        70.79 |    +1.54 |    73.80 |     +0.80 |  Improved |
+| rpo5        | GreaTer           |  1500 |   70.53 |         69.26 |        69.45 |    +0.19 |    73.40 |     +0.40 |  Improved |
+| rpo5        | GreaTer-TG        |  1500 |   71.13 |         69.26 |        70.15 |    +0.89 |    73.20 |     +0.20 |  Improved |
+| rpo10       | First stage       |   900 |   71.33 |         68.61 |        70.09 |    +1.47 |    72.20 |       N/A |       N/A |
+| rpo10       | GradPO-Gen        |  1500 |   72.20 |         69.58 |        71.18 |    +1.60 |    72.60 |     +0.40 |  Improved |
+| rpo10       | GradPO-Prob       |  1500 |   70.60 |         69.58 |        70.01 |    +0.43 |    71.80 |     -0.40 | Test loss |
+| rpo10       | GradPO-Gen-Random |  1500 |   70.73 |         69.58 |        69.80 |    +0.23 |    72.40 |     +0.20 |  Improved |
+| rpo10       | LPO               |  1500 |   70.33 |         69.58 |        69.58 |    +0.00 |    72.20 |     +0.00 |  Retained |
+| rpo10       | GreaTer           |  1500 |   70.40 |         69.58 |        69.81 |    +0.23 |    72.80 |     +0.60 |  Improved |
+| rpo10       | GreaTer-TG        |  1500 |   71.00 |         69.58 |        69.98 |    +0.40 |    71.80 |     -0.40 | Test loss |
+| evoprompt5  | First stage       |   900 |   70.44 |         68.61 |        70.03 |    +1.42 |    73.00 |       N/A |       N/A |
+| evoprompt5  | GradPO-Gen        |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| evoprompt5  | GradPO-Prob       |  1500 |   71.40 |         70.08 |        70.26 |    +0.17 |    74.60 |     +1.60 |  Improved |
+| evoprompt5  | GradPO-Gen-Random |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| evoprompt5  | LPO               |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| evoprompt5  | GreaTer           |  1500 |   71.87 |         70.08 |        70.50 |    +0.41 |    73.00 |     +0.00 |  Test tie |
+| evoprompt5  | GreaTer-TG        |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| evoprompt10 | First stage       |   900 |   71.11 |         68.61 |        70.16 |    +1.54 |    73.60 |       N/A |       N/A |
+| evoprompt10 | GradPO-Gen        |  1500 |   69.87 |         69.21 |        69.21 |    +0.00 |    73.60 |     +0.00 |  Retained |
+| evoprompt10 | GradPO-Prob       |  1500 |   70.07 |         69.21 |        69.49 |    +0.29 |    73.20 |     -0.40 | Test loss |
+| evoprompt10 | GradPO-Gen-Random |  1500 |   70.27 |         69.21 |        69.22 |    +0.01 |    74.00 |     +0.40 |  Improved |
+| evoprompt10 | LPO               |  1500 |   70.40 |         69.21 |        69.75 |    +0.54 |    72.40 |     -1.20 | Test loss |
+| evoprompt10 | GreaTer           |  1500 |   70.33 |         69.21 |        69.81 |    +0.60 |    72.80 |     -0.80 | Test loss |
+| evoprompt10 | GreaTer-TG        |  1500 |   70.80 |         69.21 |        70.21 |    +1.00 |    72.60 |     -1.00 | Test loss |
+| etgpo1      | First stage       |  1500 |   68.73 |         63.03 |        67.25 |    +4.22 |    71.80 |       N/A |       N/A |
+| etgpo1      | GradPO-Gen        |  1500 |   70.13 |         67.34 |        69.36 |    +2.02 |    72.20 |     +0.40 |  Improved |
+| etgpo1      | GradPO-Prob       |  1500 |   69.20 |         67.34 |        67.75 |    +0.41 |    71.80 |     +0.00 |  Test tie |
+| etgpo1      | GradPO-Gen-Random |  1500 |   69.73 |         67.34 |        68.18 |    +0.84 |    72.20 |     +0.40 |  Improved |
+| etgpo1      | LPO               |  1500 |   69.53 |         67.34 |        68.54 |    +1.19 |    72.00 |     +0.20 |  Improved |
+| etgpo1      | GreaTer           |  1500 |   69.67 |         67.34 |        68.35 |    +1.00 |    72.20 |     +0.40 |  Improved |
+| etgpo1      | GreaTer-TG        |  1500 |   69.33 |         67.34 |        67.91 |    +0.56 |    71.80 |     +0.00 |  Test tie |
+
+Second-stage transfer counts (all five sources per method)
+---------------------------------------------------------
+Dev +: positive stable-score gain over its own source.
+Test +: positive test-accuracy gain over the same source.
+Transfer: test improvement / dev-improved cases; ties do not count as gains.
+Retained prompts and dev failures remain included among all five attempts.
+These descriptive counts do not establish statistical significance.
+
+| Model | Method            | Dev + | Test + | Transfer | Test ties | Test losses |
+| ----- | ----------------- | ----- | ------ | -------- | --------- | ----------- |
+| qwen  | GradPO-Gen        |   4/5 |    2/5 |      2/4 |         2 |           1 |
+| qwen  | GradPO-Prob       |   4/5 |    1/5 |      1/4 |         1 |           3 |
+| qwen  | GradPO-Gen-Random |   3/5 |    2/5 |      2/3 |         2 |           1 |
+| qwen  | LPO               |   5/5 |    2/5 |      2/5 |         0 |           3 |
+| qwen  | GreaTer           |   3/5 |    2/5 |      2/3 |         2 |           1 |
+| qwen  | GreaTer-TG        |   4/5 |    2/5 |      2/4 |         1 |           2 |
+| gemma | GradPO-Gen        |   3/5 |    2/5 |      2/3 |         2 |           1 |
+| gemma | GradPO-Prob       |   5/5 |    2/5 |      2/5 |         1 |           2 |
+| gemma | GradPO-Gen-Random |   4/5 |    3/5 |      3/4 |         2 |           0 |
+| gemma | LPO               |   3/5 |    2/5 |      2/3 |         2 |           1 |
+| gemma | GreaTer           |   5/5 |    3/5 |      3/5 |         1 |           1 |
+| gemma | GreaTer-TG        |   4/5 |    1/5 |      1/4 |         2 |           2 |
+
+Provenance: experiment_tracking/final_test/openbookqa_selected_prompts.tsv.
+Stable scores come from the exact selected prompt in its optimizer summary,
+matching retained snapshot, validation candidate entry, or original validation
+event (Qwen adjusted EvoPrompt-5). Training fitness is never used as validation.
+Raw scores reflect their original validation data and decoding settings.
+Some first-stage runs use 3x300, others 3x500; refiners use their recorded folds.
+Differences between those totals are shown explicitly; cross-run raw score
+levels are not directly comparable. Gemma RPO-5/RPO-10 use actual iterations
+3/4; EvoPrompt slot provenance remains as recorded in the manifest.
+
+Second-stage comparisons grouped by method
+==========================================
+Same recorded scores as above, reordered only; all refinements are retained.
+Each method groups its five first-stage sources into adjacent rows.
+Scores are percentages; gains are pp against each refiner's own source.
+Historical 10-token test protocol; Gemma results remain provisional.
+
+Qwen3-4B grouped by second-stage method
+
+| Method            | Source      | Val N | Val acc | Source stable | Final stable | Val gain | Test acc | Test gain | Transfer  |
+| ----------------- | ----------- | ----- | ------- | ------------- | ------------ | -------- | -------- | --------- | --------- |
+| GradPO-Gen        | rpo5        |  1500 |   80.47 |         79.12 |        79.81 |    +0.69 |    79.20 |     -0.20 | Test loss |
+| GradPO-Gen        | rpo10       |  1500 |   81.53 |         80.13 |        80.71 |    +0.58 |    80.60 |     +0.00 |  Test tie |
+| GradPO-Gen        | evoprompt5  |  1500 |   79.27 |         78.10 |        78.28 |    +0.19 |    79.60 |     +0.20 |  Improved |
+| GradPO-Gen        | evoprompt10 |  1500 |   80.47 |         78.33 |        79.11 |    +0.78 |    80.80 |     +0.40 |  Improved |
+| GradPO-Gen        | etgpo1      |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+| GradPO-Prob       | rpo5        |  1500 |   80.47 |         79.12 |        79.48 |    +0.36 |    79.20 |     -0.20 | Test loss |
+| GradPO-Prob       | rpo10       |  1500 |   81.07 |         80.13 |        80.33 |    +0.20 |    80.40 |     -0.20 | Test loss |
+| GradPO-Prob       | evoprompt5  |  1500 |   79.27 |         78.10 |        78.28 |    +0.19 |    79.60 |     +0.20 |  Improved |
+| GradPO-Prob       | evoprompt10 |  1500 |   79.40 |         78.33 |        78.33 |    +0.00 |    80.40 |     +0.00 |  Retained |
+| GradPO-Prob       | etgpo1      |  1500 |   79.60 |         78.86 |        78.95 |    +0.09 |    81.60 |     -0.20 | Test loss |
+| GradPO-Gen-Random | rpo5        |  1500 |   80.80 |         79.12 |        80.09 |    +0.97 |    80.40 |     +1.00 |  Improved |
+| GradPO-Gen-Random | rpo10       |  1500 |   80.87 |         80.13 |        80.13 |    +0.00 |    80.60 |     +0.00 |  Retained |
+| GradPO-Gen-Random | evoprompt5  |  1500 |   79.20 |         78.10 |        78.38 |    +0.29 |    79.60 |     +0.20 |  Improved |
+| GradPO-Gen-Random | evoprompt10 |  1500 |   79.67 |         78.33 |        78.36 |    +0.03 |    79.40 |     -1.00 | Test loss |
+| GradPO-Gen-Random | etgpo1      |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+| LPO               | rpo5        |  1500 |   80.60 |         79.12 |        79.89 |    +0.77 |    81.20 |     +1.80 |  Improved |
+| LPO               | rpo10       |  1500 |   81.20 |         80.13 |        80.21 |    +0.08 |    80.40 |     -0.20 | Test loss |
+| LPO               | evoprompt5  |  1500 |   79.40 |         78.10 |        78.65 |    +0.55 |    80.00 |     +0.60 |  Improved |
+| LPO               | evoprompt10 |  1500 |   79.27 |         78.33 |        78.65 |    +0.32 |    80.20 |     -0.20 | Test loss |
+| LPO               | etgpo1      |  1500 |   79.93 |         78.86 |        79.18 |    +0.32 |    81.40 |     -0.40 | Test loss |
+| GreaTer           | rpo5        |  1500 |   80.07 |         79.12 |        79.17 |    +0.05 |    80.00 |     +0.60 |  Improved |
+| GreaTer           | rpo10       |  1500 |   80.87 |         80.13 |        80.13 |    +0.00 |    80.60 |     +0.00 |  Retained |
+| GreaTer           | evoprompt5  |  1500 |   79.60 |         78.10 |        78.10 |    +0.01 |    78.80 |     -0.60 | Test loss |
+| GreaTer           | evoprompt10 |  1500 |   79.67 |         78.33 |        78.52 |    +0.19 |    80.60 |     +0.20 |  Improved |
+| GreaTer           | etgpo1      |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+| GreaTer-TG        | rpo5        |  1500 |   80.73 |         79.12 |        79.78 |    +0.66 |    80.60 |     +1.20 |  Improved |
+| GreaTer-TG        | rpo10       |  1500 |   80.87 |         80.13 |        80.29 |    +0.16 |    80.20 |     -0.40 | Test loss |
+| GreaTer-TG        | evoprompt5  |  1500 |   79.47 |         78.10 |        78.66 |    +0.56 |    79.20 |     -0.20 | Test loss |
+| GreaTer-TG        | evoprompt10 |  1500 |   79.67 |         78.33 |        78.52 |    +0.19 |    80.60 |     +0.20 |  Improved |
+| GreaTer-TG        | etgpo1      |  1500 |   79.27 |         78.86 |        78.86 |    +0.00 |    81.80 |     +0.00 |  Retained |
+
+Gemma3-4B-IT grouped by second-stage method
+
+| Method            | Source      | Val N | Val acc | Source stable | Final stable | Val gain | Test acc | Test gain | Transfer  |
+| ----------------- | ----------- | ----- | ------- | ------------- | ------------ | -------- | -------- | --------- | --------- |
+| GradPO-Gen        | rpo5        |  1500 |   70.60 |         69.26 |        69.46 |    +0.20 |    72.60 |     -0.40 | Test loss |
+| GradPO-Gen        | rpo10       |  1500 |   72.20 |         69.58 |        71.18 |    +1.60 |    72.60 |     +0.40 |  Improved |
+| GradPO-Gen        | evoprompt5  |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| GradPO-Gen        | evoprompt10 |  1500 |   69.87 |         69.21 |        69.21 |    +0.00 |    73.60 |     +0.00 |  Retained |
+| GradPO-Gen        | etgpo1      |  1500 |   70.13 |         67.34 |        69.36 |    +2.02 |    72.20 |     +0.40 |  Improved |
+| GradPO-Prob       | rpo5        |  1500 |   70.80 |         69.26 |        69.95 |    +0.69 |    73.60 |     +0.60 |  Improved |
+| GradPO-Prob       | rpo10       |  1500 |   70.60 |         69.58 |        70.01 |    +0.43 |    71.80 |     -0.40 | Test loss |
+| GradPO-Prob       | evoprompt5  |  1500 |   71.40 |         70.08 |        70.26 |    +0.17 |    74.60 |     +1.60 |  Improved |
+| GradPO-Prob       | evoprompt10 |  1500 |   70.07 |         69.21 |        69.49 |    +0.29 |    73.20 |     -0.40 | Test loss |
+| GradPO-Prob       | etgpo1      |  1500 |   69.20 |         67.34 |        67.75 |    +0.41 |    71.80 |     +0.00 |  Test tie |
+| GradPO-Gen-Random | rpo5        |  1500 |   70.47 |         69.26 |        69.51 |    +0.25 |    73.00 |     +0.00 |  Test tie |
+| GradPO-Gen-Random | rpo10       |  1500 |   70.73 |         69.58 |        69.80 |    +0.23 |    72.40 |     +0.20 |  Improved |
+| GradPO-Gen-Random | evoprompt5  |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| GradPO-Gen-Random | evoprompt10 |  1500 |   70.27 |         69.21 |        69.22 |    +0.01 |    74.00 |     +0.40 |  Improved |
+| GradPO-Gen-Random | etgpo1      |  1500 |   69.73 |         67.34 |        68.18 |    +0.84 |    72.20 |     +0.40 |  Improved |
+| LPO               | rpo5        |  1500 |   71.13 |         69.26 |        70.79 |    +1.54 |    73.80 |     +0.80 |  Improved |
+| LPO               | rpo10       |  1500 |   70.33 |         69.58 |        69.58 |    +0.00 |    72.20 |     +0.00 |  Retained |
+| LPO               | evoprompt5  |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| LPO               | evoprompt10 |  1500 |   70.40 |         69.21 |        69.75 |    +0.54 |    72.40 |     -1.20 | Test loss |
+| LPO               | etgpo1      |  1500 |   69.53 |         67.34 |        68.54 |    +1.19 |    72.00 |     +0.20 |  Improved |
+| GreaTer           | rpo5        |  1500 |   70.53 |         69.26 |        69.45 |    +0.19 |    73.40 |     +0.40 |  Improved |
+| GreaTer           | rpo10       |  1500 |   70.40 |         69.58 |        69.81 |    +0.23 |    72.80 |     +0.60 |  Improved |
+| GreaTer           | evoprompt5  |  1500 |   71.87 |         70.08 |        70.50 |    +0.41 |    73.00 |     +0.00 |  Test tie |
+| GreaTer           | evoprompt10 |  1500 |   70.33 |         69.21 |        69.81 |    +0.60 |    72.80 |     -0.80 | Test loss |
+| GreaTer           | etgpo1      |  1500 |   69.67 |         67.34 |        68.35 |    +1.00 |    72.20 |     +0.40 |  Improved |
+| GreaTer-TG        | rpo5        |  1500 |   71.13 |         69.26 |        70.15 |    +0.89 |    73.20 |     +0.20 |  Improved |
+| GreaTer-TG        | rpo10       |  1500 |   71.00 |         69.58 |        69.98 |    +0.40 |    71.80 |     -0.40 | Test loss |
+| GreaTer-TG        | evoprompt5  |  1500 |   71.13 |         70.08 |        70.08 |    +0.00 |    73.00 |     +0.00 |  Retained |
+| GreaTer-TG        | evoprompt10 |  1500 |   70.80 |         69.21 |        70.21 |    +1.00 |    72.60 |     -1.00 | Test loss |
+| GreaTer-TG        | etgpo1      |  1500 |   69.33 |         67.34 |        67.91 |    +0.56 |    71.80 |     +0.00 |  Test tie |
+
+Per-method averages across all five sources
+==========================================
+Unweighted arithmetic means over RPO-5, RPO-10, EvoPrompt-5, EvoPrompt-10,
+and ETGPO-1. Each method has n=5 per model, INCLUDING unchanged refinements.
+Computed from unrounded saved metrics; displayed to two decimal places.
+Scores are percentages; gains are pp against each run's own source prompt.
+Average stable = mean of the five recorded stable scores, NOT a new pooled
+mean-minus-std score. Val gain = mean(final stable - source stable).
+Test gain = mean(final test accuracy - source test accuracy).
+All refiner validations use 3x500, lambda=1; test uses the old 10-token batch.
+Gemma test averages remain provisional pending matched-setting checks.
+No test stable score or statistical-significance claim is implied.
+
+Qwen3-4B method averages
+
+| Method            | N | Avg val acc | Avg source stable | Avg final stable | Avg val gain | Avg source test | Avg final test | Avg test gain |
+| ----------------- | - | ----------- | ----------------- | ---------------- | ------------ | --------------- | -------------- | ------------- |
+| GradPO-Gen        | 5 |       80.20 |             78.91 |            79.35 |        +0.45 |           80.32 |          80.40 |         +0.08 |
+| GradPO-Prob       | 5 |       79.96 |             78.91 |            79.07 |        +0.17 |           80.32 |          80.24 |         -0.08 |
+| GradPO-Gen-Random | 5 |       79.96 |             78.91 |            79.16 |        +0.26 |           80.32 |          80.36 |         +0.04 |
+| LPO               | 5 |       80.08 |             78.91 |            79.31 |        +0.41 |           80.32 |          80.64 |         +0.32 |
+| GreaTer           | 5 |       79.89 |             78.91 |            78.96 |        +0.05 |           80.32 |          80.36 |         +0.04 |
+| GreaTer-TG        | 5 |       80.00 |             78.91 |            79.22 |        +0.31 |           80.32 |          80.48 |         +0.16 |
+
+Gemma3-4B-IT method averages
+
+| Method            | N | Avg val acc | Avg source stable | Avg final stable | Avg val gain | Avg source test | Avg final test | Avg test gain |
+| ----------------- | - | ----------- | ----------------- | ---------------- | ------------ | --------------- | -------------- | ------------- |
+| GradPO-Gen        | 5 |       70.79 |             69.09 |            69.86 |        +0.76 |           72.72 |          72.80 |         +0.08 |
+| GradPO-Prob       | 5 |       70.41 |             69.09 |            69.49 |        +0.40 |           72.72 |          73.00 |         +0.28 |
+| GradPO-Gen-Random | 5 |       70.47 |             69.09 |            69.36 |        +0.27 |           72.72 |          72.92 |         +0.20 |
+| LPO               | 5 |       70.51 |             69.09 |            69.75 |        +0.65 |           72.72 |          72.68 |         -0.04 |
+| GreaTer           | 5 |       70.56 |             69.09 |            69.58 |        +0.49 |           72.72 |          72.84 |         +0.12 |
+| GreaTer-TG        | 5 |       70.68 |             69.09 |            69.67 |        +0.57 |           72.72 |          72.48 |         -0.24 |

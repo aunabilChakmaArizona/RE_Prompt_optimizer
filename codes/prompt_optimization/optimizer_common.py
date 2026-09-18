@@ -241,6 +241,7 @@ def finalize_run(
         "task": context.mode.task_name,
         "qa_mode": context.mode.name,
         "backend": context.args.backend,
+        "objective_scoring_backend": getattr(context.args, "objective_scoring_backend", None),
         "model": context.args.model,
         "optimizer_model": context.args.optimizer_model,
         "initial_prompt": context.initial_prompt,

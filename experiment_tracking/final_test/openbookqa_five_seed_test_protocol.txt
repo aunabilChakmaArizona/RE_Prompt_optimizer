@@ -1,0 +1,67 @@
+OpenBookQA five-seed final test protocol
+======================================
+Scripts:
+  codes/run_openbookqa_final_test_qwen_5runs.sh
+  codes/run_openbookqa_final_test_gemma_5runs.sh
+Shared runner: codes/run_openbookqa_final_test_evaluation.py --seeds ...
+Old single-seed commands remain supported and keep their original output format.
+
+Approved seeds, in order: 42, 1, 100, 1000, 10000.
+Each model is loaded ONCE and kept loaded across five separate generate calls.
+Each call submits ALL unique prompt-question pairs together (not all seeds mixed
+into one call). Initial and every selected first-/second-stage prompt are tested
+on the same official 500 examples each time. All 36 method rows remain reported;
+identical instructions intentionally share predictions within each seed.
+Qwen: 27 unique prompts x 500 examples x 5 runs = 67500 generation requests.
+Gemma: 30 unique prompts x 500 examples x 5 runs = 75000 generation requests.
+Prompt selection is frozen; there is no optimization or test-based selection.
+
+Settings: vLLM; max_new_tokens=16; GPU utilization=0.8; GPU 3 by default;
+model-default sampling, unchanged fixed answer instruction, strict tagged-label
+grading. Qwen uses native context 40960; Gemma uses 131072 with images ALLOWED.
+No eager/prefix-cache overrides are introduced. Prefix/KV reuse does not reuse
+raw responses: every seed receives a fresh generation call and request seeds.
+The evaluator hashes base seed/task/mode/test IDs to derive the actual test seed,
+then uses test seed + question index. All instructions share that question's
+request seed within a run. Widely spaced base seeds are user-selected identifiers;
+distance between seed numbers does not guarantee stronger statistical independence.
+
+Launching: use nohup commands in each script's header. Both default to GPU 3;
+run them sequentially there, or set RUN_GPU to a DIFFERENT available GPU for one
+model before running concurrently. FINAL_TEST_DRY_RUN=1 verifies files without
+loading a GPU model or writing outputs. No inference was launched during setup.
+
+Output identity and progress
+---------------------------
+Parent CODE: openbookqa_non_reasoning_<family>_selected_prompts_5seeds_<UTC_TAG>
+RUN_TAG can be overridden. No --overwrite: previous tests are protected.
+Parent directory:
+  outputs/qa_final_test/non_reasoning/selected_prompts/<PARENT_CODE>/
+Parent config.json freezes selected paths/hashes and decoding settings.
+Parent summary.json is a progress INDEX: status, requested_runs, completed_runs,
+seeds, and each seed's results/summary paths; NOT an averaged score table.
+It is updated after every seed finishes. "complete" requires all five runs.
+Each seed has a separate directory seed_42, seed_1, seed_100, seed_1000, seed_10000:
+  summary.json: 36 scores and source-relative gains; protocol.seed is that seed.
+  results.txt: the individual seed's complete score table and provenance.
+  evaluations/: raw responses and per-problem token counts for unique prompts.
+  prompts/: exact copies of tested instructions.
+Each seed has child CODE <PARENT_CODE>_seed<SEED> in its summary.
+Logs print run 1/5 through 5/5, seed and total elapsed time.
+If interrupted, completed seeds remain saved; incomplete parents must not be
+reported as five-run experiments. Automatic resumption is not implemented.
+
+Mean/std reporting AFTER completion (not computed by these scripts)
+-----------------------------------------------------------------
+User requested that we calculate the five-run means and standard deviations in
+chat after the runs finish. No mean/std aggregate file or stable test score is
+generated now. At that time, align by exact model/source/method row ID; report
+five accuracies, mean accuracy and SAMPLE std across seeds (ddof=1).
+Compute gains WITHIN each seed: first stage minus that seed's initial score;
+second stage minus its corresponding first-stage source in that same seed.
+Report mean and sample std of those five paired gains. Do not compare with a
+historical baseline, pool 2500 responses as independent questions, or treat
+sample variation as proof of statistical significance. Flag missing-tag rates.
+Per-method summaries should first average over all five source slots for EACH
+seed, then calculate the mean/std of those five per-seed method averages.
+Retained/unchanged prompts remain in the denominator.

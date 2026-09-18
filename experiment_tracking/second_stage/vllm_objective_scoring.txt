@@ -1,0 +1,133 @@
+vLLM FORWARD-ONLY CANDIDATE OBJECTIVES
+====================================
+Updated: 2026-09-16
+Status: implemented; synthetic/CPU regression tests pass in v2.
+Small Qwen/MATH GPU timing and numerical comparisons are now measured.
+See length_sorted_objective_scoring_benchmark.txt for the two-pass test,
+source-index restoration, speed results, and observed score variation.
+Gemma, full-beam timings, and near-tie numerical reproducibility remain open.
+No full optimizer experiments were launched by this implementation change.
+
+Scope and controls
+------------------
+--backend dual --objective-scoring-backend vllm
+--objective-scoring-batch-size 128
+
+Default scoring backend remains transformers for existing commands.
+The new backend requires vllm==0.11.0. The common model loader accepts both
+0.8.5.post1 and 0.11.0; the original requirements_vllm.txt is unchanged.
+Use the separate re_prompt_optimization_vllm_v2 environment and
+requirements_vllm_v2.txt. Do not reinstall into the original environment.
+
+HF retains all gradients and gradient-dependent token probability/ranking work.
+vLLM optionally replaces forward-only task/fluency objectives through the
+shared _score_objective_candidates path, covering all GradPO variants and
+GreaTer's forward-scored candidates. LPO's direct validation is unchanged.
+No meta-prompts, answer formats, protected terms, validation metrics,
+reasoning token limits, subset sizes, or beam/candidate budgets were changed.
+
+Exact objective and sequence construction
+-----------------------------------------
+For each candidate and training example, use the same HF teacher-forced
+renderer, exact token IDs, and overlapping gold-answer token boundaries.
+Existing generated reasoning is reused, with the final tagged prediction
+replaced by the gold answer (or the existing missing-answer fallback).
+Reasoning is conditioning context; only gold-answer tokens contribute loss.
+First average negative input-token logprobs within each problem's answer,
+then average equally across problems. Long symbolic answers do not dominate.
+Instruction fluency is scored separately on the raw editable instruction,
+without a chat template, question, fixed answer instruction, or reasoning.
+Exclude the first instruction token, just as the HF scorer does.
+Combined score = mean gold-answer loss + fluency_lambda * instruction NLL.
+This preserves the existing NLL objective; do not exponentiate it into PPL.
+
+Use vLLM input prompt_logprobs=0 (the supplied token, no alternatives),
+not generated-output logprobs. v0.11.0 requires max_tokens >= 1: discard
+that one output token; never generate new reasoning for candidate scoring.
+Fail explicitly on incomplete/nonfinite logprobs or changed input token IDs.
+Installed v0.11.0 skips prefix-cache reuse for prompt-logprob requests.
+These requests still process the full supplied reasoning context.
+
+Batching, logging, and caches
+-----------------------------
+At each beam region, interleave candidate/example sequences and submit
+bounded groups (128 by default). This is a CPU submission/memory bound;
+vLLM decides GPU scheduling. The legacy HF --selection-batch-size is
+not used for vLLM scoring; --gradient-batch-size still controls gradients.
+Each candidate instruction's fluency is scored once per objective call.
+Cache exact prompt objectives inside each fixed beam search; reuse unchanged
+survivors and identical synthesized prompts across regions. This cache is
+in-memory only, scoped to fixed records/reasoning/model/weight and discarded
+after that search. It cannot leak across sources, G, or other settings.
+Existing raw-response and source-validation cache matching stays strict:
+the library-version upgrade may miss older caches and regenerate inference.
+Do not remove version checks or silently substitute old aggregate scores.
+Logs/events include scoring backend/version, request counts, elapsed time,
+new prompt counts, and score-cache hits. Config and summary store backend.
+
+Enabled commands
+----------------
+codes/run_math_gradpo_tuning_qwen.sh: all eight adaptive commands now request
+vLLM scoring, submission size 128. Same visible GPU default 3, logical cuda:0,
+vLLM fraction 0.50, pool 1600, G 200, validation 3 x 300; fast-plan target
+limit 4096, C 7, B 5, F 0.5, gradient batch 1, HF selection batch 4.
+The default runs all eight attempts. Other command scripts were not changed.
+Use a new CODE or preserve old run artifacts before rerunning --overwrite.
+Changing code does not convert an already-running HF beam search into vLLM.
+
+Verification
+------------
+python -m unittest discover -s tests
+
+The v2 environment passes the full regression suite, including synthetic
+HF/vLLM losses and rankings, exact Math LaTeX targets, OpenBookQA label
+casing, HotpotQA multi-token answers, causal offsets, per-problem means,
+instruction-only fluency, batched requests, version checks, and beam caching.
+Tests use a fake engine with identical causal logits for backend parity;
+they do not by themselves establish real Qwen/Gemma numerical parity or speed.
+Separate small Qwen/MATH GPU measurements are documented in
+length_sorted_objective_scoring_benchmark.txt. Do not claim bitwise real-model
+parity; the benchmark also observed instruction-fluency variation.
+Small BF16/kernel numerical differences can change near-tied rankings.
+
+Small real-model benchmark (choose an available physical GPU first)
+-----------------------------------------------------------------
+conda activate re_prompt_optimization_vllm_v2
+
+CUDA_VISIBLE_DEVICES=CHOOSE_FREE_GPU python -u codes/benchmark_vllm_objective_scoring.py \
+  --model Qwen/Qwen3-4B \
+  --qa-task math500 \
+  --qa-mode reasoning \
+  --train-path data/processed/math500/train.jsonl \
+  --cache-file outputs/shared_gradient_cache/math500/reasoning/Qwen_Qwen3-4B/296764978e5ee908/112a3933751163c3d635019362b53de309bee2c6218fde846eb49bb4c03b4f6b.json \
+  --prompt-files \
+    outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit/prompt_experimental_iteration_5_from_actual_iteration_2.txt \
+    outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit/prompt_experimental_iteration_10_from_actual_iteration_5.txt \
+  --sample-size 4 \
+  --selection-batch-size 1 \
+  --objective-scoring-batch-size 128 \
+  --device cuda:0 \
+  --hf-device cuda:0 \
+  --gpu-memory-utilization 0.40 \
+  --fluency-lambda 0.5 \
+  --output outputs/benchmarks/math_qwen_vllm_objectives.json
+
+The benchmark reads old saved responses explicitly as a fixed comparison
+fixture; it never changes normal cache matching or regenerates answers.
+It chooses short through long saved responses, warms both backends, and
+reports task/fluency/combined differences, rankings, scoring time, and speedup
+excluding model loading. Inspect nvidia-smi during this GPU check.
+Increase sample size after the small check passes; four examples do not
+represent a complete G=200 beam step. Repeat with Gemma and its own cache.
+The observed driver is 550.163.01; CUDA-12.8 PTX/JIT compatibility remains
+a runtime caveat. See experiment_tracking/vllm_v2_environment_setup.txt.
+
+Implementation entry points
+---------------------------
+codes/prompt_optimization/vllm_scoring.py
+codes/prompt_optimization/second_stage.py: _score_objective_candidates,
+  _beam_search_replacements
+codes/prompt_optimization/cli_common.py: add_gradient_runtime_arguments
+codes/agents/agent_vllm_models.py: _validate_vllm_version
+codes/benchmark_vllm_objective_scoring.py
+tests/test_vllm_objective_scoring.py
