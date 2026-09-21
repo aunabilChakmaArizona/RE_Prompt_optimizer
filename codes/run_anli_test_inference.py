@@ -1,17 +1,7 @@
 """Run direct three-way classification on the labeled ANLI test rounds."""
 
+from anli_task_common import ANLI_ANSWER_INSTRUCTION, ANLI_INITIAL_PROMPT
 from qa_test_inference_common import run_qa_test_inference
-
-
-ANLI_INITIAL_PROMPT = (
-    "Determine whether the hypothesis is entailed by the premise, is neutral with "
-    "respect to the premise, or contradicts the premise. Select the best label."
-)
-ANLI_ANSWER_INSTRUCTION = (
-    "Do not think or provide any reasoning. Output only the option label exactly once "
-    "between the tags <answer> and </answer>, for example: <answer>entailment</answer>. "
-    "Do not output anything else."
-)
 
 
 def main() -> None:

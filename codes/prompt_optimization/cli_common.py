@@ -16,6 +16,8 @@ from prompt_optimization.gradient_cache import (
 )
 from prompt_optimization.models import ModelPool, seed_everything
 from prompt_optimization.qa_task import (
+    ANLI_TRAIN_PATH,
+    ANLI_VALIDATION_PATH,
     DEFAULT_TRAIN_PATH,
     DEFAULT_VALIDATION_PATH,
     HOTPOTQA_TRAIN_PATH,
@@ -72,7 +74,7 @@ def add_shared_arguments(
     parser.add_argument("--code", required=True, help="Unique identity for this run.")
     parser.add_argument(
         "--qa-task",
-        choices=("openbookqa", "hotpotqa", "math500"),
+        choices=("openbookqa", "anli", "hotpotqa", "math500"),
         default="openbookqa",
         help="Task; OpenBookQA remains the backward-compatible default.",
     )
@@ -392,7 +394,12 @@ def build_context(
     train_path = args.train_path
     validation_path = args.validation_path
     math_grading = None
-    if args.qa_task == "hotpotqa":
+    if args.qa_task == "anli":
+        if train_path == str(DEFAULT_TRAIN_PATH):
+            train_path = str(ANLI_TRAIN_PATH)
+        if validation_path == str(DEFAULT_VALIDATION_PATH):
+            validation_path = str(ANLI_VALIDATION_PATH)
+    elif args.qa_task == "hotpotqa":
         if train_path == str(DEFAULT_TRAIN_PATH):
             train_path = str(HOTPOTQA_TRAIN_PATH)
         if validation_path == str(DEFAULT_VALIDATION_PATH):

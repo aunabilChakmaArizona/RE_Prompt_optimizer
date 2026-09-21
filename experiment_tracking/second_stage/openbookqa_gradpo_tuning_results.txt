@@ -457,3 +457,389 @@ Corrected GreaTer run outputs (completed)
 - outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo5_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
 - outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo10_greater_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
 - outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo10_greater_tg_g200_topu10_same_token_count_lambda1_vs1500/final_prompt.txt
+
+Latest RPO-source reruns (planned/running; not final results)
+------------------------------------------------------------
+Updated: 2026-09-20
+
+Qwen first-stage sources:
+- RPO-5 uses `openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500_generalmeta_retry_gpu045/prompt_iteration_5.txt`.
+  This snapshot retains the prompt generated at actual RPO iteration 1
+  (79.40 raw accuracy, 78.75 stable; 1191/1500 correct).
+- RPO-10 uses the corresponding `prompt_iteration_10.txt`. This snapshot
+  retains the prompt generated at actual RPO iteration 9 (79.87 raw accuracy,
+  79.21 stable; 1198/1500 correct).
+
+Qwen GradPO-Gen tuning plan:
+- Validation: the full 1,500 examples, stored as three fixed folds of 500.
+- Fixed: T=3, G=200, B=5, F=0.5, training pool=800.
+- Tuned: S={3,5}, H={0.45,0.60}, C={7,10}.
+- Eight hyperparameter settings are applied to both sources: 16 runs total.
+- Script: `codes/run_openbookqa_gradpo_tuning_qwen.sh`.
+- These runs supersede no FINAL result until their outputs are complete and
+  analyzed. The earlier FINAL table above remains the current completed record.
+
+Gemma latest-source second-stage plan:
+- RPO-5 is actual iteration 1; RPO-10 is actual iteration 2 from
+  `openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500_generalmeta`.
+- Script: `codes/run_openbookqa_second_stage_gemma_latest_rpo.sh`.
+- Total: 18 runs = 12 GradPO (three variants x two S values x two sources),
+  2 LPO, and 4 GreaTer/GreaTer-TG.
+- The Gemma vLLM 0.11.0 commands do not disable image inputs. The first GradPO
+  call for each source refreshes the shared training cache so responses from
+  the incompatible image-disabled configuration cannot be reused.
+
+Gemma GradPO-Gen H/C follow-up:
+- The completed H=0.60, C=7 reference selected S=5 for both latest RPO
+  sources. RPO-5 changed 1040/1500 to 1059/1500 correct and improved stable
+  score from 67.44 to 69.32. RPO-10 changed 1062/1500 to 1063/1500 correct
+  and improved stable score from 69.94 to 70.21.
+- The active follow-up keeps S=5, T=3, G=200, B=5, and F=0.5, and runs the
+  three missing H/C cells: (0.45,7), (0.60,10), and (0.45,10).
+- Three settings x two latest RPO sources = six runs on the same 3 x 500
+  validation set.
+- Existing script reused: `codes/run_openbookqa_second_stage_gemma_latest_rpo.sh`.
+
+Latest smaller-edit follow-up plan
+---------------------------------
+Updated: 2026-09-20
+
+Qwen:
+- Fixed T=3, B=5, F=0.50, H in {0.45,0.60}, and C in {5,7}.
+- Phase s3 uses S=3 and G=300: four settings x two latest RPO sources = 8 runs.
+- Phase s2 uses S=2 and G in {200,300}: eight settings x two sources = 16 runs.
+- `codes/run_openbookqa_gradpo_tuning_qwen.sh` defaults to `PHASE=s3`; pass
+  `PHASE=s2` for the second phase.
+
+Gemma:
+- Fixed S=3, T=3, G=200, B=5, and F=0.50.
+- H in {0.45,0.60} and C in {5,7,10}.
+- H=0.60/C=7 is already complete for both sources; the remaining five settings
+  x two latest RPO sources produce 10 new runs.
+- Script: `codes/run_openbookqa_second_stage_gemma_latest_rpo.sh`.
+
+Qwen latest-source smaller-edit S=3 results
+--------------------------------------------
+Updated: 2026-09-20
+
+All eight runs completed on the 3 x 500 validation set. Fixed settings are
+S=3, T=3, G=300, B=5, and F=0.50. `Fixed` is incorrect-to-correct and
+`Broken` is correct-to-incorrect. When no candidate improved stable score, the
+source prompt was retained and the flip counts are zero.
+
+| Source | H | C | Source raw/stable | Final raw/stable | Fixed | Broken | Net | Audit |
+|--------|---|---|-------------------|------------------|-------|--------|-----|-------|
+| RPO-5 | 0.45 | 5 | 79.20 / 78.87 | 79.67 / 79.01 | 17 | 10 | +7 | Improved, but says `multiple correct answers` |
+| RPO-5 | 0.45 | 7 | 79.20 / 78.87 | 79.67 / 79.01 | 17 | 10 | +7 | Same selected prompt and quality issue |
+| RPO-5 | 0.60 | 5 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-5 | 0.60 | 7 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 5 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 7 | 79.87 / 79.29 | 79.87 / 79.77 | 10 | 10 | 0 | Stable-only gain; ungrammatical `a collection of multiple-choice question` |
+| RPO-10 | 0.60 | 5 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.60 | 7 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+
+Interpretation:
+- H=0.45 is consistently better than H=0.60 in this S=3/G=300 phase.
+- C=5 and C=7 are identical for RPO-5; C=7 is necessary for the RPO-10
+  stable-only improvement.
+- The RPO-5 G=300 result is weaker in stable score than the earlier G=200,
+  H=0.45/C=7 result (79.01 versus 79.26).
+- Neither numerically selected prompt should be considered a clean final prompt
+  without addressing its task-description wording.
+
+Qwen latest-source smaller-edit S=2 results
+--------------------------------------------
+Updated: 2026-09-20
+
+All 16 runs completed on the 3 x 500 validation set. Fixed settings are S=2,
+T=3, B=5, and F=0.50; H is in {0.45,0.60}, C in {5,7}, and G in {200,300}.
+
+| Source | H | C | G | Source raw/stable | Final raw/stable | Fixed | Broken | Net | Audit |
+|--------|---|---|---|-------------------|------------------|-------|--------|-----|-------|
+| RPO-5 | 0.45 | 5 | 200 | 79.20 / 78.87 | 79.67 / 79.26 | 17 | 10 | +7 | Says `multiple correct answers` |
+| RPO-5 | 0.45 | 7 | 200 | 79.20 / 78.87 | 79.67 / 79.26 | 17 | 10 | +7 | Same selected prompt |
+| RPO-5 | 0.60 | 5 | 200 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-5 | 0.60 | 7 | 200 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-5 | 0.45 | 5 | 300 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-5 | 0.45 | 7 | 300 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-5 | 0.60 | 5 | 300 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-5 | 0.60 | 7 | 300 | 79.20 / 78.87 | 79.20 / 78.87 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 5 | 200 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 7 | 200 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.60 | 5 | 200 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.60 | 7 | 200 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 5 | 300 | 79.87 / 79.29 | 79.87 / 79.29 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 7 | 300 | 79.87 / 79.29 | 80.13 / 79.40 | 11 | 7 | +4 | Says `multiple correct choices` |
+| RPO-10 | 0.60 | 5 | 300 | 79.87 / 79.29 | 79.80 / 79.31 | 4 | 5 | -1 | Stable-only gain |
+| RPO-10 | 0.60 | 7 | 300 | 79.87 / 79.29 | 79.67 / 79.42 | 9 | 12 | -3 | Stable-only gain |
+
+Interpretation:
+- RPO-5 prefers G=200/H=0.45; C=5 and C=7 select the same prompt.
+- RPO-10 changes only under G=300. H=0.45/C=7 gives the best raw/net result,
+  while H=0.60/C=7 gives a slightly higher stable score by losing three net
+  correct predictions.
+- The strongest raw/net prompts alter the task wording to imply multiple
+  correct answers, so they are not clean final prompts.
+
+Qwen H=0.30 follow-up plan
+--------------------------
+Updated: 2026-09-20
+
+The main change is H=0.30. T=3, B=5, F=0.50, seed=42, and the 3 x 500
+validation set remain fixed. No new task-phrase protection is introduced, so
+the threshold effect can be compared directly with completed H=0.45/0.60 runs.
+
+Phase h030_g300 (run first):
+- S in {2,3}, C in {5,7}, G=300, and both latest RPO sources.
+- Four configurations x two sources = 8 runs.
+
+Phase h030_g200 (optional):
+- The same S/C matrix with G=200.
+- Four configurations x two sources = 8 runs.
+- Run only if the G=300 phase does not provide an acceptable shared result.
+
+Script: `codes/run_openbookqa_gradpo_tuning_qwen.sh`.
+
+Gemma latest-source smaller-edit S=3 results
+---------------------------------------------
+Updated: 2026-09-20
+
+The ten new runs completed. The table also includes the two previously
+completed H=0.60/C=7 runs, giving the full S=3 matrix. Fixed settings are
+T=3, G=200, B=5, and F=0.50 on the 3 x 500 validation set.
+
+| Source | H | C | Source raw/stable | Final raw/stable | Fixed | Broken | Net | Audit |
+|--------|---|---|-------------------|------------------|-------|--------|-----|-------|
+| RPO-5 | 0.45 | 5 | 69.33 / 67.44 | 69.80 / 69.09 | 42 | 35 | +7 | Best S=3 stable; malformed `areconfronted` and wrong `multiple-answer` wording |
+| RPO-5 | 0.45 | 7 | 69.33 / 67.44 | 70.33 / 68.82 | 32 | 17 | +15 | Cleanest S=3 result; says generic `quiz question` |
+| RPO-5 | 0.45 | 10 | 69.33 / 67.44 | 70.00 / 68.87 | 42 | 32 | +10 | Incorrectly says `true or false question` |
+| RPO-5 | 0.60 | 5 | 69.33 / 67.44 | 69.80 / 68.38 | 31 | 24 | +7 | Changes task to `question with multiple options` |
+| RPO-5 | 0.60 | 7 | 69.33 / 67.44 | 69.40 / 68.17 | 29 | 28 | +1 | Incorrectly says `true or false question` |
+| RPO-5 | 0.60 | 10 | 69.33 / 67.44 | 69.40 / 68.97 | 40 | 39 | +1 | Severely malformed and says `true or false` |
+| RPO-10 | 0.45 | 5 | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 7 | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.45 | 10 | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.60 | 5 | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.60 | 7 | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+| RPO-10 | 0.60 | 10 | 70.80 / 69.94 | 70.67 / 70.14 | 20 | 22 | -2 | Stable-only gain; malformed `the the` and raw accuracy decreases |
+
+Interpretation:
+- S=3 does not surpass the earlier S=5 results. The prior S=5 best reaches
+  70.67 / 69.67 for RPO-5 and 70.87 / 70.21 for RPO-10.
+- For RPO-5, S=3/H=0.45/C=7 is the cleanest useful candidate (70.33 / 68.82,
+  net +15), but its stable score remains below the S=5 alternatives.
+- For RPO-10, only H=0.60/C=10 improves stable score, but it loses two net
+  correct predictions and produces malformed wording. It should not replace
+  the earlier S=5/H=0.60/C=7 result.
+
+Gemma final tuning decision
+---------------------------
+Status: COMPLETE; no additional Gemma OpenBookQA GradPO-Gen tuning planned.
+Updated: 2026-09-20
+
+Final shared configuration:
+- S=5, T=3, H=0.60, C=7, G=200, B=5, F=0.50.
+- This is the best practical configuration that improves both latest RPO
+  source prompts and retains acceptable prompt wording.
+
+| Source | Source raw/stable | Final raw/stable | Fixed | Broken | Net |
+|--------|-------------------|------------------|-------|--------|-----|
+| Gemma latest RPO-5 | 69.33 / 67.44 | 70.60 / 69.32 | 42 | 23 | +19 |
+| Gemma latest RPO-10 | 70.80 / 69.94 | 70.87 / 70.21 | 23 | 22 | +1 |
+
+Final prompt paths:
+- RPO-5: `outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_gemma_rpo5_latest_gradpo_gen_s5_t3_h060_c7_g200_b5_f050/final_prompt.txt`
+- RPO-10: `outputs/qa_prompt_optimization/non_reasoning/gradpo_gen/openbookqa_non_reasoning_gemma_rpo10_latest_gradpo_gen_s5_t3_h060_c7_g200_b5_f050/final_prompt.txt`
+
+Practical runner-up:
+- S=5, T=3, H=0.60, C=10, G=200, B=5, F=0.50.
+- RPO-5: 70.33 / 69.13, net +15.
+- RPO-10: 70.87 / 70.03, net +1.
+
+Rejected alternatives:
+- S=5/H=0.45/C=10 has the best numeric RPO-5 score (70.67 / 69.67)
+  but does not improve RPO-10 and produces the malformed phrase `You are are`.
+- S=3/H=0.60/C=10 is second numerically for RPO-10 stable score
+  (70.67 / 70.14), but raw accuracy and correct count decrease (net -2), and
+  the selected prompt is malformed.
+
+Random-span baseline at the final Gemma setting
+------------------------------------------------
+GradPO-Gen-Random was run with the same S=5, T=3, H=0.60, C=7, G=200,
+B=5, and F=0.50 configuration.
+
+| Source | Method | Source raw/stable | Final raw/stable | Fixed | Broken | Net |
+|--------|--------|-------------------|------------------|-------|--------|-----|
+| Gemma latest RPO-5 | GradPO-Gen | 69.33 / 67.44 | 70.60 / 69.32 | 42 | 23 | +19 |
+| Gemma latest RPO-5 | GradPO-Gen-Random | 69.33 / 67.44 | 70.27 / 69.04 | 34 | 20 | +14 |
+| Gemma latest RPO-10 | GradPO-Gen | 70.80 / 69.94 | 70.87 / 70.21 | 23 | 22 | +1 |
+| Gemma latest RPO-10 | GradPO-Gen-Random | 70.80 / 69.94 | 70.47 / 70.37 | 20 | 25 | -5 |
+
+Audit:
+- GradPO-Gen is stronger than random on raw accuracy and net correct count for
+  both sources, and is also stronger on RPO-5 stable score.
+- Random has the higher RPO-10 stable score only because its fold variance is
+  lower despite losing five net correct predictions. Its prompt also changes
+  the task incorrectly to a `multiple selection question`, so it is not a
+  suitable final prompt.
+
+Final Gemma GreaTer rerun plan
+------------------------------
+Updated: 2026-09-20
+
+The existing LPO runs already use five generated/final-validation candidates
+and are retained without overwriting. GreaTer and GreaTer-TG are rerun on both
+latest RPO sources with these final settings:
+
+- Training pool: 600.
+- Balanced gradient subset: 200 (100 correct and 100 incorrect).
+- Gradient batch size: 2.
+- Candidate objective-scoring batch size: 8.
+- Proposal examples/top-k/minimum: 50/25/10.
+- Top gradient-ranked candidates scored (mu): 10.
+- Final refined prompts validated (top-u): at most 5.
+- Fluency weight: 0.20; region threshold: 0.60.
+- Dual mode keeps HF and vLLM resident together on one GPU; vLLM GPU memory
+  utilization is 0.50.
+- Script: `codes/run_openbookqa_second_stage_gemma_latest_rpo.sh`.
+- New run labels use the suffix `gb2_vllm050` so completed baseline outputs are
+  not overwritten.
+
+Final latest-source Gemma second-stage comparison
+-------------------------------------------------
+Updated: 2026-09-20
+
+All methods use the same 3 x 500 validation set and latest RPO source prompts.
+The three GradPO variants use the selected shared setting S=5, T=3, H=0.60,
+C=7, G=200, B=5, and F=0.50. GreaTer/GreaTer-TG use the final gradient-batch-2
+dual-mode runs. `Fixed` is incorrect-to-correct and `Broken` is
+correct-to-incorrect.
+
+| Source | Method | Source raw/stable | Final raw/stable | Fixed | Broken | Net | Audit |
+|--------|--------|-------------------|------------------|-------|--------|-----|-------|
+| RPO-5 | GradPO-Gen | 69.33 / 67.44 | 70.60 / 69.32 | 42 | 23 | +19 | Clean and selected |
+| RPO-5 | GradPO-Prob | 69.33 / 67.44 | 70.87 / 70.09 | 49 | 26 | +23 | Best numeric RPO-5 result; wording `natural-choice question` is unusual |
+| RPO-5 | GradPO-Gen-Random | 69.33 / 67.44 | 70.27 / 69.04 | 34 | 20 | +14 | Incorrect `multiple-select` wording |
+| RPO-5 | LPO | 69.33 / 67.44 | 69.13 / 68.63 | 61 | 64 | -3 | Stable-only gain; raw decreases |
+| RPO-5 | GreaTer | 69.33 / 67.44 | 69.87 / 68.55 | 31 | 23 | +8 | Malformed `Provide are presented` |
+| RPO-5 | GreaTer-TG | 69.33 / 67.44 | 69.27 / 68.43 | 34 | 35 | -1 | Wrong `multiple-answer` wording |
+| RPO-10 | GradPO-Gen | 70.80 / 69.94 | 70.87 / 70.21 | 23 | 22 | +1 | Clean and selected |
+| RPO-10 | GradPO-Prob | 70.80 / 69.94 | 70.40 / 69.97 | 23 | 29 | -6 | Stable-only gain; raw decreases |
+| RPO-10 | GradPO-Gen-Random | 70.80 / 69.94 | 70.47 / 70.37 | 20 | 25 | -5 | Stable-only gain and wrong `multiple selection` wording |
+| RPO-10 | LPO | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+| RPO-10 | GreaTer | 70.80 / 69.94 | 70.80 / 70.09 | 16 | 16 | 0 | Stable-only gain; malformed `Please are presented` |
+| RPO-10 | GreaTer-TG | 70.80 / 69.94 | 70.80 / 69.94 | 0 | 0 | 0 | Source retained |
+
+Summary:
+- GradPO-Gen is the only method with positive raw/net improvement on both
+  latest sources (+19 and +1 net correct).
+- GradPO-Prob is strongest on RPO-5 (+23 net) but loses six net correct on
+  RPO-10, despite its tiny stable-score increase.
+- Random selection is weaker than GradPO-Gen in raw/net terms on both sources.
+- LPO and both GreaTer variants do not provide a clean improvement on RPO-10.
+
+Final latest-source Qwen comparison plan
+----------------------------------------
+Updated: 2026-09-20
+
+Script: `codes/run_openbookqa_second_stage_qwen.sh`.
+
+Both latest RPO-5 and RPO-10 prompts use the same 3 x 500 validation set. Every
+method evaluates at most five final prompt candidates.
+
+- GradPO-Gen and GradPO-Gen-Random: S=3, T=3, H=0.45, C=7, G=300,
+  B=5, and F=0.50.
+- LPO full sensitivity grid: feedback examples in {3, 5} crossed with maximum
+  editable spans in {3, 5}; maximum words per span=3 and candidates=5.
+- GreaTer and GreaTer-TG: balanced gradient subset in {200, 300}; gradient
+  batch size=2, top-mu=10, top-u=5, and fluency weight=0.20.
+- Shared Qwen training pool: 800 examples.
+- Total active matrix: 20 runs (10 per source prompt).
+
+Completed Gemma LPO/GreaTer sensitivity results
+------------------------------------------------
+Updated: 2026-09-20
+
+All scores use the latest Gemma RPO sources and the same 3 x 500 validation
+set. `F/B/Net` means fixed, broken, and net-correct examples.
+
+| Source | Method/configuration | Source raw/stable | Final raw/stable | F/B/Net | Prompt audit |
+|--------|----------------------|-------------------|------------------|---------|--------------|
+| RPO-5 | LPO feedback=3, max spans=5 | 69.33 / 67.44 | 69.13 / 68.63 | 61/64/-3 | Clean; raw decreases |
+| RPO-5 | LPO feedback=5, max spans=3 | 69.33 / 67.44 | 69.40 / 68.26 | 50/49/+1 | Malformed duplicated phrase |
+| RPO-5 | LPO feedback=3, max spans=3 | 69.33 / 67.44 | 70.07 / 69.17 | 46/35/+11 | Clean; best LPO for RPO-5 |
+| RPO-5 | GreaTer G=200 | 69.33 / 67.44 | 69.87 / 68.55 | 31/23/+8 | Malformed `Provide are presented` |
+| RPO-5 | GreaTer G=300 | 69.33 / 67.44 | 70.13 / 69.05 | 31/19/+12 | Malformed `Write are presented` |
+| RPO-5 | GreaTer-TG G=200 | 69.33 / 67.44 | 69.27 / 68.43 | 34/35/-1 | Wrong `multiple-answer` wording |
+| RPO-5 | GreaTer-TG G=300 | 69.33 / 67.44 | 69.00 / 68.29 | 31/36/-5 | Wrong `multiple-answer` wording |
+| RPO-10 | LPO feedback=3, max spans=5 | 70.80 / 69.94 | 70.80 / 69.94 | 0/0/0 | Source retained |
+| RPO-10 | LPO feedback=5, max spans=3 | 70.80 / 69.94 | 71.27 / 70.46 | 52/45/+7 | Clean; best LPO for RPO-10 |
+| RPO-10 | LPO feedback=3, max spans=3 | 70.80 / 69.94 | 70.80 / 69.94 | 0/0/0 | Source retained |
+| RPO-10 | GreaTer G=200 | 70.80 / 69.94 | 70.80 / 70.09 | 16/16/0 | Malformed `Please are presented` |
+| RPO-10 | GreaTer G=300 | 70.80 / 69.94 | 71.00 / 70.35 | 22/19/+3 | Malformed `Provide are presented` |
+| RPO-10 | GreaTer-TG G=200 | 70.80 / 69.94 | 70.80 / 69.94 | 0/0/0 | Source retained |
+| RPO-10 | GreaTer-TG G=300 | 70.80 / 69.94 | 70.80 / 69.94 | 0/0/0 | Source retained |
+
+The last LPO run is stored in
+`codes/nohup_outs/openbookqa_gemma_lpo_f3_s3_final.log`. Its selected RPO-5
+prompt is clean and its RPO-10 run retains the source prompt.
+
+Final selected Gemma baseline settings
+---------------------------------------
+Finalized: 2026-09-20
+
+These settings are final for the latest Gemma RPO-5 and RPO-10 comparison:
+
+- LPO: feedback examples=5, maximum spans=3, maximum words per span=3, and
+  candidates=5.
+- GreaTer: G=300, gradient batch size=2, top-mu=10, top-u=5, and fluency
+  weight=0.20.
+- GreaTer-TG: the same GreaTer settings with G=300.
+
+Selected run directories:
+
+- LPO RPO-5: `outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_gemma_rpo5_latest_lpo_c5_feedback5_s3_t3_lambda1_vs1500`
+- LPO RPO-10: `outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_gemma_rpo10_latest_lpo_c5_feedback5_s3_t3_lambda1_vs1500`
+- GreaTer RPO-5: `outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo5_latest_greater_g300_topu5_same_token_count_final_sensitivity_lambda1_vs1500`
+- GreaTer RPO-10: `outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_gemma_rpo10_latest_greater_g300_topu5_same_token_count_final_sensitivity_lambda1_vs1500`
+- GreaTer-TG RPO-5: `outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo5_latest_greater_tg_g300_topu5_same_token_count_final_sensitivity_lambda1_vs1500`
+- GreaTer-TG RPO-10: `outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_gemma_rpo10_latest_greater_tg_g300_topu5_same_token_count_final_sensitivity_lambda1_vs1500`
+
+The prompt-quality audit above remains applicable: this section records the
+user-selected final hyperparameters and does not erase malformed-wording notes.
+
+Final selected Qwen baseline settings
+--------------------------------------
+Finalized: 2026-09-20
+
+These settings are final for the latest Qwen RPO-5 and RPO-10 comparison:
+
+- LPO: feedback examples=3, maximum spans=5, maximum words per span=3, and
+  candidates=5.
+- GreaTer: G=300, gradient batch size=2, top-mu=10, top-u=5, and fluency
+  weight=0.20.
+- GreaTer-TG: the same GreaTer settings with G=300.
+
+Final validation results:
+
+| Source | Method | Source raw/stable | Final raw/stable | Fixed/Broken/Net |
+|--------|--------|-------------------|------------------|------------------|
+| RPO-5 | LPO feedback=3, max spans=5 | 79.20 / 78.87 | 80.27 / 79.61 | 27/11/+16 |
+| RPO-10 | LPO feedback=3, max spans=5 | 79.87 / 79.29 | 80.13 / 79.38 | 23/19/+4 |
+| RPO-5 | GreaTer G=300 | 79.20 / 78.87 | 79.20 / 78.87 | 0/0/0 |
+| RPO-10 | GreaTer G=300 | 79.87 / 79.29 | 79.87 / 79.29 | 0/0/0 |
+| RPO-5 | GreaTer-TG G=300 | 79.20 / 78.87 | 79.20 / 78.87 | 0/0/0 |
+| RPO-10 | GreaTer-TG G=300 | 79.87 / 79.29 | 80.07 / 79.54 | 16/13/+3 |
+
+Selected run directories:
+
+- LPO RPO-5: `outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_qwen_rpo5_latest_lpo_final_f3_s5_t3_c5`
+- LPO RPO-10: `outputs/qa_prompt_optimization/non_reasoning/lpo/openbookqa_non_reasoning_qwen_rpo10_latest_lpo_final_f3_s5_t3_c5`
+- GreaTer RPO-5: `outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_qwen_rpo5_latest_greater_final_g300_topu5`
+- GreaTer RPO-10: `outputs/qa_prompt_optimization/non_reasoning/greater/openbookqa_non_reasoning_qwen_rpo10_latest_greater_final_g300_topu5`
+- GreaTer-TG RPO-5: `outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_qwen_rpo5_latest_greater_tg_final_g300_topu5`
+- GreaTer-TG RPO-10: `outputs/qa_prompt_optimization/non_reasoning/greater_tg/openbookqa_non_reasoning_qwen_rpo10_latest_greater_tg_final_g300_topu5`
+
+This is the user-selected final baseline configuration. The numerical and
+prompt-quality observations in the completed Qwen tuning tables remain part of
+the audit record.

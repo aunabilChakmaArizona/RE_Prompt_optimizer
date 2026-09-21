@@ -21,6 +21,8 @@ QA_TASK_DESCRIPTIONS = {
 The task requires reasoning carefully and then outputting the correct option label.""",
     "non_reasoning": """A multiple-choice question contains several labeled options, with one best answer.
 The task requires directly outputting the correct option label without reasoning or explanation.""",
+    "anli_non_reasoning": """A premise and hypothesis have one of three relationships: entailment, neutral, or contradiction.
+The task requires directly outputting the correct relationship label without reasoning or explanation.""",
     "hotpotqa_reasoning": """A context-based question may require combining information from multiple passages.
 The task requires reasoning carefully over the provided context and then outputting the correct short answer.""",
     "math500_reasoning": """A mathematical problem may require numerical, algebraic, geometric, combinatorial, or symbolic reasoning.
@@ -36,6 +38,8 @@ def qa_task_description(mode: QAMode) -> str:
 
 def qa_task_label(mode: QAMode) -> str:
     """Return the task name used in optimizer-model role instructions."""
+    if mode.task_name == "anli":
+        return "three-way natural language inference"
     if mode.task_name == "hotpotqa":
         return "context-based open question-answering"
     if mode.task_name == "math500":
@@ -103,16 +107,24 @@ def rpo_feedback_prompt(
 - If the answer is correct, explain which reasoning steps, evidence, or cues were useful.
 - If the answer is incorrect, explain which reasoning step, misunderstanding, missing evidence, or heuristic likely caused the error."""
     else:
-        instance_description = """You are given one task instance containing the question, choices, ground-truth answer, the LLM's selected answer, and whether that answer was correct or incorrect. No reasoning trace is provided."""
-        analysis_instruction = """The LLM was asked to answer directly, and no explicit reasoning is provided. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
+        if mode.task_name == "anli":
+            instance_description = """You are given one task instance containing the premise, hypothesis, relationship labels, ground-truth answer, the LLM's selected answer, and whether that answer was correct or incorrect. No reasoning trace is provided."""
+            analysis_instruction = """The LLM was asked to answer directly, and no explicit reasoning is provided. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
 - If the answer is correct, explain what likely supported the decision.
-- If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error."""
+- If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error.
+When the premise does not provide enough information to support or refute the hypothesis, the relationship should be Neutral. Choose Contradiction only when the premise provides evidence that the hypothesis is false."""
+        else:
+            instance_description = """You are given one task instance containing the question, choices, ground-truth answer, the LLM's selected answer, and whether that answer was correct or incorrect. No reasoning trace is provided."""
+            analysis_instruction = """The LLM was asked to answer directly, and no explicit reasoning is provided. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
+- If the answer is correct, explain what likely supported the decision.
+- If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error.
+Describe the error or successful decision as a general question-answering pattern rather than advice tied to the specific subject, facts, or scenario in the example."""
 
     if mode.task_name == "math500":
         analysis_instruction += """
 - If reasoning reaches the output-token limit without a final answer, classify it as "reasoning token limit exceeded" and identify unnecessary repetition, checking, or detours that could be shortened. Distinguish this from an incorrect final answer or a missing final answer below the limit; do not assume that the ground-truth answer or outcome is mislabeled."""
 
-    return f"""You are an expert feedback model for a {task_label} task. You specialize in explaining why a question-answering system arrived at a particular answer, for both correct and incorrect predictions.
+    return f"""You are an expert feedback model for a {task_label} task. You specialize in explaining why an LLM arrived at a particular answer, for both correct and incorrect predictions.
 
 {task_description}
 
@@ -138,13 +150,27 @@ def rpo_rewrite_prompt(
     """Ask RPO to revise one QA instruction from separate example feedback."""
     task_description = qa_task_description(mode)
     task_label = qa_task_label(mode)
-    math_guidance = ""
+    task_guidance = ""
     if mode.task_name == "math500":
-        math_guidance = (
+        task_guidance = (
             "\nFor token-limit failures, encourage concise, focused reasoning that "
             "reaches a final answer within the available budget; avoid unnecessary "
             "repeated verification. Keep guidance general rather than specific to "
             "the example problems."
+        )
+    elif mode.task_name == "anli":
+        task_guidance = (
+            "\nKeep the revised instruction task-general so that it applies to unseen "
+            "premise-hypothesis pairs. Do not copy example-specific facts, entities, "
+            "or scenarios, or turn observations from a single example into general "
+            "rules."
+        )
+    elif mode.task_name == "openbookqa":
+        task_guidance = (
+            "\nKeep the revised instruction applicable to unseen questions across "
+            "different subjects. Focus on general strategies for understanding "
+            "questions and comparing answer choices, without copying "
+            "example-specific details."
         )
 
     return f"""You are an expert prompt generator for a {task_label} task. You specialize in revising and improving prompts based on feedback from previous model predictions.
@@ -164,7 +190,7 @@ Using this prompt, another LLM was tested on {len(feedback_examples)} task insta
 Carefully read the inputs, outputs, and feedback to identify problems with the current prompt.
 Your task is to generate a revised version of the prompt that helps the other LLM generalize better when using it.
 You may modify, add to, or remove any instructions or content in the current prompt to improve prediction and generalization.
-Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, input placeholders, or a model-response template; these are handled separately from the prompt being optimized.{math_guidance}
+Revise only the task instruction and task details. Do not add answer-format instructions, answer tags, input placeholders, or a model-response template; these are handled separately from the prompt being optimized.{task_guidance}
 
 Please reason through the problem, but output only the revised prompt inside <prompt> and </prompt>."""
 

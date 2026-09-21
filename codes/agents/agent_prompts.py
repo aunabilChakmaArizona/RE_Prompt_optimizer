@@ -497,6 +497,7 @@ First, think about the issues with the prompt.
 Identify the scope of tokens within the prompt where edits should take place.
 Prompt edits include adding, deleting or modifying tokens.
 Mark the scope of the prompt that needs editing by putting <edit>, </edit> tags.
+Do not rewrite, add, or delete any prompt text at this stage; only insert the <edit> and </edit> tags into the exact current prompt.
 You can have multiple <edit> tags and each <edit> tag should not entail more than #MAX_WORDS_PER_EDIT_TAG# words.
 Use at most #MAX_EDIT_TAGS# <edit> tags.
 Do not cover the whole sentence with multiple <edit> tags.

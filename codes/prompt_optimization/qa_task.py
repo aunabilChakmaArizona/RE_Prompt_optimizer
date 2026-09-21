@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from anli_task_common import ANLI_ANSWER_INSTRUCTION, ANLI_INITIAL_PROMPT
 from math_grading.graders import grade_math_answer
 from math_inference_common import (
     ANSWER_INSTRUCTION_PROMPT as MATH_ANSWER_INSTRUCTION_PROMPT,
@@ -38,6 +39,10 @@ DEFAULT_VALIDATION_PATH = (
     REPO_ROOT / "data" / "processed" / "openbookqa" / "validation.jsonl"
 )
 DEFAULT_TEST_PATH = REPO_ROOT / "data" / "processed" / "openbookqa" / "test.jsonl"
+ANLI_TRAIN_PATH = REPO_ROOT / "data" / "processed" / "anli" / "train.jsonl"
+ANLI_VALIDATION_PATH = (
+    REPO_ROOT / "data" / "processed" / "anli" / "validation_promptopt.jsonl"
+)
 # The HotpotQA experimental setup follows "Fine-Tuning and Prompt Optimization:
 # Two Great Steps that Work Better Together."
 HOTPOTQA_TRAIN_PATH = REPO_ROOT / "data" / "processed" / "hotpotqa" / "train.jsonl"
@@ -91,6 +96,17 @@ OPENBOOKQA_MODES = {
     ),
 }
 
+ANLI_MODES = {
+    "non_reasoning": QAMode(
+        name="non_reasoning",
+        task_name="anli",
+        initial_prompt=ANLI_INITIAL_PROMPT,
+        answer_instruction=ANLI_ANSWER_INSTRUCTION,
+        enable_thinking=False,
+        default_max_new_tokens=16,
+    ),
+}
+
 HOTPOTQA_MODES = {
     "reasoning": QAMode(
         name="reasoning",
@@ -121,6 +137,7 @@ def resolve_mode(mode_name: str, task_name: str = "openbookqa") -> QAMode:
     """Return the fixed configuration for one QA task and reasoning mode."""
     task_modes = {
         "openbookqa": OPENBOOKQA_MODES,
+        "anli": ANLI_MODES,
         "hotpotqa": HOTPOTQA_MODES,
         "math500": MATH500_MODES,
     }
@@ -154,6 +171,7 @@ def load_qa_records(
         task_type = validate_records(records)
     expected_type = {
         "openbookqa": "multiple_choice_qa",
+        "anli": "multiple_choice_qa",
         "hotpotqa": "hotpotqa_open_qa",
         "math500": "math_symbolic_answer",
     }.get(expected_task)
@@ -458,6 +476,15 @@ def rpo_feedback_example(
             [
                 f"Context: {context_as_text(record)}",
                 f"Question: {record['question']}",
+                f"Ground-Truth Answer: {record['answer']}",
+            ]
+        )
+    elif mode.task_name == "anli":
+        lines.extend(
+            [
+                f"Premise: {record['premise']}",
+                f"Hypothesis: {record['hypothesis']}",
+                f"Labels: {choices_as_text(record)}",
                 f"Ground-Truth Answer: {record['answer']}",
             ]
         )

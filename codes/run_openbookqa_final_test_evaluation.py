@@ -39,6 +39,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--code", required=True, help="Unique identity of the final-test run.")
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST),
                         help="Frozen list of selected prompt files and their SHA-256 hashes.")
+    parser.add_argument(
+        "--source-slots",
+        nargs="+",
+        choices=SOURCE_SLOTS,
+        default=list(SOURCE_SLOTS),
+        help="First-stage source prompts expected in the selected-prompt manifest.",
+    )
     parser.add_argument("--test-path", default=str(DEFAULT_TEST_PATH),
                         help="Prepared official OpenBookQA test JSONL (500 questions).")
     parser.add_argument("--backend", choices=("vllm",), default="vllm",
@@ -74,21 +81,31 @@ def parse_args() -> argparse.Namespace:
         any(seed < 0 for seed in args.seeds) or len(set(args.seeds)) != len(args.seeds)
     ):
         parser.error("--seeds must be distinct non-negative integers.")
+    if len(set(args.source_slots)) != len(args.source_slots):
+        parser.error("--source-slots must not contain duplicates.")
     return args
 
 
-def load_selected_prompts(manifest_path: str | Path, family: str) -> list[dict[str, str]]:
-    """Validate the complete method matrix and load the exact selected instructions."""
+def load_selected_prompts(
+    manifest_path: str | Path,
+    family: str,
+    source_slots: Sequence[str] = SOURCE_SLOTS,
+) -> list[dict[str, str]]:
+    """Validate the requested method matrix and load its exact selected instructions."""
     path = resolve_repo_path(manifest_path)
     with path.open(encoding="utf-8", newline="") as stream:
         rows = [dict(row) for row in csv.DictReader(stream, delimiter="\t")
                 if row["family"] == family]
     expected_ids = {"initial"}
-    for source in SOURCE_SLOTS:
+    for source in source_slots:
         expected_ids.add(f"first_stage_{source}")
         expected_ids.update(f"second_stage_{source}_{method}" for method in REFINERS)
-    if len(rows) != 36 or {row["row_id"] for row in rows} != expected_ids:
-        raise ValueError(f"Expected exactly 36 complete, unique selected rows for {family}.")
+    expected_count = len(expected_ids)
+    if len(rows) != expected_count or {row["row_id"] for row in rows} != expected_ids:
+        raise ValueError(
+            f"Expected exactly {expected_count} complete, unique selected rows for "
+            f"{family} and sources {list(source_slots)}."
+        )
     by_id = {row["row_id"]: row for row in rows}
     for row in rows:
         prompt_path = resolve_repo_path(row["prompt_file"])
@@ -231,7 +248,7 @@ def evaluate_seed(
     }
     save_json(run_dir / "summary.json", summary)
     save_text(run_dir / "results.txt", build_text_report(summary))
-    print(f"Saved all 36 test rows to: {run_dir / 'results.txt'} | "
+    print(f"Saved all {len(selected)} test rows to: {run_dir / 'results.txt'} | "
           f"seed_elapsed={format_elapsed(summary['elapsed_seconds'])}", flush=True)
     return summary
 
@@ -241,7 +258,7 @@ def main() -> None:
     args = parse_args()
     started_at = time.monotonic()
     mode = resolve_mode("non_reasoning", "openbookqa")
-    selected = load_selected_prompts(args.manifest, args.family)
+    selected = load_selected_prompts(args.manifest, args.family, args.source_slots)
     prompts = unique_instructions(selected)
     seeds = args.seeds if args.seeds is not None else [args.seed]
     multiple_runs = len(seeds) > 1
@@ -249,7 +266,7 @@ def main() -> None:
     records = load_qa_records(test_path, expected_task="openbookqa")
     if len(records) != 500 or any(record.get("split") != "test" for record in records):
         raise ValueError("Use the prepared official OpenBookQA test split: 500 test questions.")
-    print(f"[final-test:{args.family}] selected rows=36 | unique prompts={len(prompts)} | "
+    print(f"[final-test:{args.family}] selected rows={len(selected)} | unique prompts={len(prompts)} | "
           f"test questions=500 | requests per run={len(prompts) * len(records)} | "
           f"decoding runs={len(seeds)} | seeds={seeds}", flush=True)
     if args.dry_run:
@@ -287,7 +304,8 @@ def main() -> None:
     try:
         for run_index, seed in enumerate(seeds, start=1):
             print(f"[final-test:{args.family}] run {run_index}/{len(seeds)} started | "
-                  f"seed={seed} | rows=36 | total_elapsed={format_elapsed(time.monotonic()-started_at)}",
+                  f"seed={seed} | rows={len(selected)} | "
+                  f"total_elapsed={format_elapsed(time.monotonic()-started_at)}",
                   flush=True)
             seed_dir = run_dir / f"seed_{seed}" if multiple_runs else run_dir
             seed_code = f"{args.code}_seed{seed}" if multiple_runs else args.code

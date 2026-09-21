@@ -15,16 +15,16 @@ from prompt_edit_distance_stats import FIRST_STAGE_RE
 
 PROMPTS_PATH = Path("all_the_prompts.txt")
 OUTPUT_PATH = Path("gradpo_span_selection_content_stats.txt")
+GROUPED_OUTPUT_PATH = Path("gradpo_selected_spans_four_categories.txt")
+SIMPLE_GROUPED_OUTPUT_PATH = Path(
+    "gradpo_selected_spans_four_categories_simple.txt"
+)
 
 CATEGORY_ORDER = (
-    "Sentence/support/query wording",
-    "Relation name/description wording",
-    "Generic/function/partial wording",
-    "Entity/relation-decision wording",
-    "Answer/decision wording",
-    "Relation-description formatting",
-    "Other general task/example wording",
-    "Relation-specific illustrative fragments",
+    "Shared task-content wording",
+    "Generic instruction fragments",
+    "Decision/output/formatting wording",
+    "Relation-specific rule fragments",
 )
 
 ENTITY_DECISION_SPANS = {
@@ -96,21 +96,17 @@ def extract_tagged_prompt_blocks(log_text: str) -> list[tuple[str, tuple[str, ..
 def classify_span(span: str) -> str:
     value = span.casefold()
     if "sentence" in value:
-        return "Sentence/support/query wording"
+        return "Shared task-content wording"
     if value in {"name", "description", "description of"}:
-        return "Relation name/description wording"
-    if value in GENERIC_SPANS:
-        return "Generic/function/partial wording"
+        return "Shared task-content wording"
     if value in ENTITY_DECISION_SPANS:
-        return "Entity/relation-decision wording"
-    if value in ANSWER_DECISION_SPANS:
-        return "Answer/decision wording"
-    if value == "brackets":
-        return "Relation-description formatting"
-    if value in OTHER_TASK_SPANS:
-        return "Other general task/example wording"
+        return "Shared task-content wording"
+    if value in GENERIC_SPANS or value in OTHER_TASK_SPANS:
+        return "Generic instruction fragments"
+    if value in ANSWER_DECISION_SPANS or value == "brackets":
+        return "Decision/output/formatting wording"
     if value in RELATION_SPECIFIC_SPANS:
-        return "Relation-specific illustrative fragments"
+        return "Relation-specific rule fragments"
     raise ValueError(f"Unclassified selected span: {span!r}")
 
 
@@ -204,7 +200,17 @@ def main() -> None:
         raise ValueError("Unexpected Gemma run/span count")
     if sum(category_counts.values()) != 75:
         raise ValueError("Category counts do not sum to 75")
-    if category_counts["Relation-specific illustrative fragments"] != 2:
+    expected_category_counts = {
+        "Shared task-content wording": 38,
+        "Generic instruction fragments": 23,
+        "Decision/output/formatting wording": 12,
+        "Relation-specific rule fragments": 2,
+    }
+    if dict(category_counts) != expected_category_counts:
+        raise ValueError(
+            f"Unexpected consolidated category counts: {dict(category_counts)}"
+        )
+    if category_counts["Relation-specific rule fragments"] != 2:
         raise ValueError("Expected exactly two relation-specific fragments")
 
     category_examples = {
@@ -281,8 +287,12 @@ def main() -> None:
             ),
             "",
             "Most important interpretation",
-            "- Only 2/75 selected regions (2.7%) clearly came from relation-specific",
-            "  illustrative rules: `province` and the partial span `hier`.",
+            "- Shared task-content wording accounts for 38/75 regions (50.7%).",
+            "- Generic instruction fragments account for 23/75 regions (30.7%).",
+            "- Decision, output, and formatting wording accounts for 12/75 regions",
+            "  (16.0%).",
+            "- Only 2/75 selected regions (2.7%) came from relation-specific rules:",
+            "  `province` and the partial span `hier`.",
             "- `province` occurred inside a rule illustrating",
             "  `org:stateorprovince_of_headquarters`.",
             "- `hier` came from `hierarchies` in a rule contrasting `has part` with",
@@ -308,15 +318,12 @@ def main() -> None:
             "",
             "Suggested paper text",
             "Across all 19 GradPO-Gen runs, we recovered 75 selected high-gradient",
-            "regions. Six recurring task-level spans—\"name,\" \"sentence,\" \"sentence",
-            "exemplifying,\" \"brackets,\" \"You are,\" and \"Answer\"—account for 49.3%",
-            "of all selections. The remaining regions are mostly less-frequent",
-            "instruction fragments and generic words. Only two selections (2.7%),",
-            "\"province\" and the partial span \"hier,\" came from relation-specific",
-            "illustrative rules, and neither is a complete relation label or named entity.",
-            "This suggests that the gradient signal primarily captures shared",
-            "instruction-level wording rather than being dominated by individual",
-            "relations or examples.",
+            "regions. Shared task-content wording accounts for 50.7%, generic",
+            "instruction fragments for 30.7%, and decision, output, or formatting",
+            "wording for 16.0%. Only two selections (2.7%), `province` and the partial",
+            "span `hier`, came from relation-specific rules, and neither is a complete",
+            "relation label or named entity. Thus, 73/75 selections (97.3%) concern",
+            "shared task instructions rather than individual relations or examples.",
             "",
             "Selected regions by run",
             *markdown_table(
@@ -327,8 +334,109 @@ def main() -> None:
     )
 
     OUTPUT_PATH.write_text(report + "\n", encoding="utf-8")
+
+    category_descriptions = {
+        "Shared task-content wording": (
+            "General input, sentence, relation-description, subject/entity, and "
+            "relation-decision wording shared across the task."
+        ),
+        "Generic instruction fragments": (
+            "Function words, partial words, grammatical framing, and other general "
+            "instruction fragments."
+        ),
+        "Decision/output/formatting wording": (
+            "Wording that controls the decision, answer, or relation-description "
+            "format."
+        ),
+        "Relation-specific rule fragments": (
+            "Fragments selected from illustrative rules concerning particular "
+            "relations."
+        ),
+    }
+    grouped_lines = [
+        "GRADPO-GEN SELECTED SPANS: FOUR-CATEGORY COMPLETE LIST",
+        "",
+        "Scope",
+        "- 75 top-gradient selected-region occurrences from all 19 valid",
+        "  relation-extraction GradPO-Gen runs.",
+        "- Duplicate span strings are retained because each occurrence is a distinct",
+        "  gradient selection in a source run.",
+        "- These are regions proposed for editing, not necessarily regions ultimately",
+        "  changed in the retained prompt.",
+        "",
+        "Summary",
+    ]
+    for category in CATEGORY_ORDER:
+        count = category_counts[category]
+        grouped_lines.append(
+            f"- {category}: {count}/75 ({100 * count / len(all_spans):.1f}%)"
+        )
+
+    occurrence_total = 0
+    for category in CATEGORY_ORDER:
+        occurrences = [
+            (run.code, span_index, span)
+            for run in runs
+            for span_index, span in enumerate(run.spans, start=1)
+            if classify_span(span) == category
+        ]
+        occurrence_total += len(occurrences)
+        grouped_lines.extend(
+            [
+                "",
+                f"{category.upper()} — {len(occurrences)}/75 "
+                f"({100 * len(occurrences) / len(all_spans):.1f}%)",
+                category_descriptions[category],
+                "",
+                "All occurrences (duplicates retained)",
+            ]
+        )
+        for item_index, (code, span_index, span) in enumerate(occurrences, start=1):
+            grouped_lines.append(
+                f"{item_index:02d}. `{span}` — {code}, selected-region {span_index}"
+            )
+        category_exact_counts = Counter(
+            span.casefold() for _code, _span_index, span in occurrences
+        )
+        grouped_lines.extend(["", "Exact-string frequency summary"])
+        for span, count in category_exact_counts.most_common():
+            grouped_lines.append(f"- `{span}`: {count}")
+
+    if occurrence_total != 75:
+        raise ValueError(
+            f"Expected 75 grouped selected-span occurrences; found {occurrence_total}"
+        )
+    GROUPED_OUTPUT_PATH.write_text(
+        "\n".join(grouped_lines) + "\n",
+        encoding="utf-8",
+    )
+
+    simple_grouped_lines = []
+    simple_occurrence_total = 0
+    for category in CATEGORY_ORDER:
+        category_spans = [
+            span
+            for run in runs
+            for span in run.spans
+            if classify_span(span) == category
+        ]
+        simple_occurrence_total += len(category_spans)
+        simple_grouped_lines.append(f"{category} ({len(category_spans)})")
+        simple_grouped_lines.extend(category_spans)
+        simple_grouped_lines.append("")
+    if simple_occurrence_total != 75:
+        raise ValueError(
+            "Expected 75 simple grouped selected-span occurrences; "
+            f"found {simple_occurrence_total}"
+        )
+    SIMPLE_GROUPED_OUTPUT_PATH.write_text(
+        "\n".join(simple_grouped_lines).rstrip() + "\n",
+        encoding="utf-8",
+    )
     print(report)
     print(f"\nSaved: {OUTPUT_PATH}")
+    print(f"Saved: {GROUPED_OUTPUT_PATH}")
+    print(f"Saved: {SIMPLE_GROUPED_OUTPUT_PATH}")
 
 
 if __name__ == "__main__":

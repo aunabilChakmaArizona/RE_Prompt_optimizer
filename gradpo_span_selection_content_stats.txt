@@ -30,18 +30,18 @@ Main statistics
 Content categories
 | Category | Count | Percent | Exact span strings |
 |:---|:---|:---|:---|
-| Sentence/support/query wording | 20 | 26.7% | `example sentence`, `sentence`, `sentence exempl`, `sentence exemplifying`, `sentence illustrates`, `sentence serves`, `sentence to` |
-| Relation name/description wording | 11 | 14.7% | `description`, `description of`, `name` |
-| Generic/function/partial wording | 17 | 22.7% | `a`, `are given`, `given a`, `itness`, `of`, `the`, `to`, `you`, `you are` |
-| Entity/relation-decision wording | 7 | 9.3% | `entities in`, `explicitly expresses`, `holds between the`, `instantiated between`, `marked subject`, `subject`, `subject and` |
-| Answer/decision wording | 6 | 8.0% | `answer`, `decide`, `determine if`, `only answer` |
-| Relation-description formatting | 6 | 8.0% | `brackets` |
-| Other general task/example wording | 6 | 8.0% | `exemplifies`, `exemplifying`, `instance`, `on the information`, `specified` |
-| Relation-specific illustrative fragments | 2 | 2.7% | `hier`, `province` |
+| Shared task-content wording | 38 | 50.7% | `description`, `description of`, `entities in`, `example sentence`, `explicitly expresses`, `holds between the`, `instantiated between`, `marked subject`, `name`, `sentence`, `sentence exempl`, `sentence exemplifying`, `sentence illustrates`, `sentence serves`, `sentence to`, `subject`, `subject and` |
+| Generic instruction fragments | 23 | 30.7% | `a`, `are given`, `exemplifies`, `exemplifying`, `given a`, `instance`, `itness`, `of`, `on the information`, `specified`, `the`, `to`, `you`, `you are` |
+| Decision/output/formatting wording | 12 | 16.0% | `answer`, `brackets`, `decide`, `determine if`, `only answer` |
+| Relation-specific rule fragments | 2 | 2.7% | `hier`, `province` |
 
 Most important interpretation
-- Only 2/75 selected regions (2.7%) clearly came from relation-specific
-  illustrative rules: `province` and the partial span `hier`.
+- Shared task-content wording accounts for 38/75 regions (50.7%).
+- Generic instruction fragments account for 23/75 regions (30.7%).
+- Decision, output, and formatting wording accounts for 12/75 regions
+  (16.0%).
+- Only 2/75 selected regions (2.7%) came from relation-specific rules:
+  `province` and the partial span `hier`.
 - `province` occurred inside a rule illustrating
   `org:stateorprovince_of_headquarters`.
 - `hier` came from `hierarchies` in a rule contrasting `has part` with
@@ -79,15 +79,12 @@ Six prominent recurring task-level spans
 
 Suggested paper text
 Across all 19 GradPO-Gen runs, we recovered 75 selected high-gradient
-regions. Six recurring task-level spans—"name," "sentence," "sentence
-exemplifying," "brackets," "You are," and "Answer"—account for 49.3%
-of all selections. The remaining regions are mostly less-frequent
-instruction fragments and generic words. Only two selections (2.7%),
-"province" and the partial span "hier," came from relation-specific
-illustrative rules, and neither is a complete relation label or named entity.
-This suggests that the gradient signal primarily captures shared
-instruction-level wording rather than being dominated by individual
-relations or examples.
+regions. Shared task-content wording accounts for 50.7%, generic
+instruction fragments for 30.7%, and decision, output, or formatting
+wording for 16.0%. Only two selections (2.7%), `province` and the partial
+span `hier`, came from relation-specific rules, and neither is a complete
+relation label or named entity. Thus, 73/75 selections (97.3%) concern
+shared task instructions rather than individual relations or examples.
 
 Selected regions by run
 | GradPO-Gen code | Dev improvement | Regions | Selected region text |

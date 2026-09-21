@@ -10,10 +10,13 @@ Approved seeds, in order: 42, 1, 100, 1000, 10000.
 Each model is loaded ONCE and kept loaded across five separate generate calls.
 Each call submits ALL unique prompt-question pairs together (not all seeds mixed
 into one call). Initial and every selected first-/second-stage prompt are tested
-on the same official 500 examples each time. All 36 method rows remain reported;
-identical instructions intentionally share predictions within each seed.
+on the same official 500 examples each time. Qwen retains all 36 method rows.
+The final Gemma run uses the latest RPO-5/RPO-10 sources and all six refiners:
+15 rows total (initial + 2 first-stage + 12 second-stage). Identical instructions
+intentionally share predictions within each seed.
 Qwen: 27 unique prompts x 500 examples x 5 runs = 67500 generation requests.
-Gemma: 30 unique prompts x 500 examples x 5 runs = 75000 generation requests.
+Gemma final latest-RPO: 14 unique prompts x 500 examples x 5 runs = 35000
+generation requests.
 Prompt selection is frozen; there is no optimization or test-based selection.
 
 Settings: vLLM; max_new_tokens=16; GPU utilization=0.8; GPU 3 by default;
@@ -33,7 +36,9 @@ loading a GPU model or writing outputs. No inference was launched during setup.
 
 Output identity and progress
 ---------------------------
-Parent CODE: openbookqa_non_reasoning_<family>_selected_prompts_5seeds_<UTC_TAG>
+Qwen parent CODE: openbookqa_non_reasoning_qwen_selected_prompts_5seeds_<UTC_TAG>
+Gemma parent CODE:
+  openbookqa_non_reasoning_gemma_latest_rpo_six_refiners_5seeds_<UTC_TAG>
 RUN_TAG can be overridden. No --overwrite: previous tests are protected.
 Parent directory:
   outputs/qa_final_test/non_reasoning/selected_prompts/<PARENT_CODE>/
@@ -42,7 +47,8 @@ Parent summary.json is a progress INDEX: status, requested_runs, completed_runs,
 seeds, and each seed's results/summary paths; NOT an averaged score table.
 It is updated after every seed finishes. "complete" requires all five runs.
 Each seed has a separate directory seed_42, seed_1, seed_100, seed_1000, seed_10000:
-  summary.json: 36 scores and source-relative gains; protocol.seed is that seed.
+  summary.json: the complete selected matrix and source-relative gains;
+                protocol.seed is that seed.
   results.txt: the individual seed's complete score table and provenance.
   evaluations/: raw responses and per-problem token counts for unique prompts.
   prompts/: exact copies of tested instructions.

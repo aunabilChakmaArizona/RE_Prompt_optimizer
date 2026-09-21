@@ -13,7 +13,13 @@ from typing import Any, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT_DIR = PROJECT_ROOT / "experiment_tracking" / "first_stage"
-GEMMA_OPENBOOK_RPO_CODE = "openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1"
+GEMMA_OPENBOOK_RPO_CODE = (
+    "openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500_generalmeta"
+)
+QWEN_OPENBOOK_RPO_CODE = (
+    "openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500_"
+    "generalmeta_retry_gpu045"
+)
 QWEN_MATH_RPO_CODE = (
     "math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit"
 )
@@ -44,9 +50,9 @@ RUN_SPECS = (
         "non-reasoning",
         "Qwen3-4B",
         "RPO",
-        "openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1",
+        QWEN_OPENBOOK_RPO_CODE,
         "outputs/qa_prompt_optimization/non_reasoning/rpo/"
-        "openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1",
+        + QWEN_OPENBOOK_RPO_CODE,
     ),
     RunSpec(
         "OpenBookQA",
@@ -71,9 +77,9 @@ RUN_SPECS = (
         "non-reasoning",
         "Gemma3-4B",
         "RPO",
-        "openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1",
+        GEMMA_OPENBOOK_RPO_CODE,
         "outputs/qa_prompt_optimization/non_reasoning/rpo/"
-        "openbookqa_non_reasoning_gemma_rpo_gemma12opt_lambda1",
+        + GEMMA_OPENBOOK_RPO_CODE,
     ),
     RunSpec(
         "OpenBookQA",
@@ -220,15 +226,22 @@ MANUAL_PROMPT_NOTES = {
         "Valid full prompt, but the combinatorial-ratio and closed-locker guidance "
         "is more example-specific than ideal."
     ),
-    "openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1": (
-        "Valid full prompts, but some retained advice is domain-specific, including "
-        "ecological, geographical, and scientific principles."
+    QWEN_OPENBOOK_RPO_CODE: (
+        "FINAL OpenBookQA Qwen RPO run and source assignment. RPO-5 retains the "
+        "actual iteration-1 winner (1191/1500 correct, 79.40 raw, 78.75 stable); "
+        "RPO-10 retains the actual iteration-9 winner (1198/1500 correct, 79.87 "
+        "raw, 79.21 stable). The run initial is 1185/1500 correct, 79.00 raw, "
+        "and 78.43 stable, so the retained sources add 6 and 13 net correct "
+        "answers, respectively. Both prompts are complete and valid; the small "
+        "gains reflect limited prompt-optimization headroom on this task."
     ),
     GEMMA_OPENBOOK_RPO_CODE: (
-        "For distinct second-stage sources, the experimental RPO-5 slot uses the "
-        "actual iteration-3 candidate and RPO-10 uses the actual iteration-4 "
-        "candidate retained through iteration 10. Their current 1,500-example "
-        "second-stage source validations are 69.26 and 69.58 stable, respectively."
+        "FINAL OpenBookQA Gemma RPO run and source assignment for the new "
+        "second-stage rerun. Experimental RPO-5 uses actual iteration 1 "
+        "(1046/1500 correct, 69.73 raw, 67.84 stable); experimental RPO-10 "
+        "uses actual iteration 2 (1057/1500 correct, 70.47 raw, 69.47 stable). "
+        "The run initial is 976/1500 correct, 65.07 raw, and 64.12 stable, so "
+        "the assigned sources add 70 and 81 net correct answers, respectively."
     ),
     QWEN_OPENBOOK_EVOPROMPT_CODE: (
         "For distinct second-stage sources, the experimental EvoPrompt-5 slot "
@@ -377,6 +390,31 @@ def snapshot_metrics(
     return snapshot.get("metrics")
 
 
+def assigned_snapshot_metrics(
+    spec: RunSpec,
+    summary: dict[str, Any] | None,
+    iteration: str,
+) -> dict[str, Any] | None:
+    """Return metrics for a literal or explicitly reassigned 5/10 source slot."""
+    if spec.code != GEMMA_OPENBOOK_RPO_CODE:
+        return snapshot_metrics(summary, iteration)
+
+    actual_iteration = {"5": 1, "10": 2}.get(iteration)
+    if actual_iteration is None:
+        return snapshot_metrics(summary, iteration)
+    population_path = absolute_path(spec.run_dir) / "population.json"
+    if not population_path.exists():
+        return None
+    population = json.loads(population_path.read_text(encoding="utf-8"))
+    for node in population:
+        if int(node.get("iteration", -1)) == actual_iteration:
+            return {
+                "accuracy": node.get("accuracy"),
+                "stable_accuracy": node.get("selection_score"),
+            }
+    return None
+
+
 def expected_prompt_entries(spec: RunSpec) -> list[tuple[str, str]]:
     """Return the report labels and prompt filenames expected from one method."""
     if spec.code == QWEN_MATH_RPO_CODE:
@@ -386,8 +424,14 @@ def expected_prompt_entries(spec: RunSpec) -> list[tuple[str, str]]:
         ]
     if spec.code == GEMMA_OPENBOOK_RPO_CODE:
         return [
-            ("RPO-5", "prompt_iteration_3.txt"),
-            ("RPO-10", "prompt_iteration_10.txt"),
+            (
+                "RPO-5",
+                "prompt_experimental_iteration_5_from_actual_iteration_1.txt",
+            ),
+            (
+                "RPO-10",
+                "prompt_experimental_iteration_10_from_actual_iteration_2.txt",
+            ),
         ]
     if spec.code == QWEN_OPENBOOK_EVOPROMPT_CODE:
         return [
@@ -498,8 +542,8 @@ def detailed_report() -> str:
         validation = (summary or {}).get("validation") or {}
         initial = validation.get("initial")
         final = validation.get("final")
-        metrics_5 = snapshot_metrics(summary, "5")
-        metrics_10 = snapshot_metrics(summary, "10")
+        metrics_5 = assigned_snapshot_metrics(spec, summary, "5")
+        metrics_10 = assigned_snapshot_metrics(spec, summary, "10")
         initial_stable = stable_percent(initial)
         retained_stable = stable_percent(final)
         gain = (
@@ -560,9 +604,9 @@ def detailed_report() -> str:
             path = run_dir / filename
             text = read_text(path)
             if label.endswith("-5"):
-                metrics = snapshot_metrics(summary, "5")
+                metrics = assigned_snapshot_metrics(spec, summary, "5")
             elif label.endswith("-10"):
-                metrics = snapshot_metrics(summary, "10")
+                metrics = assigned_snapshot_metrics(spec, summary, "10")
             else:
                 metrics = final_metrics(summary)
             score = stable_percent(metrics)
@@ -666,9 +710,9 @@ def compact_report() -> str:
                 for label, filename in expected_prompt_entries(spec):
                     text = read_text(run_dir / filename)
                     if label.endswith("-5"):
-                        metrics = snapshot_metrics(summary, "5")
+                        metrics = assigned_snapshot_metrics(spec, summary, "5")
                     elif label.endswith("-10"):
-                        metrics = snapshot_metrics(summary, "10")
+                        metrics = assigned_snapshot_metrics(spec, summary, "10")
                     else:
                         metrics = final_metrics(summary)
                     score = stable_percent(metrics)

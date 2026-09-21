@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ACTIVE (2026-09-15): remaining EvoPrompt and ETGPO source prompts only.
-# The completed RPO command archive remains below the explicit `exit 0`.
+# COMPLETED (2026-09-15): remaining EvoPrompt and ETGPO source prompts.
+# This block is disabled and retained as experiment history.
 # Qwen EvoPrompt-5 is actual iteration 1; EvoPrompt-10 is actual iteration 4.
-# This script runs 3 sources x 6 refiners = 18 experiments.
-RUN_GPU="${RUN_GPU:-2}"
+# The active final RPO comparison is defined after this completed block.
+RUN_GPU="${RUN_GPU:-1}"
 
+if false; then
 ACTIVE_SOURCES=(
   "evoprompt5|outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_experimental_iteration_5_from_actual_iteration_1.txt"
   "evoprompt10|outputs/qa_prompt_optimization/non_reasoning/evoprompt_de/openbookqa_non_reasoning_qwen_evoprompt_qwen14opt_lambda1/prompt_experimental_iteration_10_from_actual_iteration_4.txt"
@@ -139,6 +140,193 @@ for source_spec in "${ACTIVE_SOURCES[@]}"; do
   run_active_lpo "${source_name}" "${source_prompt}"
   run_active_greater "${source_name}" "${source_prompt}" greater
   run_active_greater "${source_name}" "${source_prompt}" greater_tg
+done
+fi
+
+# COMPLETED (2026-09-20): final Qwen comparison on the latest RPO-5 and RPO-10.
+# Five methods are compared, and every method evaluates at most five refined
+# prompts on the same 3 x 500 validation set. Total completed runs: 20.
+#
+# ACTIVE (2026-09-20): the two missing GradPO-Prob runs needed for the complete
+# six-refiner test matrix. Both use the finalized GradPO configuration.
+#
+# nohup bash codes/run_openbookqa_second_stage_qwen.sh \
+#   > codes/nohup_outs/openbookqa_second_stage_qwen_prob.log 2>&1 &
+
+LATEST_RPO_DIR="outputs/qa_prompt_optimization/non_reasoning/rpo/openbookqa_non_reasoning_qwen_rpo_qwen14opt_lambda1_vs1500_generalmeta_retry_gpu045"
+FINAL_SOURCES=(
+  "rpo5_latest|${LATEST_RPO_DIR}/prompt_iteration_5.txt"
+  "rpo10_latest|${LATEST_RPO_DIR}/prompt_iteration_10.txt"
+)
+
+for source_spec in "${FINAL_SOURCES[@]}"; do
+  IFS='|' read -r _ source_prompt <<< "${source_spec}"
+  [[ -f "${source_prompt}" ]] || {
+    echo "Missing latest Qwen RPO source prompt: ${source_prompt}" >&2
+    exit 1
+  }
+done
+
+run_final_gradpo() {
+  # Run one GradPO replacement variant with the selected configuration.
+  local source_name="$1"
+  local source_prompt="$2"
+  local variant="$3"
+  local code="openbookqa_non_reasoning_qwen_${source_name}_gradpo_${variant}_final_s3_t3_h045_c7_g300_b5_f050"
+
+  echo "[Qwen final second stage] ${code} | GPU=${RUN_GPU}"
+  CUDA_VISIBLE_DEVICES="${RUN_GPU}" python -u codes/run_qa_promptopt_gradpo.py \
+    --code "${code}" \
+    --qa-task openbookqa \
+    --qa-mode non_reasoning \
+    --train-path data/processed/openbookqa/train.jsonl \
+    --validation-path data/processed/openbookqa/validation.jsonl \
+    --initial-prompt-file "${source_prompt}" \
+    --model Qwen/Qwen3-4B \
+    --device cuda:0 \
+    --hf-device cuda:0 \
+    --target-max-new-tokens 10 \
+    --validation-std-penalty 1.0 \
+    --output-root outputs/qa_prompt_optimization \
+    --overwrite \
+    --backend dual \
+    --final-evaluation-backend vllm \
+    --dual-vllm-gpu-memory-utilization 0.5 \
+    --vllm-max-model-len 16384 \
+    --variant "${variant}" \
+    --train-sample-size 800 \
+    --gradient-sample-size 300 \
+    --gradient-batch-size 2 \
+    --selection-batch-size 4 \
+    --num-edit-regions 3 \
+    --max-region-tokens 3 \
+    --region-expansion-threshold 0.45 \
+    --num-region-candidates 7 \
+    --beam-width 5 \
+    --beam-replacement-mode llm_synthesis \
+    --fluency-lambda 0.5 \
+    --candidate-max-new-tokens 10000 \
+    --synthesis-max-new-tokens 10000 \
+    --synthesis-batch-size 4 \
+    --seed 42
+}
+
+run_final_lpo() {
+  # Run one LPO feedback-count and maximum-span configuration.
+  local source_name="$1"
+  local source_prompt="$2"
+  local feedback_examples="$3"
+  local max_locations="$4"
+  local code="openbookqa_non_reasoning_qwen_${source_name}_lpo_final_f${feedback_examples}_s${max_locations}_t3_c5"
+
+  echo "[Qwen final second stage] ${code} | GPU=${RUN_GPU}"
+  CUDA_VISIBLE_DEVICES="${RUN_GPU}" python -u codes/run_qa_promptopt_lpo.py \
+    --code "${code}" \
+    --qa-task openbookqa \
+    --qa-mode non_reasoning \
+    --train-path data/processed/openbookqa/train.jsonl \
+    --validation-path data/processed/openbookqa/validation.jsonl \
+    --initial-prompt-file "${source_prompt}" \
+    --model Qwen/Qwen3-4B \
+    --optimizer-model Qwen/Qwen3-14B \
+    --device cuda:0 \
+    --optimizer-device cuda:0 \
+    --target-max-new-tokens 10 \
+    --optimizer-max-new-tokens 10000 \
+    --validation-std-penalty 1.0 \
+    --output-root outputs/qa_prompt_optimization \
+    --overwrite \
+    --backend vllm \
+    --gpu-memory-utilization 0.9 \
+    --vllm-max-model-len 16384 \
+    --train-sample-size 800 \
+    --feedback-examples "${feedback_examples}" \
+    --max-locations "${max_locations}" \
+    --max-words-per-location 3 \
+    --num-candidates 5 \
+    --seed 42
+}
+
+run_final_greater() {
+  # Run one GreaTer variant and balanced-gradient subset size.
+  local source_name="$1"
+  local source_prompt="$2"
+  local variant="$3"
+  local gradient_sample_size="$4"
+  local code="openbookqa_non_reasoning_qwen_${source_name}_${variant}_final_g${gradient_sample_size}_topu5"
+
+  echo "[Qwen final second stage] ${code} | GPU=${RUN_GPU}"
+  CUDA_VISIBLE_DEVICES="${RUN_GPU}" python -u codes/run_qa_promptopt_greater.py \
+    --code "${code}" \
+    --qa-task openbookqa \
+    --qa-mode non_reasoning \
+    --train-path data/processed/openbookqa/train.jsonl \
+    --validation-path data/processed/openbookqa/validation.jsonl \
+    --initial-prompt-file "${source_prompt}" \
+    --model Qwen/Qwen3-4B \
+    --device cuda:0 \
+    --hf-device cuda:0 \
+    --target-max-new-tokens 10 \
+    --validation-std-penalty 1.0 \
+    --output-root outputs/qa_prompt_optimization \
+    --overwrite \
+    --backend dual \
+    --final-evaluation-backend vllm \
+    --dual-vllm-gpu-memory-utilization 0.5 \
+    --vllm-max-model-len 16384 \
+    --variant "${variant}" \
+    --train-sample-size 800 \
+    --gradient-sample-size "${gradient_sample_size}" \
+    --gradient-batch-size 2 \
+    --selection-batch-size 8 \
+    --proposal-top-k 25 \
+    --proposal-example-size 50 \
+    --proposal-min-candidates 10 \
+    --selection-top-mu 10 \
+    --top-u 5 \
+    --fluency-lambda 0.2 \
+    --region-expansion-threshold 0.6 \
+    --seed 42
+}
+
+if false; then
+for source_spec in "${FINAL_SOURCES[@]}"; do
+  IFS='|' read -r source_name source_prompt <<< "${source_spec}"
+
+  run_final_gradpo "${source_name}" "${source_prompt}" gen
+  run_final_gradpo "${source_name}" "${source_prompt}" gen_random
+
+  for feedback_examples in 3 5; do
+    for max_locations in 3 5; do
+      run_final_lpo \
+        "${source_name}" \
+        "${source_prompt}" \
+        "${feedback_examples}" \
+        "${max_locations}"
+    done
+  done
+
+  for gradient_sample_size in 200 300; do
+    run_final_greater \
+      "${source_name}" \
+      "${source_prompt}" \
+      greater \
+      "${gradient_sample_size}"
+    run_final_greater \
+      "${source_name}" \
+      "${source_prompt}" \
+      greater_tg \
+      "${gradient_sample_size}"
+  done
+done
+fi
+
+# Run only the missing probability-based replacement variant. The completed
+# GradPO-Gen, random-span, LPO, GreaTer, and GreaTer-TG runs above are retained
+# as experiment history and are not repeated.
+for source_spec in "${FINAL_SOURCES[@]}"; do
+  IFS='|' read -r source_name source_prompt <<< "${source_spec}"
+  run_final_gradpo "${source_name}" "${source_prompt}" prob
 done
 
 exit 0

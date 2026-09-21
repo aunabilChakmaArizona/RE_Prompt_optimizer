@@ -4,6 +4,15 @@ This is the central index for project-created experiment notes, reports, and
 processing documentation. Generated run directories and third-party baseline
 files are intentionally not indexed individually.
 
+## Dataset preparation
+
+- ANLI prompt optimization uses `../data/processed/anli/validation_promptopt.jsonl`:
+  3,000 examples divided into three deterministic 1,000-example folds. Every
+  fold mixes R1/R2/R3 and is label-balanced, with the single extra label and
+  round example rotated across folds. Preparation and validation are implemented
+  in `../codes/prepare_anli.py`; detailed counts are recorded in
+  `../data/processed/anli/dataset_info.json`.
+
 ## First-stage experiments
 
 - `first_stage/detailed_first_stage_results.txt`: canonical raw/stable scores,
@@ -70,7 +79,13 @@ python -u codes/report_first_stage_results.py
 - `../random_mode_results.txt`: raw random-span experiment results.
 - `../changed_prompt_stats.txt`: edit-distance and changed-prompt statistics.
 - `../gradpo_span_selection_content_stats.txt`: selected-span counts and content
-  analysis for GradPO.
+  analysis for GradPO using the consolidated four-category taxonomy.
+- `../gradpo_selected_spans_four_categories.txt`: complete 75-occurrence
+  selected-span list grouped into the four paper categories, with duplicates,
+  source runs, selected-region positions, and per-category frequency summaries.
+- `../gradpo_selected_spans_four_categories_simple.txt`: minimal four-category
+  list containing only group headings, counts, and one selected span per line.
+- `../temp_category.tex`: compact four-category LaTeX table for the paper.
 - `../gradpo_changed_span_audit.csv`: detailed GradPO selected-span audit.
 - `../lpo_greater_changed_source_audit.csv`: source/edit audit for LPO and
   GreaTer.
@@ -91,12 +106,16 @@ Associated report scripts:
 
 - `final_test/openbookqa_five_seed_test_protocol.txt`: five separate batched
   test evaluations per model using seeds 42, 1, 100, 1000, 10000; one model load,
-  all 36 selected rows, 16 output tokens and memory ratio 0.8. Scripts:
+  16 output tokens and memory ratio 0.8. The latest-RPO Qwen and Gemma
+  matrices each have 15 rows. Scripts:
   `../codes/run_openbookqa_final_test_qwen_5runs.sh` and
   `../codes/run_openbookqa_final_test_gemma_5runs.sh`. Results are saved separately
   under `../outputs/qa_final_test/non_reasoning/selected_prompts/<CODE>/seed_<SEED>/`.
-  The parent summary tracks completion. Mean/sample std and paired gains are
-  intentionally deferred to our analysis after all five runs finish.
+  The parent summary tracks completion. The completed mean/sample-std accuracy
+  and source-relative mean gains are recorded in
+  `final_test/openbookqa_latest_rpo_five_seed_results.txt`.
+- `final_test/openbookqa_qwen_latest_rpo_final_prompts.tsv`: frozen 15-row
+  Qwen manifest containing its latest RPO-5/RPO-10 and six refiners per source.
 
 ## Professor-facing result bundles
 
@@ -147,6 +166,9 @@ Associated report scripts:
   `../codes/run_openbookqa_final_test_gemma.sh`.
 - `final_test/openbookqa_selected_prompts.tsv`: frozen 72-row first-/second-stage
   prompt manifest with exact CODEs, paths, parent links, and SHA-256 hashes.
+- `final_test/openbookqa_gemma_latest_rpo_final_prompts.tsv`: frozen 15-row
+  Gemma manifest containing the initial prompt, latest RPO-5/RPO-10 prompts,
+  and all six final second-stage variants for each source.
 - `../codes/run_openbookqa_initial_test_gemma.sh`: standalone initial-prompt
   check for Gemma's anomalous 0/500 batched baseline. Uses the existing
   evaluator, one decoding run, GPU 3, memory ratio 0.8, output limit 16 tokens,
