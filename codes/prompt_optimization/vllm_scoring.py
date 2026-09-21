@@ -125,8 +125,9 @@ def score_combined_objectives_vllm(
     batch_size: int,
     fluency_lambda: float,
     reasoning_traces: Sequence[str] | None = None,
+    instruction_nlls: Sequence[float] | None = None,
 ) -> list[dict[str, float]]:
-    """Batch cached teacher-forced examples and instruction-only fluency with vLLM."""
+    """Batch task loss with vLLM and combine supplied or vLLM fluency NLLs."""
     prompts = list(instruction_prompts)
     if not prompts:
         return []
@@ -159,22 +160,29 @@ def score_combined_objectives_vllm(
         )
     if any(count != len(records) for count in counts):
         raise RuntimeError("vLLM scoring did not process every candidate/example pair.")
-    fluencies = [0.0] * len(prompts)
-    for indices in batched(list(range(len(prompts))), batch_size):
-        # Match score_instruction_nlls: raw instruction, no chat/BOS, no truncation.
-        encoded = tokenizer(
-            [prompts[index] for index in indices],
-            padding=False,
-            add_special_tokens=False,
-        )
-        scored = [(index, list(tokens)) for index, tokens in zip(indices, encoded["input_ids"]) if len(tokens) >= 2]
-        losses = score_token_sequences(
-            model,
-            [tokens for _, tokens in scored],
-            [list(range(1, len(tokens))) for _, tokens in scored],
-        )
-        for (index, _), loss in zip(scored, losses):
-            fluencies[index] = loss
+    if instruction_nlls is not None:
+        fluencies = [float(value) for value in instruction_nlls]
+        if len(fluencies) != len(prompts):
+            raise ValueError("Supplied instruction NLLs must match the candidate prompts.")
+        if any(not math.isfinite(value) for value in fluencies):
+            raise ValueError("Supplied instruction NLLs must all be finite.")
+    else:
+        fluencies = [0.0] * len(prompts)
+        for indices in batched(list(range(len(prompts))), batch_size):
+            # Match score_instruction_nlls: raw instruction, no chat/BOS, no truncation.
+            encoded = tokenizer(
+                [prompts[index] for index in indices],
+                padding=False,
+                add_special_tokens=False,
+            )
+            scored = [(index, list(tokens)) for index, tokens in zip(indices, encoded["input_ids"]) if len(tokens) >= 2]
+            losses = score_token_sequences(
+                model,
+                [tokens for _, tokens in scored],
+                [list(range(1, len(tokens))) for _, tokens in scored],
+            )
+            for (index, _), loss in zip(scored, losses):
+                fluencies[index] = loss
     return [
         {
             "task_loss": total / count,

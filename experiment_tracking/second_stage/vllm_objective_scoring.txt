@@ -20,9 +20,12 @@ Use the separate re_prompt_optimization_vllm_v2 environment and
 requirements_vllm_v2.txt. Do not reinstall into the original environment.
 
 HF retains all gradients and gradient-dependent token probability/ranking work.
-vLLM optionally replaces forward-only task/fluency objectives through the
+vLLM replaces the expensive forward-only task-loss objective through the
 shared _score_objective_candidates path, covering all GradPO variants and
-GreaTer's forward-scored candidates. LPO's direct validation is unchanged.
+GreaTer's forward-scored candidates. The resident HF model scores every new
+candidate instruction's short fluency NLL before beam pruning. This avoids a
+Gemma 3 non-finite vLLM prompt-logprob observed during raw-instruction scoring
+without repeating candidate-example task loss in HF. LPO is unchanged.
 No meta-prompts, answer formats, protected terms, validation metrics,
 reasoning token limits, subset sizes, or beam/candidate budgets were changed.
 
@@ -35,7 +38,7 @@ replaced by the gold answer (or the existing missing-answer fallback).
 Reasoning is conditioning context; only gold-answer tokens contribute loss.
 First average negative input-token logprobs within each problem's answer,
 then average equally across problems. Long symbolic answers do not dominate.
-Instruction fluency is scored separately on the raw editable instruction,
+Instruction fluency is scored separately by HF on the raw editable instruction,
 without a chat template, question, fixed answer instruction, or reasoning.
 Exclude the first instruction token, just as the HF scorer does.
 Combined score = mean gold-answer loss + fluency_lambda * instruction NLL.

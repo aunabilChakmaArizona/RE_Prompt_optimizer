@@ -74,6 +74,7 @@ from prompt_optimization.sequence_gradients import (
     rank_fixed_token_candidates,
     replace_selected_regions,
     score_combined_objectives,
+    score_instruction_nlls,
     select_gradient_regions,
     same_length_single_token_replacement_prompt,
     tensor_free_gradient_summary,
@@ -472,6 +473,12 @@ def _score_objective_candidates(
             f"vLLM objective scoring started | candidates={len(prompts)} | "
             f"examples={len(records)} | submission_size={submission_size}",
         )
+        instruction_nlls = score_instruction_nlls(
+            prompts,
+            model,
+            tokenizer,
+            batch_size=batch_size,
+        )
         objectives = score_combined_objectives_vllm(
             prompts,
             records,
@@ -481,6 +488,7 @@ def _score_objective_candidates(
             batch_size=submission_size,
             fluency_lambda=fluency_lambda,
             reasoning_traces=reasoning_traces,
+            instruction_nlls=instruction_nlls,
         )
         elapsed = time.monotonic() - started_at
         context.logger.event(
@@ -489,6 +497,7 @@ def _score_objective_candidates(
             candidates=len(prompts),
             examples=len(records),
             submission_size=submission_size,
+            fluency_backend="transformers",
             elapsed_seconds=elapsed,
         )
         log_progress(context, "vLLM objective scoring completed", phase_started_at=started_at)

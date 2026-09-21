@@ -206,6 +206,35 @@ class VLLMObjectiveTests(unittest.TestCase):
         for result in results:
             self.assertAlmostEqual(result["combined_score"], result["task_loss"] + 0.5 * result["instruction_nll"])
 
+    def test_supplied_hf_fluency_skips_vllm_instruction_scoring(self):
+        """Use vLLM only for task loss when HF prompt NLLs are supplied."""
+        model = FakeVLLM()
+        prompts = ["Solve.", "Check carefully."]
+        fluencies = [0.25, 0.75]
+
+        results = score_combined_objectives_vllm(
+            prompts,
+            self.records,
+            mode=self.mode,
+            model=model,
+            tokenizer=CharacterTokenizer(),
+            batch_size=3,
+            fluency_lambda=0.5,
+            reasoning_traces=self.traces,
+            instruction_nlls=fluencies,
+        )
+
+        self.assertEqual([len(call[0]) for call in model.calls], [3, 1])
+        self.assertEqual(
+            [result["instruction_nll"] for result in results],
+            fluencies,
+        )
+        for result in results:
+            self.assertAlmostEqual(
+                result["combined_score"],
+                result["task_loss"] + 0.5 * result["instruction_nll"],
+            )
+
     @unittest.skipIf(torch is None, "HF parity requires PyTorch.")
     def test_hf_and_vllm_objectives_agree_for_identical_causal_logits(self):
         """Verify token shifts, left padding, per-example weighting, and rankings."""
@@ -231,7 +260,7 @@ class VLLMObjectiveTests(unittest.TestCase):
                 score_token_sequences(SimpleNamespace(generate=lambda *_args, **_kwargs: [output]), [[65, 66]], [[1]])
 
     def test_dispatch_uses_target_vllm_without_hf_forward(self):
-        """Route the shared GreaTer/GradPO objective call to the target engine."""
+        """Route task loss to vLLM while supplying HF instruction fluency."""
         model = object()
         context = SimpleNamespace(
             args=SimpleNamespace(objective_scoring_backend="vllm", objective_scoring_batch_size=128),
@@ -239,11 +268,22 @@ class VLLMObjectiveTests(unittest.TestCase):
             mode=self.mode, logger=SimpleNamespace(event=MagicMock()),
             optimizer_name="gradpo_gen", started_at=time.monotonic(),
         )
-        with patch("prompt_optimization.vllm_scoring.score_combined_objectives_vllm", return_value=[{"combined_score": 1.0}]) as scorer:
+        with (
+            patch(
+                "prompt_optimization.second_stage.score_instruction_nlls",
+                return_value=[0.25],
+            ) as fluency_scorer,
+            patch(
+                "prompt_optimization.vllm_scoring.score_combined_objectives_vllm",
+                return_value=[{"combined_score": 1.0}],
+            ) as scorer,
+        ):
             result = _score_objective_candidates(context, ["Solve."], self.records, model=object(), tokenizer=CharacterTokenizer(), batch_size=1, fluency_lambda=0.5, reasoning_traces=self.traces)
         self.assertEqual(result, [{"combined_score": 1.0}])
         self.assertIs(scorer.call_args.kwargs["model"], model)
         self.assertEqual(scorer.call_args.kwargs["batch_size"], 128)
+        self.assertEqual(scorer.call_args.kwargs["instruction_nlls"], [0.25])
+        fluency_scorer.assert_called_once()
         context.model_pool.ensure_vllm.assert_called_once_with("target")
 
     def test_beam_does_not_rescore_unchanged_survivors(self):
