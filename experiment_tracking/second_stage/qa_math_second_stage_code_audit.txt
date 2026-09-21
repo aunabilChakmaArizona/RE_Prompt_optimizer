@@ -231,3 +231,17 @@ Verification
   cover deterministic beam synthesis, last-complete-block extraction, span-tag
   cleanup, discarding truncated tagged output, accepting complete tagged
   synthesis as generated, and OpenBookQA's `true-false` restriction.
+
+Gemma Math teacher-forced alignment fix (2026-09-21)
+-----------------------------------------------------
+- Gemma 3's chat template trims assistant-message boundary whitespace. When a
+  cached reasoning trace lacked answer tags, the Math fallback began with two
+  newlines before `Therefore, ... <answer>GOLD</answer>`. The template removed
+  those newlines, while gradient alignment searched for the full untrimmed
+  fallback prefix, causing `Gold answer target was not found`.
+- Alignment now searches for the invariant final `<answer>GOLD</answer>` block
+  and continues to calculate loss only over `GOLD`. Model input construction,
+  the reasoning trace, and the loss target are otherwise unchanged. A bounded
+  record-aware diagnostic is retained if the invariant block is ever absent.
+- All 30 Math prompt-optimization tests pass (one optional test skipped),
+  including a new regression test that mimics Gemma content trimming.

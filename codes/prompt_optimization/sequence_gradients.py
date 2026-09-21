@@ -136,11 +136,22 @@ def render_teacher_forced_qa(
     instruction_start = rendered.find(instruction_prompt)
     if instruction_start < 0:
         raise ValueError("Instruction text was not found after chat-template rendering.")
-    target_text = f"{answer_prefix}{gold_answer}</answer>"
+    # Chat templates may trim leading whitespace from assistant content.  Align
+    # against the invariant answer block rather than the optional fallback
+    # preamble, which begins with newlines and is therefore not round-tripped by
+    # Gemma's template.
+    answer_tag = "<answer>"
+    target_text = f"{answer_tag}{gold_answer}</answer>"
     target_start = rendered.rfind(target_text)
     if target_start < 0:
-        raise ValueError("Gold answer target was not found after chat-template rendering.")
-    answer_start = target_start + len(answer_prefix)
+        record_id = record.get("id", "<unknown>")
+        raise ValueError(
+            "Gold answer target was not found after chat-template rendering "
+            f"for record {record_id!r}; target={target_text!r}, "
+            f"answer_target_mode={answer_target_mode!r}, "
+            f"rendered_suffix={rendered[-500:]!r}."
+        )
+    answer_start = target_start + len(answer_tag)
     return {
         "text": rendered,
         "instruction_start": instruction_start,

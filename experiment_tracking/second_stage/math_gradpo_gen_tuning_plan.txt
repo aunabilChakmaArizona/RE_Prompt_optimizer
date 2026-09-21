@@ -1,14 +1,71 @@
 QWEN MATH GradPO-Gen: fast eight-attempt tuning plan
 ====================================================
-Updated: 2026-09-16
-Status: first fast attempt failed during HF gradients; batch-1 restart ready.
+Updated: 2026-09-21
+Status: all 16 comparable S/T/H attempts and the two RPO10 seed checks are
+complete. The script's default remains the later eight-attempt grid on GPU 1.
 Scope: Math reasoning, Qwen only, selected RPO5/RPO10 sources only.
 No test evaluation. Gemma tuning will be planned separately.
 Script: codes/run_math_gradpo_tuning_qwen.sh
 Shared-cache note: experiment_tracking/second_stage/shared_training_pool_cache.txt
 
+RPO10 S3/T5/H0.45 two-seed follow-up (completed)
+------------------------------------------------------------
+The seed-42 run retained RPO10: its strongest candidate scored 77.69% stable
+versus 77.74% for the source, a near miss. To check seed sensitivity without
+changing hyperparameters, the existing script now supports MATH_TUNING_STAGE=
+seedcheck. It runs RPO10 at S=3, T=5, H=0.45 with seeds 1 and 100, with
+distinct CODE suffixes _seed1 and _seed100. C=7, G=200, B=5, F=0.5,
+pool=1600, validation=3x300, and output cap=4096 remain fixed. These seeds
+also change seeded training-pool/balanced-subset selection and sampled model
+responses; compare each candidate against its own same-seed source score.
+Report both outcomes, including failures, rather than selecting a lucky seed.
+
+Only launch when the selected GPU has sufficient free memory. At preparation
+time GPU 1 was heavily occupied by another process, so no job was started.
+From the repository root, after activating re_prompt_optimization_vllm_v2:
+
+MATH_TUNING_STAGE=seedcheck nohup bash codes/run_math_gradpo_tuning_qwen.sh \
+  > codes/nohup_outs/math_gradpo_qwen_rpo10_s3t5h045_seeds.log 2>&1 &
+
+The script defaults to GPU 1. To rerun only the second seed after a failure,
+set MATH_TUNING_SEEDS=100. Do not delete or overwrite other researchers'
+processes to make room for this run.
+
+Remaining Qwen grid (completed; still the script default)
+---------------------------------
+The earlier four configurations were evaluated on both RPO sources. The four
+previously untested combinations below complete S={3,5} x T={3,5} x H={0.30,0.45};
+each was run on both RPO5 and RPO10. Existing run directories are not changed by
+this distinct set of CODEs. Prior attempts remain available explicitly with
+MATH_TUNING_STAGE=all, but should not be rerun for this follow-up.
+
+| Attempts | Sources     | S | T | H    |
+|----------|-------------|---|---|------|
+| 1-2      | RPO5, RPO10 | 5 | 3 | 0.45 |
+| 3-4      | RPO5, RPO10 | 5 | 5 | 0.45 |
+| 5-6      | RPO5, RPO10 | 3 | 3 | 0.30 |
+| 7-8      | RPO5, RPO10 | 5 | 3 | 0.30 |
+
+Everything else matches the completed Math runs: pool=1600, G=200, C=7,
+B=5, F=0.5, output=4096, validation=3x300, seed=42, gradient batch=1,
+selection batch=4, and dual HF/vLLM scoring on one GPU. The matching shared
+training and source-validation caches may be reused. No test set is read.
+
+Launch from the project root after activating re_prompt_optimization_vllm_v2:
+nohup bash codes/run_math_gradpo_tuning_qwen.sh \
+  > codes/nohup_outs/math_gradpo_tuning_qwen_remaining.log 2>&1 &
+
+The default is GPU 1. To resume without rerunning completed attempts, set
+MATH_TUNING_START=N (1-8); MATH_TUNING_END=N optionally bounds the last one.
+
+Original eight-attempt setup and historical deployment notes (completed)
+-----------------------------------------------------------------------
+The details below describe the original fast matrix and its earlier failed
+batch-2 startup, not the current default launch. Use the remaining-grid
+launch command above for the new experiments.
+
 Fixed fast settings
---------------------
+-------------------
 C=7 requested new replacements per region, plus the unchanged candidate.
 B=5 beam survivors and at most five final beam prompts.
 G=200 correctness-balanced gradient subset (up to 100 correct + 100 incorrect).
@@ -48,8 +105,8 @@ Gold-answer loss remains conditioned on cached model reasoning, averaged
 within answers and then equally across examples. Reasoning is not supervised
 as a gold trace. The fixed answer instruction remains uneditable.
 
-Eight attempts (default: run all, sequentially)
-------------------------------------------------
+Original eight attempts (completed; available with MATH_TUNING_STAGE=all)
+-----------------------------------------------------------------------
 | Attempts | Sources     | S | T | H    | C | G   | B | F   |
 |----------|-------------|---|---|------|---|-----|---|-----|
 | 1-2      | RPO5, RPO10 | 3 | 3 | 0.45 | 7 | 200 | 5 | 0.5 |
@@ -110,8 +167,8 @@ Superseded slow plan: C=10, B=10, target output 8192, gradient/selection
 microbatch 1, initially HF objectives. Its previous adaptive plan ran four
 width attempts by default, then two threshold and two span-count attempts.
 
-Stop the old job and launch the ready script
----------------------------------------------
+Historical stop/restart instructions for the original attempts
+--------------------------------------------------------------
 At inspection, the old shell PID and process-group ID were both 793738.
 Its Python PID 793739, vLLM worker PID 794691, and resource tracker 794690
 all belonged to that same group. The user's login shell is a different group.
@@ -128,7 +185,9 @@ conda activate re_prompt_optimization_vllm_v2
 nohup bash codes/run_math_gradpo_tuning_qwen.sh \
   > codes/nohup_outs/math_gradpo_tuning_qwen_fast4096.log 2>&1 &
 
-Optional GPU override: MATH_TUNING_GPU=N before nohup; default stays 3.
+That historical launch line now runs the NEW remaining grid by default on
+GPU 1; use MATH_TUNING_STAGE=all only if deliberately rerunning the originals.
+Optional GPU override: MATH_TUNING_GPU=N before nohup.
 CUDA_VISIBLE_DEVICES numeric ordering differs from nvidia-smi on this host.
 Do not launch the new models before the old job releases its GPU memory.
 The assistant did not stop or launch any actual optimization experiment.
@@ -148,3 +207,45 @@ edit_tracking remains disabled.
 Older Math full-matrix generator/scripts still refer to old Qwen RPO sources
 and duplicate original EvoPrompt snapshots. Do not run them as this plan;
 update sources/settings after selecting the final tuning configuration.
+
+Selected Qwen MATH-500 GradPO-Gen settings (validation only)
+-----------------------------------------------------------
+Preferred shared setting for RPO5 and RPO10: S=3, T=3, H=0.30, seed=42.
+This is the strongest common setting improving both sources; it is not the
+highest-scoring individual RPO5 setting. Fixed: C=7, G=200, B=5, F=0.5,
+pool=1600, output cap=4096, validation=3x300, stable penalty=1.
+
+RPO5: 703/900 -> 713/900 correct; stable 76.03% -> 77.22%; 30 fixed,
+20 broken. Retained prompt:
+outputs/math_prompt_optimization/reasoning/gradpo_gen/math500_reasoning_qwen_rpo5_gradpo_tune_s3_t3_h030_c7_g200_b5_f050_pool1600_vs900_tok4096_v2/final_prompt.txt
+
+RPO10: 716/900 -> 728/900 correct; stable 77.74% -> 79.55%; 41 fixed,
+29 broken. Retained prompt:
+outputs/math_prompt_optimization/reasoning/gradpo_gen/math500_reasoning_qwen_rpo10_gradpo_tune_s3_t3_h030_c7_g200_b5_f050_pool1600_vs900_tok4096_v2/final_prompt.txt
+
+Requested RPO10 backup: S=3, T=5, H=0.45, seed=100. This run improved its
+same-seed source from 705/900 to 710/900 correct and from 76.37% to 77.76%
+stable, with 38 fixed and 33 broken. Its saved prompt is:
+outputs/math_prompt_optimization/reasoning/gradpo_gen/math500_reasoning_qwen_rpo10_gradpo_tune_s3_t5_h045_c7_g200_b5_f050_pool1600_vs900_tok4096_v2_seed100/final_prompt.txt
+IMPORTANT: This backup prompt begins "S Figure out ..." because separate
+gradient regions split the original "Solve" into "S" and "olve". The exact
+saved prompt is malformed and should not be used as a final prompt without
+repair and fresh validation; a repaired prompt has no measured score here.
+The same setting with seed=42 did not improve; seed=1 also selected a
+malformed prompt. Seed-dependent source scores differ because the sampled
+model outputs changed. Do not report the seed=100 gain as a robust result.
+
+For completeness, the best individual RPO5 run was S=3, T=5, H=0.45,
+seed=42: 703/900 -> 735/900 correct, stable 76.03% -> 80.01%.
+These are tuning-set results only, not MATH-500 test scores.
+
+Final Qwen RPO-source comparison commands
+-----------------------------------------
+codes/run_math_second_stage_qwen.sh now defaults to ten validation runs:
+RPO5 and RPO10 crossed with GradPO-Prob, GradPO-Gen-Random, GreaTer,
+GreaTer-TG, and LPO. The two preferred GradPO-Gen runs above are already
+complete and are intentionally not repeated. Default physical GPU is 1;
+MATH_SECOND_STAGE_GPU overrides it. MATH_SECOND_STAGE_DRY_RUN=1 prints the
+commands, and completed CODEs with summary.json are skipped on restart.
+The older five-source matrix is preserved only under
+MATH_SECOND_STAGE_RUN_SET=legacy; it retains outdated sources/settings.

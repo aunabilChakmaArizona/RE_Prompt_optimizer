@@ -1,6 +1,6 @@
-DELTA AI: SIMPLE SSH, CONDA, UPLOAD, AND GEMMA MATH RUN GUIDE
-===========================================================
-Prepared: 2026-09-17. Follow the numbered steps in order.
+DELTA AI: GIT, DATA, CONDA, GEMMA MATH SLURM, AND RESULTS GUIDE
+==============================================================
+Updated: 2026-09-21. Follow the numbered steps in order.
 This guide contains commands for YOU to run; no remote setup was performed.
 Central index: experiment_tracking/README.md.
 
@@ -11,20 +11,34 @@ DeltaAI has ARM/aarch64 CPUs and GH200 superchips (H100-class GPU, 96GB).
 Use partition ghx4. Do not request Delta's gpuH200x8 with this allocation.
 Use a fresh native ARM environment; do NOT copy your old x86 Conda environment.
 
-Our versions: Python3.11, vLLM0.11.0, PyTorch2.8.0, Transformers4.55.2.
+Our separate environment: Python3.11, vLLM0.11.0, PyTorch2.8.0,
+Transformers4.55.2. The site module used to initialize Conda is version
+2.10.0 (its own PyTorch version does not replace ours after activation).
 IMPORTANT CORRECTION: ARM PyTorch2.8/vLLM0.11 prebuilt wheels are available
 with CUDA12.9 (cu129). Use cu129 below, NOT the old server's cu128 recipe.
 A source build is not our first choice. Wheel availability was verified on
 official release/index pages; installation/GPU execution on DeltaAI is not
 yet verified. Stop at the failing step if an installation/check fails.
 
-Replace these items when needed:
-- achakma: use this only if it is your NCSA login username. Your ACCESS profile
-  lists the NCSA username under Resource Provider Site Usernames.
-- YOUR_SLURM_ACCOUNT: your allocation charge account, shown by accounts.
-- YOUR_PROJECT: your actual writable project directory under /projects.
-The Slurm account and the project-directory name may be different.
-Do not assume the displayed username "achakma" is also the charge account.
+Your verified login username is achakma. Your `accounts` output shows the
+charge account bihn-dtai-gh (4,481 hours remaining when checked), and
+your `quota` output shows the corresponding project directory /projects/bihn.
+These are different names: use bihn-dtai-gh for Slurm and /projects/bihn for
+files. The other listed allocation, /projects/bbov, is not the project tied
+to the shown bihn-dtai-gh account. Recheck account balance when you submit.
+
+Storage shown by your `quota` output at the time you checked:
+- /u/achakma (your HOME): about 4 KB used; 100 GB soft disk quota, 103 GB
+  hard disk limit; 5 files used of 750,000 soft / 760,000 hard.
+- /projects/bihn (shared project): 35.33 GB used of 500 GB soft / 550 GB
+  hard; about 464.67 GB remains before the soft disk quota. File usage is
+  174,944 of 750,000 soft / 825,000 hard.
+- /work/nvme/bihn: 3,702,766 files used, already above its 3,400,000-file
+  soft quota and only 37,234 below its 3,740,000-file hard limit.
+These are disk capacity and file-count quotas, not GPU or system RAM.
+Use HOME for this one Conda environment and its package caches. Keep the Git
+checkout, model cache, data, and experiment outputs in /projects/bihn so job
+I/O does not burden HOME. Check `quota` as the shared project usage changes.
 
 STEP 1 -- SSH into DeltaAI [YOUR LAPTOP OR CURRENT SERVER]
 --------------------------------------------------------
@@ -56,32 +70,99 @@ quota
 ls /projects
 sinfo
 
-Expected architecture: aarch64. Save the account you can charge from accounts.
-Find your accessible project directory from quota or your allocation details.
-If no writable project directory is available, ask NCSA support before using
-a large model cache. Do not guess a project name or use this server's /storage2.
+Expected architecture: aarch64. Your reported account is bihn-dtai-gh and
+the matching project storage is /projects/bihn. At the time you checked,
+the project had about 464.67 GB left before its soft disk quota. Do not put
+the Conda environment under /work/nvme/bihn or /projects/bihn.
 
-Replace the two placeholders below, then run:
+STEP 2A -- Save paths and account in Bash once
+----------------------------------------------
+First confirm that your login shell is Bash and find the available Miniforge
+module version:
 
-export SLURM_ACCOUNT=YOUR_SLURM_ACCOUNT
-export PROJECT_DIR=/projects/YOUR_PROJECT
+echo "$SHELL"
+module spider python/miniforge3_pytorch
+module spider python/miniforge3_pytorch/2.10.0
+
+If the shell is Bash, inspect ~/.bashrc for an existing similar block, then
+open it with `nano ~/.bashrc` and add the block below ONCE. Use version 2.10.0:
+NCSA documents it with CUDA 12.9, matching the cu129 wheels we will install.
+The 2.11.0 module loads a CUDA 13.1 toolkit and is not our preferred Conda
+initializer for this particular environment. Check the full `module spider`
+output for any loading prerequisites. These lines must be SAVED IN ~/.bashrc, not
+merely typed as temporary `export` commands in the terminal. In nano, press
+Ctrl+O, Enter, then Ctrl+X to save and exit.
+If the shell is not Bash, use its startup file instead; do not assume Bash's
+~/.bashrc runs in a different shell.
+
+# DeltaAI prompt-optimization setup: add once to ~/.bashrc.
+export SLURM_ACCOUNT=bihn-dtai-gh
+export PROJECT_DIR=/projects/bihn
 export BASE_DIR="$PROJECT_DIR/$USER/promptopt"
-mkdir -p "$BASE_DIR"
+export REPO_DIR="$BASE_DIR/RE_Prompt_optimizer"
+export CONDA_ENV="$HOME/conda_envs/re_prompt_optimization_vllm_v2"
+export CONDA_PKGS_DIRS="$HOME/conda_pkgs"
+export PIP_CACHE_DIR="$HOME/pip_cache"
+export HF_HOME="$BASE_DIR/huggingface_cache"
+export CONDA_MODULE=python/miniforge3_pytorch/2.10.0
+if command -v module >/dev/null 2>&1; then
+  module load "$CONDA_MODULE"
+fi
+if command -v conda >/dev/null 2>&1; then
+  export CONDA_SH="$(conda info --base)/etc/profile.d/conda.sh"
+  source "$CONDA_SH"
+fi
 
-BASE_DIR holds code, the Conda environment, and downloaded model weights.
-Use your project's assigned storage and check its quota; project/work files
-are not automatically backed up. Keep important results elsewhere too.
+If you previously sourced ~/.bashrc with the 2.11.0 module, edit its module
+line to 2.10.0 and start a FRESH SSH login after saving. Do not merely source
+the edited file in the same shell: CUDA 13.1 variables/modules may remain
+loaded. Otherwise, source the file once to load the block in this existing
+Bash session. Future Bash logins should load it automatically. `echo` only
+PRINTS values to verify them; you do not need `echo ... >> ~/.bashrc` after
+using nano.
 
-STEP 3 -- Get the latest project [DELTA AI LOGIN NODE]
-----------------------------------------------------
-Before cloning, upload your latest LOCAL project changes to GitHub, including
-the Gemma tuning scripts, source prompt copies, and vLLM scoring implementation.
-Cloning an older GitHub revision will NOT include uncommitted local changes.
+source ~/.bashrc  # only if this shell has not loaded the 2.11.0 module
+echo "$SLURM_ACCOUNT"
+echo "$PROJECT_DIR"
+echo "$CONDA_ENV"
+echo "$CONDA_MODULE"
+module list
+echo "$CUDA_HOME"
+test -f "$CONDA_SH"
+mkdir -p "$BASE_DIR" "$HOME/conda_envs" "$HOME/conda_pkgs" \
+  "$HOME/pip_cache" "$HF_HOME"
+
+If mkdir reports a permission error, stop and check your project membership
+or ask NCSA support; quota visibility alone does not prove write permission.
+
+This configures the account, project paths, Conda path, and caches for future
+Bash logins. It initializes Conda but does not auto-activate the environment;
+after installation, `conda activate "$CONDA_ENV"` is still needed when working
+interactively. Slurm inherits exported variables from the submission shell.
+BASE_DIR holds code, model weights, data, and results. The Conda environment
+and Conda/pip package caches stay under HOME. Project files are not
+automatically backed up; keep important results elsewhere too.
+
+STEP 3 -- Get the latest project [CURRENT SERVER, THEN DELTA AI LOGIN NODE]
+-------------------------------------------------------------------------
+On the CURRENT SERVER, first check the committed revision and GitHub status:
+
+cd /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer
+git log -1 --oneline
+git status --short
+git push origin HEAD
+
+The Gemma runner, Slurm file, portable source prompts, requirements, and
+promptopt_data.zip are tracked in the local committed repository. git push
+sends only committed work; uncommitted Qwen changes will NOT be included.
+Check that the intended commit reaches GitHub before cloning on DeltaAI.
+
+Now run these commands on the DELTA AI login node:
 
 cd "$BASE_DIR"
 git clone https://github.com/aunabilChakmaArizona/RE_Prompt_optimizer.git
-export REPO_DIR="$BASE_DIR/RE_Prompt_optimizer"
 cd "$REPO_DIR"
+git log -1 --oneline
 
 If this is a private repository, use GitHub's supported HTTPS authentication.
 Do not put a GitHub token in the clone URL or commit it in a file.
@@ -96,25 +177,40 @@ ls codes/prompt_optimization/vllm_scoring.py
 ls requirements_vllm_v2.txt
 ls experiment_tracking/second_stage/math_gemma_sources/rpo5.txt
 ls experiment_tracking/second_stage/math_gemma_sources/rpo10.txt
+ls promptopt_data.zip
 
-STEP 4 -- Transfer and extract processed data
---------------------------------------------
-If promptopt_data.zip was included in GitHub, it is already in the cloned root.
-Otherwise open a SECOND terminal on your CURRENT SERVER and run this command,
-replacing YOUR_PROJECT and the username if necessary:
-
-scp /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer/promptopt_data.zip \
-  achakma@dtai-login.delta.ncsa.illinois.edu:/projects/YOUR_PROJECT/achakma/promptopt/RE_Prompt_optimizer/
-
-Complete password/Duo prompts. This archive is about36.6MiB.
-Return to the DELTA AI terminal:
+STEP 4 -- Verify, optionally transfer, and extract processed data
+----------------------------------------------------------------
+promptopt_data.zip is Git-tracked in the current local commit (about 36.6 MiB),
+so the clone should already contain it. On DELTA AI, first verify:
 
 cd "$REPO_DIR"
-unzip promptopt_data.zip
+ls -lh promptopt_data.zip
+sha256sum promptopt_data.zip
+unzip -tq promptopt_data.zip
+
+Expected SHA-256 for this archived dataset:
+326e9205385b3ea0723852055413fe6a8d04c0bb782a49503d0cd123dff341d4
+
+If the archive is absent, open a SECOND terminal on the CURRENT SERVER and
+transfer it with ONE of these commands:
+
+scp /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer/promptopt_data.zip \
+  achakma@dtai-login.delta.ncsa.illinois.edu:/projects/bihn/achakma/promptopt/RE_Prompt_optimizer/
+
+rsync -avP /storage2/home/aunabilchakma/codes/RE_Prompt_optimizer/promptopt_data.zip \
+  achakma@dtai-login.delta.ncsa.illinois.edu:/projects/bihn/achakma/promptopt/RE_Prompt_optimizer/
+
+Complete password/Duo prompts. Recheck the SHA-256 on DELTA AI after transfer.
+Return to the DELTA AI terminal and extract without overwriting existing data:
+
+cd "$REPO_DIR"
+unzip -n promptopt_data.zip
 mkdir -p codes/nohup_outs
 ls data/processed/math500/train.jsonl
 ls data/processed/math500/validation.jsonl
 ls data/processed/math500/test.jsonl
+wc -l data/processed/math500/train.jsonl data/processed/math500/validation.jsonl
 
 The archive also contains OpenBookQA and HotpotQA. Raw downloads and old
 output/cache directories do not need to be transferred for this tuning run.
@@ -122,40 +218,36 @@ Both required source prompts are already included in the new tracked files.
 
 STEP 5 -- Load Conda [DELTA AI LOGIN NODE]
 ----------------------------------------
-module spider python/miniforge3_pytorch
+Step 2A added the selected Miniforge module and conda.sh initialization to
+~/.bashrc, so they should already be available in this Bash login:
 
-The currently documented stable default is 2.10.0. Use it as a Conda
-initializer, NOT as our experiment's PyTorch version:
+printf 'module=%s\nconda.sh=%s\n' "$CONDA_MODULE" "$CONDA_SH"
+conda --version
 
-export CONDA_MODULE=python/miniforge3_pytorch/2.10.0
-module load "$CONDA_MODULE"
-source "$(conda info --base)/etc/profile.d/conda.sh"
-export CONDA_SH="$(conda info --base)/etc/profile.d/conda.sh"
-
-If 2.10.0 is unavailable, choose a listed module and update CONDA_MODULE to
-that exact name. We create a separate environment in the next step; this
-does NOT modify the system module or inherit its Python packages.
+If these fail, revisit step 2A before creating an environment. The site
+module only supplies the Conda initializer; the experiment packages go into
+our separate environment, not the site environment.
 
 STEP 6 -- Create your own named environment [DELTA AI LOGIN NODE]
 ---------------------------------------------------------------
-mkdir -p "$BASE_DIR/conda_envs" "$BASE_DIR/conda_pkgs" "$BASE_DIR/pip_cache"
-export CONDA_PKGS_DIRS="$BASE_DIR/conda_pkgs"
-export PIP_CACHE_DIR="$BASE_DIR/pip_cache"
-conda config --prepend envs_dirs "$BASE_DIR/conda_envs"
+mkdir -p "$HOME/conda_envs" "$CONDA_PKGS_DIRS" "$PIP_CACHE_DIR"
+conda config --prepend envs_dirs "$HOME/conda_envs"
 
 conda create -n re_prompt_optimization_vllm_v2 python=3.11 pip -y
-conda activate re_prompt_optimization_vllm_v2
-export CONDA_ENV="$CONDA_PREFIX"
+conda activate "$CONDA_ENV"
 
 echo "$CONDA_PREFIX"
 conda env list
 python --version
 
 The environment should be under:
-<BASE_DIR>/conda_envs/re_prompt_optimization_vllm_v2
+<HOME>/conda_envs/re_prompt_optimization_vllm_v2
 Adding envs_dirs lets you activate it by name. Existing environments are not
 deleted or moved. If that name already exists, inspect it rather than recreate
-or overwrite it blindly. CONDA_ENV stores the exact path for our Slurm launcher.
+or overwrite it blindly. CONDA_ENV in ~/.bashrc stores the exact path for our
+Slurm launcher. The environment and package cache are both on the HOME
+filesystem, allowing Conda to hardlink packages where possible. Monitor both
+HOME disk usage and file counts with `quota` after installation.
 
 STEP 7 -- Install the matching ARM CUDA packages [DELTA AI LOGIN NODE]
 --------------------------------------------------------------------
@@ -165,11 +257,9 @@ Do not run a large source compilation on the login node.
 cd "$REPO_DIR"
 python -m pip install --upgrade pip setuptools wheel
 
-# First install the CUDA-enabled ARM PyTorch stack from the cu129 index.
+# First install the CUDA-enabled ARM PyTorch wheel from the cu129 index.
 python -m pip install --only-binary=:all: \
   "torch==2.8.0" \
-  "torchvision==0.23.0" \
-  "torchaudio==2.8.0" \
   --index-url https://download.pytorch.org/whl/cu129
 
 # Then install vLLM and our project dependencies, retaining that torch build.
@@ -181,19 +271,23 @@ python -m pip install --only-binary=vllm \
 python -m pip check
 
 Expect torch2.8.0+cu129, vLLM0.11.0, Transformers4.55.2.
-Do NOT install the ordinary CPU torch wheel, switch to a nightly version,
-upgrade to the site's torch2.10 stack, or use requirements_vllm.txt instead.
+torchvision and torchaudio are not part of this text-only experiment; add
+them only if a verified import actually requires them. Do NOT install an
+ordinary CPU torch wheel, switch blindly to a nightly version, upgrade to
+the site's PyTorch stack, or use requirements_vllm.txt instead.
 You do not need to install/update the NVIDIA driver yourself. It is managed
 by NCSA. If a wheel/driver check fails, stop and keep the error message.
 
 STEP 8 -- Check versions and run CPU tests [DELTA AI LOGIN NODE]
 --------------------------------------------------------------
-python -c 'import platform, torch, transformers, vllm; print("CPU:", platform.machine()); print("torch:", torch.__version__); print("CUDA build:", torch.version.cuda); print("transformers:", transformers.__version__); print("vLLM:", vllm.__version__)'
+env -u LD_LIBRARY_PATH python -c 'import platform, torch, transformers, vllm; print("CPU:", platform.machine()); print("torch:", torch.__version__); print("CUDA build:", torch.version.cuda); print("transformers:", transformers.__version__); print("vLLM:", vllm.__version__)'
 
 Expected: aarch64, torch2.8.0+cu129, CUDA12.9, transformers4.55.2, vLLM0.11.0.
 torch.cuda.is_available() may be False on the LOGIN node: it has no GPUs.
+The temporary `env -u LD_LIBRARY_PATH` avoids the site NCCL override without
+changing the login shell or ~/.bashrc.
 
-python -m unittest discover -s tests
+python -m unittest discover -s tests -p 'test_math_gradpo_gemma_script.py'
 MATH_TUNING_DRY_RUN=1 bash codes/run_math_gradpo_tuning_gemma.sh
 
 The dry run prints eight commands; it does NOT load a model or start inference.
@@ -205,7 +299,6 @@ In your browser, sign into Hugging Face and accept the access terms for:
 https://huggingface.co/google/gemma-3-4b-it
 Create a read token with permission to download that gated model.
 
-export HF_HOME="$BASE_DIR/huggingface_cache"
 mkdir -p "$HF_HOME"
 hf auth login
 hf download google/gemma-3-4b-it
@@ -236,6 +329,9 @@ Reload/activate your environment if your shell startup changed it:
 module load "$CONDA_MODULE"
 source "$CONDA_SH"
 conda activate "$CONDA_ENV"
+# The site library path shadows the NCCL bundled with this PyTorch wheel.
+# Clear it only for this compute-node shell, after loading the module/Conda.
+unset LD_LIBRARY_PATH
 cd "$REPO_DIR"
 nvidia-smi
 
@@ -244,6 +340,10 @@ python -c 'import torch; from vllm import _C; print("vLLM CUDA extension import 
 
 Expect a working GPU and tensor sum4.0. These are basic checks, not proof
 that Gemma generation, gradients, and prompt-logprob scoring all work.
+On DeltaAI, leaving LD_LIBRARY_PATH set to the site module's value can make
+`import torch` fail with `undefined symbol: ncclCommWindowRegister`. This
+environment bundles its own NCCL; keep `unset LD_LIBRARY_PATH` after
+`conda activate` in Slurm jobs too, not in ~/.bashrc.
 Slurm owns CUDA_VISIBLE_DEVICES. Do NOT set it to physical GPU3/1/etc.
 Our code uses cuda:0 INSIDE the GPU assigned to this job.
 
@@ -281,18 +381,28 @@ The log should eventually say Saved QA gradpo_gen run and show validation gains.
 Check the saved summary and full retained prompt before launching the rest.
 A GPU job finishing does NOT necessarily mean it improved; compare the scores.
 
-STEP 13 -- Submit the remaining seven attempts [DELTA AI LOGIN NODE]
-------------------------------------------------------------------
-After attempt1 finishes successfully:
+STEP 13 -- Submit the remaining attempts in phases [DELTA AI LOGIN NODE]
+------------------------------------------------------------------------
+After attempt1 finishes successfully, run attempts 2-4 first:
 
-MATH_TUNING_START=2 sbatch \
+MATH_TUNING_START=2 MATH_TUNING_END=4 sbatch \
   --account="$SLURM_ACCOUNT" \
   --partition=ghx4 \
   codes/run_math_gradpo_tuning_gemma.slurm
 
-Only attempts2-8 run, sequentially on one GPU. Cached matching training/source
-results from attempt1 can be reused. If you prefer all eight at once instead
-of checking attempt1 first, submit with no START/END override.
+Inspect both RPO sources after attempts 1-4. If no clean setting improves
+both on the stable validation score, run attempts 5-6, then 7-8 if needed:
+
+MATH_TUNING_START=5 MATH_TUNING_END=6 sbatch \
+  --account="$SLURM_ACCOUNT" --partition=ghx4 \
+  codes/run_math_gradpo_tuning_gemma.slurm
+
+MATH_TUNING_START=7 MATH_TUNING_END=8 sbatch \
+  --account="$SLURM_ACCOUNT" --partition=ghx4 \
+  codes/run_math_gradpo_tuning_gemma.slurm
+
+Submit each phase only after the previous one completes. Matching cached
+training/source results from earlier attempts can be reused.
 No automatic mid-attempt resume. If a later attempt fails, resume starting at
 that attempt number after fixing the issue. --overwrite replaces an existing
 run folder with the same CODE, so avoid rerunning already-completed attempts.
@@ -308,27 +418,20 @@ No test evaluation. This is not a full factorial grid.
 
 STEP 14 -- Reconnect another day [DELTA AI LOGIN NODE]
 ----------------------------------------------------
-SSH again as in step1, then restore these variables with your actual values:
+SSH again as in step1. For a Bash login, ~/.bashrc should restore the
+account, paths, cache settings, module, and Conda initializer automatically:
 
-export SLURM_ACCOUNT=YOUR_SLURM_ACCOUNT
-export PROJECT_DIR=/projects/YOUR_PROJECT
-export BASE_DIR="$PROJECT_DIR/$USER/promptopt"
-export REPO_DIR="$BASE_DIR/RE_Prompt_optimizer"
-export CONDA_MODULE=python/miniforge3_pytorch/2.10.0
-module load "$CONDA_MODULE"
-source "$(conda info --base)/etc/profile.d/conda.sh"
-export CONDA_SH="$(conda info --base)/etc/profile.d/conda.sh"
-conda activate re_prompt_optimization_vllm_v2
-export CONDA_ENV="$CONDA_PREFIX"
-export HF_HOME="$BASE_DIR/huggingface_cache"
-export PIP_CACHE_DIR="$BASE_DIR/pip_cache"
+printf 'account=%s\nrepo=%s\nenv=%s\n' \
+  "$SLURM_ACCOUNT" "$REPO_DIR" "$CONDA_ENV"
+conda activate "$CONDA_ENV"
 cd "$REPO_DIR"
 
-Change CONDA_MODULE above if you selected a different initializer in step5.
+If a login does not load ~/.bashrc automatically, run `source ~/.bashrc` once
+and check your shell startup configuration before submitting jobs.
 Already-submitted sbatch jobs continue after SSH disconnects.
 
-STEP 15 -- Stop a job or find its saved results
-----------------------------------------------
+STEP 15 -- Stop a job, inspect outputs, and prepare Git-friendly results
+-----------------------------------------------------------------------
 To stop one of YOUR jobs and its subprocesses:
 
 scancel JOBID
@@ -343,6 +446,36 @@ Copy important outputs to another server/storage location after completion;
 they are Git-ignored and not automatically included in the code repository.
 Detailed tuning/deployment note:
 experiment_tracking/second_stage/math_gradpo_gemma_slurm_guidelines.txt
+
+Planned compact TXT results bundle (NOT implemented yet):
+experiment_tracking/second_stage/math_gemma_deltaai_results/
+  overview.txt                 all attempts, raw/stable scores, gains,
+                               fixed/broken counts, and run status
+  prompts/<CODE>.txt            complete retained instruction for each run
+  selected_spans/<CODE>.txt     span locations and selected text
+  changed_questions/<CODE>.txt  IDs fixed/broken, not full reasoning traces
+  provenance.txt               Git commit, package versions, data, seed,
+                               settings, and original output paths
+
+A small exporter still needs to be added to read summary.json, selected_spans,
+and paired validation prediction JSONL files and refresh these TXT files after
+completed attempts. Until that exporter exists, do not expect the directory or
+these TXT files to appear automatically; the original run outputs remain under
+outputs/. Do not add the full reasoning traces or model caches to Git.
+
+After verifying the compact results, use a separate branch on DELTA AI to
+avoid interfering with current work in the original repository:
+
+git switch -c math-gemma-deltaai-results
+git add experiment_tracking/second_stage/math_gemma_deltaai_results/
+git commit -m "Add Gemma MATH-500 GradPO tuning results"
+git push -u origin math-gemma-deltaai-results
+
+Do this ONLY after the results folder has actually been generated. From the
+CURRENT SERVER, `git fetch origin math-gemma-deltaai-results` retrieves the
+branch without merging it into a dirty worktree. We can inspect files via
+`git show origin/math-gemma-deltaai-results:<relative-path>` or import them
+deliberately later. Do not put Hugging Face/GitHub tokens into this bundle.
 
 If something fails
 ------------------

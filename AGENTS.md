@@ -10,6 +10,7 @@ Notes on this project
 Runtime environment
 * Use the Conda environment `re_prompt_optimization_vllm_v2` for vLLM inference and the current QA/Math experiment code.
 * Activate it with `conda activate re_prompt_optimization_vllm_v2`.
+* On NCSA DeltaAI, the site module's `LD_LIBRARY_PATH` can make PyTorch load an incompatible site NCCL. After activating the Conda environment on a compute node or in a Slurm job, run `unset LD_LIBRARY_PATH` before importing PyTorch/vLLM. Keep this job-scoped; do not put it in `~/.bashrc`.
 
 Experiment tracking
 * Canonical first-stage results for OpenBookQA non-reasoning, HotpotQA reasoning, and MATH-500 reasoning are tracked in `experiment_tracking/first_stage/detailed_first_stage_results.txt`.

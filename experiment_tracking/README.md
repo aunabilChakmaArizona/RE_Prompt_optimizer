@@ -52,9 +52,10 @@ python -u codes/report_first_stage_results.py
   only HF in this test; it is not enabled in production scoring.
 - `second_stage/baseline_tuning_followups.txt`: TODO for limited LPO/GreaTer
   sensitivity checks and disclosure of unequal OpenBookQA tuning effort.
-- `second_stage/math_gradpo_gen_tuning_plan.txt`: approved Qwen-only eight-attempt
-  fast Math GradPO-Gen plan (C=7, B=5, target limit 4096), selected RPO sources,
-  cache rules, and launch/stop commands. Default runs all eight attempts.
+- `second_stage/math_gradpo_gen_tuning_plan.txt`: completed Qwen Math
+  GradPO-Gen S/T/H matrix and two seed checks (C=7, B=5, target limit 4096),
+  selected shared setting, flagged malformed backup prompt, cache rules, and
+  launch commands. The later eight-run grid remains the script default on GPU 1.
   Commands: `../codes/run_math_gradpo_tuning_qwen.sh`.
 - `second_stage/math_gradpo_gemma_slurm_guidelines.txt`: approved Gemma Math
   eight-attempt S/T/H matrix (pool 600, G 200, C 7, B 5, target limit 4096),
@@ -228,9 +229,11 @@ Associated report scripts:
 ## Implementation and dataset processing documentation
 
 - `deltaai_setup_step_by_step.txt`: complete beginner-friendly DeltaAI SSH/Duo,
-  allocation/storage discovery, GitHub/data transfer, named native ARM Conda
-  environment, pinned vLLM 0.11/PyTorch 2.8 CUDA 12.9 wheel installation,
-  compute-node checks, Gemma access, Slurm submission/resume, and troubleshooting.
+  allocation/storage discovery, one-time Bash startup settings, HOME-based
+  Conda and project-based Git/data/results, pinned vLLM 0.11/PyTorch 2.8
+  CUDA 12.9 wheel installation,
+  compute-node checks, Gemma access, Slurm submission/resume, troubleshooting,
+  and a planned Git-friendly TXT results bundle (exporter not yet implemented).
 - `vllm_v2_environment_setup.txt`: storage2 conda location configuration,
   vLLM v2 installation commands, verification, and driver caveats; optional
   candidate scoring is implemented, with small Qwen GPU comparisons documented

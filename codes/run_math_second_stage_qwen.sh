@@ -1,8 +1,173 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run only after all five first-stage source prompts below exist.
-# nohup bash codes/run_math_second_stage_qwen.sh > codes/nohup_outs/math_second_stage_qwen.log 2>&1 &
+# Default: ten final Qwen Math validation runs, five refiners on RPO5/RPO10.
+# The selected GradPO-Gen runs already exist and are not repeated here.
+# Activate re_prompt_optimization_vllm_v2 before launching.
+# nohup bash codes/run_math_second_stage_qwen.sh > codes/nohup_outs/math_second_stage_qwen_final.log 2>&1 &
+# MATH_SECOND_STAGE_DRY_RUN=1 prints all ten commands without loading models.
+# MATH_SECOND_STAGE_GPU=N overrides the default physical GPU 1.
+# Completed run directories with summary.json are skipped on a restart.
+# MATH_SECOND_STAGE_RUN_SET=legacy enables the historical commands below.
+
+if [[ "${MATH_SECOND_STAGE_RUN_SET:-selected}" == "selected" ]]; then
+  cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+  RUN_GPU="${MATH_SECOND_STAGE_GPU:-1}"
+  DRY_RUN="${MATH_SECOND_STAGE_DRY_RUN:-0}"
+  if [[ "$DRY_RUN" != 0 && "$DRY_RUN" != 1 ]]; then
+    printf 'MATH_SECOND_STAGE_DRY_RUN must be 0 or 1.\n' >&2
+    exit 2
+  fi
+
+  SOURCE_DIR="outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900_error3_tokenlimit"
+  RPO5_SOURCE="$SOURCE_DIR/prompt_experimental_iteration_5_from_actual_iteration_2.txt"
+  RPO10_SOURCE="$SOURCE_DIR/prompt_experimental_iteration_10_from_actual_iteration_5.txt"
+  for source_file in "$RPO5_SOURCE" "$RPO10_SOURCE" \
+    data/processed/math500/train.jsonl data/processed/math500/validation.jsonl; do
+    if [[ ! -s "$source_file" ]]; then
+      printf 'Missing Math input: %s\n' "$source_file" >&2
+      exit 2
+    fi
+  done
+
+  run_selected_command() {
+    # Print or run one method, skipping a previously completed CODE on restart.
+    local method="$1" code="$2" attempt="$3"
+    shift 3
+    local output_dir="outputs/math_prompt_optimization/reasoning/$method/$code"
+    printf '[math-qwen] attempt %s/10 | method=%s | GPU=%s | CODE=%s\n' \
+      "$attempt" "$method" "$RUN_GPU" "$code" >&2
+    if [[ "$DRY_RUN" == 1 ]]; then
+      printf 'CUDA_VISIBLE_DEVICES=%q ' "$RUN_GPU"
+      printf '%q ' "$@"
+      printf '\n'
+    elif [[ -f "$output_dir/summary.json" ]]; then
+      printf '[math-qwen] already completed; skipping %s\n' "$code" >&2
+    else
+      CUDA_VISIBLE_DEVICES="$RUN_GPU" "$@"
+    fi
+  }
+
+  attempt=0
+  for source in 5 10; do
+    if [[ "$source" == 5 ]]; then
+      source_prompt="$RPO5_SOURCE"
+    else
+      source_prompt="$RPO10_SOURCE"
+    fi
+    for method in gradpo_prob gradpo_gen_random greater greater_tg lpo; do
+      attempt=$((attempt + 1))
+      case "$method" in
+        gradpo_prob|gradpo_gen_random)
+          code="math500_reasoning_qwen_rpo${source}_${method}_final_s3_t3_h030_c7_g200_b5_f050_pool1600_vs900_tok4096_v2"
+          ;;
+        greater|greater_tg)
+          code="math500_reasoning_qwen_rpo${source}_${method}_final_g200_topu5_pool1600_vs900_tok4096_v2"
+          ;;
+        lpo)
+          code="math500_reasoning_qwen_rpo${source}_lpo_final_f3_s5_t3_c5_pool512_vs900_tok4096_v2"
+          ;;
+      esac
+      common_args=(
+        --code "$code"
+        --qa-task math500
+        --qa-mode reasoning
+        --train-path data/processed/math500/train.jsonl
+        --validation-path data/processed/math500/validation.jsonl
+        --initial-prompt-file "$source_prompt"
+        --model Qwen/Qwen3-4B
+        --device cuda:0
+        --target-max-new-tokens 4096
+        --validation-std-penalty 1.0
+        --validation-fold-size 300
+        --gradient-cache-root outputs/shared_gradient_cache
+        --seed 42
+        --output-root outputs/math_prompt_optimization
+        --overwrite
+      )
+      if [[ "$method" == gradpo_* ]]; then
+        command=(
+          python -u codes/run_qa_promptopt_gradpo.py
+          "${common_args[@]}"
+          --hf-device cuda:0
+          --backend dual
+          --objective-scoring-backend vllm
+          --objective-scoring-batch-size 128
+          --final-evaluation-backend vllm
+          --gpu-memory-utilization 0.50
+          --dual-vllm-gpu-memory-utilization 0.50
+          --vllm-max-model-len 32768
+          --variant "${method#gradpo_}"
+          --train-sample-size 1600
+          --gradient-sample-size 200
+          --gradient-batch-size 1
+          --selection-batch-size 4
+          --num-edit-regions 3
+          --max-region-tokens 3
+          --region-expansion-threshold 0.30
+          --num-region-candidates 7
+          --beam-width 5
+          --beam-replacement-mode llm_synthesis
+          --fluency-lambda 0.5
+          --candidate-max-new-tokens 10000
+          --synthesis-max-new-tokens 10000
+          --synthesis-batch-size 4
+        )
+      elif [[ "$method" == greater* ]]; then
+        command=(
+          python -u codes/run_qa_promptopt_greater.py
+          "${common_args[@]}"
+          --hf-device cuda:0
+          --backend dual
+          --objective-scoring-backend vllm
+          --objective-scoring-batch-size 128
+          --final-evaluation-backend vllm
+          --gpu-memory-utilization 0.50
+          --dual-vllm-gpu-memory-utilization 0.50
+          --vllm-max-model-len 32768
+          --variant "$method"
+          --train-sample-size 1600
+          --gradient-sample-size 200
+          --gradient-batch-size 1
+          --selection-batch-size 4
+          --proposal-top-k 25
+          --proposal-example-size 50
+          --proposal-min-candidates 10
+          --selection-top-mu 10
+          --top-u 5
+          --fluency-lambda 0.2
+          --region-expansion-threshold 0.6
+        )
+      else
+        command=(
+          python -u codes/run_qa_promptopt_lpo.py
+          "${common_args[@]}"
+          --optimizer-model Qwen/Qwen3-14B
+          --optimizer-device cuda:0
+          --optimizer-max-new-tokens 10000
+          --backend vllm
+          --gpu-memory-utilization 0.90
+          --vllm-max-model-len 32768
+          --train-sample-size 512
+          --feedback-examples 3
+          --max-locations 5
+          --max-words-per-location 3
+          --num-candidates 5
+        )
+      fi
+      run_selected_command "$method" "$code" "$attempt" "${command[@]}"
+    done
+  done
+  exit 0
+fi
+
+if [[ "$MATH_SECOND_STAGE_RUN_SET" != "legacy" ]]; then
+  printf 'MATH_SECOND_STAGE_RUN_SET must be selected or legacy.\n' >&2
+  exit 2
+fi
+
+# Historical five-source matrix, preserved but inactive by default.
+# Its RPO paths and 8192-token settings predate the selected Math comparison.
 
 [[ -f outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_5.txt'; exit 1; }
 [[ -f outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt ]] || { echo 'Missing first-stage prompt: outputs/math_prompt_optimization/reasoning/rpo/math500_reasoning_qwen_rpo_qwen14opt_lambda1_vs900/prompt_iteration_10.txt'; exit 1; }

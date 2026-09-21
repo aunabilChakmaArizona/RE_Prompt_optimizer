@@ -69,6 +69,17 @@ class _PlainChatTokenizer:
         )
 
 
+class _TrimmingChatTokenizer:
+    """Mimic Gemma's trimming of each rendered message body."""
+
+    def apply_chat_template(self, messages, **_kwargs):
+        """Join chat messages after stripping boundary whitespace."""
+        return "\n".join(
+            f"{message['role'].upper()}: {message['content'].strip()}"
+            for message in messages
+        )
+
+
 class _RoundTripTokenizer:
     """Expose equal-length and length-changing retokenization for testing."""
 
@@ -503,6 +514,23 @@ class MathPromptOptimizationTests(unittest.TestCase):
             "Therefore, the final answer is <answer>1</answer>",
             rendered["text"],
         )
+        self.assertEqual(
+            rendered["answer_target_mode"],
+            "appended_missing_answer_fallback",
+        )
+
+    def test_reasoning_target_alignment_survives_gemma_content_trimming(self) -> None:
+        """Align the gold answer when Gemma strips fallback-leading newlines."""
+        rendered = render_teacher_forced_qa(
+            "Solve this exactly.",
+            self.record,
+            self.mode,
+            _TrimmingChatTokenizer(),
+            reasoning_trace="An unfinished derivation.",
+        )
+
+        target = rendered["text"][rendered["label_start"] : rendered["label_end"]]
+        self.assertEqual(target, "1")
         self.assertEqual(
             rendered["answer_target_mode"],
             "appended_missing_answer_fallback",
