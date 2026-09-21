@@ -29,6 +29,7 @@ else
   exit 2
 fi
 conda activate "${CONDA_ENV:-re_prompt_optimization_vllm_v2}"
+unset LD_LIBRARY_PATH
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export PYTHONUNBUFFERED=1
 
