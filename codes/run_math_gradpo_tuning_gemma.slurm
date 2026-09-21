@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=math-gemma-gradpo
+#SBATCH --account=bihn-dtai-gh
 #SBATCH --partition=ghx4
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --output=codes/nohup_outs/math_gradpo_gemma_%j.log
 #SBATCH --error=codes/nohup_outs/math_gradpo_gemma_%j.log
 
-# Submit from the repository root; pass your allocation with sbatch --account.
+# Submit from the repository root; the DeltaAI account is set above.
 # DeltaAI: --partition=ghx4 (ARM GH200/H100, needs an ARM-compatible environment).
 # Delta H200: override using sbatch --partition=gpuH200x8.
 # Do NOT set CUDA_VISIBLE_DEVICES or CUDA_DEVICE_ORDER here: Slurm owns the GPU.
