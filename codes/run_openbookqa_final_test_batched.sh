@@ -28,9 +28,6 @@ run_model() {
   # Submit all unique prompt-question pairs to one vLLM instance for this model.
   local family="$1"
   local extra_args=()
-  if [[ "${family}" == "gemma" ]]; then
-    extra_args+=(--vllm-disable-images)
-  fi
   if [[ "${FINAL_TEST_DRY_RUN:-0}" == "1" ]]; then
     extra_args+=(--dry-run)
   fi

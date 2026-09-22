@@ -41,7 +41,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.6 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 300 \
@@ -105,7 +104,6 @@ run_gemma_case() {
     --final-evaluation-backend vllm \
     --dual-vllm-gpu-memory-utilization 0.6 \
     --vllm-max-model-len 16384 \
-    --vllm-disable-images \
     --variant gen \
     --train-sample-size 600 \
     --gradient-sample-size "${gradient_subset}" \
@@ -186,7 +184,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.6 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 300 \

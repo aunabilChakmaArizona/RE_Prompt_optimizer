@@ -27,6 +27,9 @@ DeltaAI. It supplements, but does not replace, the root `AGENTS.md`.
   unset command in `~/.bashrc`.
 - Let Slurm manage GPU visibility; do not set `CUDA_VISIBLE_DEVICES` in the
   Slurm job.
+- With Gemma 3 and vLLM 0.11.0, do not pass `--vllm-disable-images` and do not
+  set `limit_mm_per_prompt={"image": 0}`. Keep image support enabled even for
+  text-only tasks. The project loader now rejects this unsafe combination.
 
 ## Current incident status
 
@@ -47,6 +50,13 @@ Follow the handoff's small A/B diagnostics first. Preserve existing artifacts;
 do not delete caches or run outputs. Use fresh debug cache roots during
 diagnosis. After a runtime configuration is verified, refresh both the source
 validation and gradient caches before a real rerun.
+
+The corrected Math tuning script keeps Gemma image support enabled, writes new
+`v3_images_enabled` CODEs, and uses
+`outputs/deltaai_gemma_vllm011_images_enabled_cache/` so the failed cached
+responses cannot be reused. The Slurm file first evaluates ten exact RPO10
+validation prompts and aborts before the eight-run matrix if all answer tags are
+missing or average generation again nearly reaches 4,096 tokens.
 
 ## Relevant paths
 

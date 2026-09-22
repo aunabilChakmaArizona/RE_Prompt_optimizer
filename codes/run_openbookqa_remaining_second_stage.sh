@@ -59,7 +59,7 @@ set_model_family() {
     GRADPO_CANDIDATES=7
     VLLM_MEMORY=0.6
     VLLM_MAX_LEN=16384
-    VLLM_IMAGE_ARGS=(--vllm-disable-images)
+    VLLM_IMAGE_ARGS=()
   else
     echo "Unsupported model family: ${family}" >&2
     exit 1

@@ -42,7 +42,7 @@ MODEL_CONFIGS: dict[str, dict[str, Any]] = {
         "gradpo_regions": 3,
         "gradpo_region_tokens": 3,
         "gradient_pool_size": 600,
-        "vllm_extra": ["--vllm-max-model-len", "32768", "--vllm-disable-images"],
+        "vllm_extra": ["--vllm-max-model-len", "32768"],
     },
 }
 
@@ -217,8 +217,6 @@ def method_arguments(
                 "16384",
             ]
         )
-        if family == "gemma":
-            gradient_runtime.append("--vllm-disable-images")
     else:
         gradient_runtime.extend(
             [

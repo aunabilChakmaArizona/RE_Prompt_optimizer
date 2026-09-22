@@ -15,7 +15,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
 #   --overwrite
@@ -31,7 +30,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --duplicate-retries 3 \
 #   --validation-std-penalty 1.0 \
@@ -48,7 +46,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
 #   --overwrite
@@ -64,7 +61,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
 #   --overwrite
@@ -80,7 +76,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --duplicate-retries 3 \
 #   --validation-std-penalty 1.0 \
@@ -97,7 +92,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
 #   --overwrite
@@ -116,7 +110,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --feedback-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
@@ -133,7 +126,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --feedback-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
@@ -150,7 +142,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --optimizer-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
 #   --overwrite
@@ -170,7 +161,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --target-max-new-tokens 4096 \
 #   --optimizer-max-new-tokens 10000 \
 #   --validation-std-penalty 1.0 \
@@ -189,7 +179,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --target-max-new-tokens 4096 \
 #   --optimizer-max-new-tokens 10000 \
 #   --duplicate-retries 3 \
@@ -209,7 +198,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --target-max-new-tokens 4096 \
 #   --optimizer-max-new-tokens 10000 \
 #   --feedback-max-new-tokens 10000 \

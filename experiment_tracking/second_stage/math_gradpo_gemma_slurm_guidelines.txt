@@ -67,9 +67,14 @@ The script keeps two Gemma3-4B copies on logical cuda:0: HF for gradients,
 vLLM for text generation, validation, and forward-only loss/fluency scoring.
 vLLM budget=0.50; HF gradient microbatch=1; HF selection batch=4;
 vLLM objective submission chunk=128 (GPU batching remains dynamic).
-Text-only Gemma: --vllm-disable-images. Optional four conservative engine
-settings are NOT enabled by default. Do not assume 0.50 is a total-process
+Gemma 3 with vLLM 0.11.0 must keep image support enabled; do not pass
+--vllm-disable-images or set limit_mm_per_prompt={"image": 0}. The earlier
+DeltaAI image-disabled matrix produced corrupted generations. Optional four
+conservative engine settings are NOT enabled by default. Do not assume 0.50 is a total-process
 cap: HF allocations are additional, and actual GPU peaks must be checked.
+The Slurm file now runs a ten-example image-enabled RPO10 smoke test first and
+aborts before the full matrix if all tags are missing or average output usage is
+at least 95% of the 4,096-token limit.
 If OOM: reduce vLLM's ratio to 0.40 using MATH_TUNING_VLLM_RATIO=0.40 or move
 to H200; do not reduce G or validation silently. This is deployment advice,
 not evidence that a Gemma GPU run or HF/vLLM numerical comparison passed.

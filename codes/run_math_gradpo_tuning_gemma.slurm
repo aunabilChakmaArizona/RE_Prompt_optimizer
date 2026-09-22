@@ -37,5 +37,44 @@ export PYTHONUNBUFFERED=1
 # Check the selected environment without downloading/loading model weights.
 python -c 'import importlib.metadata as m, platform, torch; print("Architecture:", platform.machine()); print("Packages:", {name: m.version(name) for name in ("vllm", "torch", "transformers", "math-verify")}); assert m.version("vllm") == "0.11.0", "Candidate logprob scoring requires vLLM 0.11.0"; assert torch.cuda.is_available(), "CUDA PyTorch or allocated GPU unavailable"'
 
-# One Slurm task runs all eight attempts sequentially on its one assigned GPU.
+# First verify image-enabled Gemma generation on ten exact RPO10 validation
+# prompts. Abort before the expensive matrix if every answer tag is missing or
+# the average generation again nearly exhausts the 4,096-token limit.
+SMOKE_CODE="deltaai_gemma_rpo10_images_enabled_${SLURM_JOB_ID}"
+srun --ntasks=1 python -u codes/run_math_test_inference.py \
+  --code "$SMOKE_CODE" \
+  --model google/gemma-3-4b-it \
+  --dataset data/processed/math500/validation.jsonl \
+  --backend vllm \
+  --device cuda:0 \
+  --gpu_memory_utilization 0.50 \
+  --max_new_tokens 4096 \
+  --start 0 \
+  --end 10 \
+  --prompt "$(cat experiment_tracking/second_stage/math_gemma_sources/rpo10.txt)" \
+  --output_dir outputs/deltaai_diagnostics \
+  --overwrite
+
+python - "$SMOKE_CODE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary_path = Path("outputs/deltaai_diagnostics") / sys.argv[1] / "summary.json"
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+statistics = summary["statistics"]
+missing = int(statistics["missing_answer_tags"])
+average_tokens = float(statistics["token_usage"]["averages"]["output_tokens"])
+print(
+    f"[deltaai-smoke] missing_answer_tags={missing}/10 "
+    f"average_output_tokens={average_tokens:.2f}"
+)
+if missing == 10 or average_tokens >= 3891.2:
+    raise SystemExit(
+        "Gemma/vLLM smoke test failed; full eight-run matrix was not started."
+    )
+PY
+
+# After the smoke gate passes, one Slurm task runs all eight attempts
+# sequentially on its one assigned GPU.
 srun --ntasks=1 bash codes/run_math_gradpo_tuning_gemma.sh

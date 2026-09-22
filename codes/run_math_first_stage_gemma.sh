@@ -16,7 +16,6 @@
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --target-max-new-tokens 8192 \
 #   --optimizer-max-new-tokens 10000 \
 #   --optimizer-feedback-max-tokens 2000 \
@@ -37,7 +36,6 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_evoprompt.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --vllm-max-model-len 32768 \
-  --vllm-disable-images \
   --target-max-new-tokens 8192 \
   --optimizer-max-new-tokens 10000 \
   --optimizer-feedback-max-tokens 2000 \
@@ -60,7 +58,6 @@ CUDA_VISIBLE_DEVICES=2 python -u codes/run_qa_promptopt_evoprompt.py \
 #   --backend vllm \
 #   --gpu-memory-utilization 0.90 \
 #   --vllm-max-model-len 32768 \
-#   --vllm-disable-images \
 #   --target-max-new-tokens 8192 \
 #   --optimizer-max-new-tokens 10000 \
 #   --optimizer-feedback-max-tokens 2000 \

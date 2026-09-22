@@ -6,6 +6,14 @@ Purpose: handoff for a Codex instance running on DeltaAI to reproduce, isolate,
 and fix the abnormal Gemma-3-4B vLLM behavior before any Gemma MATH-500
 second-stage results are used.
 
+Resolution update: this project had already established that Gemma 3 under
+vLLM 0.11.0 must keep image support enabled. The failed DeltaAI script violated
+that rule by passing --vllm-disable-images, which became
+limit_mm_per_prompt={"image": 0}. The corrected script removes that argument,
+uses new `v3_images_enabled` CODEs, and uses fresh cache roots. The loader now
+rejects the unsafe Gemma-3/vLLM-0.11 combination. A small smoke test remains
+required on DeltaAI before launching the complete corrected matrix.
+
 
 BOTTOM LINE
 -----------
@@ -268,17 +276,18 @@ WHAT IS ALREADY RULED OUT OR UNLIKELY
 CURRENT WORKING HYPOTHESIS
 --------------------------
 
-This resembles a Gemma-3/vLLM runtime-generation bug or unsupported execution
-combination rather than a GradPO algorithm error. The strongest suspects are:
+This is a Gemma-3/vLLM runtime-generation problem rather than a GradPO algorithm
+error. The primary configuration error is now identified:
 
-1. Gemma-3 multimodal handling with limit_mm_per_prompt={"image": 0} in vLLM
-   0.11.0 on the GH200/aarch64 path.
-2. vLLM V1 prefix caching with Gemma-3.
-3. torch.compile/CUDA-graph behavior on GH200/aarch64.
-4. A combination of the above rather than any one setting alone.
+1. The DeltaAI script disabled Gemma-3 image inputs with
+   limit_mm_per_prompt={"image": 0} under vLLM 0.11.0, despite prior project
+   evidence that this configuration is incompatible.
+2. Prefix caching and CUDA graphs remain secondary diagnostics only if the
+   corrected image-enabled smoke test still fails on GH200/aarch64.
 
-This is a hypothesis, not a confirmed root cause. Relevant upstream reports
-with similar symptoms include:
+The existing project evidence makes image disabling the required first fix.
+The DeltaAI smoke test must still confirm that this is sufficient on GH200.
+Relevant upstream reports with similar symptoms include:
 
 - https://github.com/vllm-project/vllm/issues/14817
   Gemma-3 empty outputs while generating until the length limit.
@@ -424,4 +433,3 @@ ACCEPTANCE CRITERIA BEFORE FULL RERUN
 - Cache metadata distinguishes that engine configuration from the failed one.
 - One small GradPO run completes with real replacement candidates and sensible
   source-versus-final validation comparison.
-

@@ -7,6 +7,8 @@ set -euo pipefail
 # Local example: MATH_TUNING_GPU=3 bash codes/run_math_gradpo_tuning_gemma.sh
 # Preview only: MATH_TUNING_DRY_RUN=1 bash codes/run_math_gradpo_tuning_gemma.sh
 # Resume example: MATH_TUNING_START=3 bash codes/run_math_gradpo_tuning_gemma.sh
+# Gemma 3 with vLLM 0.11.0 must keep image support enabled. The earlier
+# image-disabled DeltaAI matrix produced corrupted generations and is invalid.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd -- "$SCRIPT_DIR/.."
@@ -16,6 +18,7 @@ END="${MATH_TUNING_END:-8}"
 DRY_RUN="${MATH_TUNING_DRY_RUN:-0}"
 VLLM_RATIO="${MATH_TUNING_VLLM_RATIO:-0.50}"
 SOURCE_DIR="experiment_tracking/second_stage/math_gemma_sources"
+CACHE_ROOT="outputs/deltaai_gemma_vllm011_images_enabled_cache"
 
 if [[ ! "$START" =~ ^[1-8]$ || ! "$END" =~ ^[1-8]$ || "$START" -gt "$END" ]]; then
   printf 'MATH_TUNING_START/END must be 1-8, with START <= END.\n' >&2
@@ -52,7 +55,7 @@ run_attempt() {
   # Run one fixed-budget configuration on one retained first-stage source.
   local attempt="$1" source="$2" spans="$3" tokens="$4" threshold="$5"
   local h_tag="${threshold//./}"
-  local code="math500_reasoning_gemma_rpo${source}_gradpo_tune_s${spans}_t${tokens}_h${h_tag}_c7_g200_b5_f050_pool600_vs900_tok4096_v2"
+  local code="math500_reasoning_gemma_rpo${source}_gradpo_tune_s${spans}_t${tokens}_h${h_tag}_c7_g200_b5_f050_pool600_vs900_tok4096_v3_images_enabled"
   local -a command=(
     python -u codes/run_qa_promptopt_gradpo.py
     --code "$code"
@@ -71,7 +74,6 @@ run_attempt() {
     --gpu-memory-utilization "$VLLM_RATIO"
     --dual-vllm-gpu-memory-utilization "$VLLM_RATIO"
     --vllm-max-model-len 32768
-    --vllm-disable-images
     --target-max-new-tokens 4096
     --validation-std-penalty 1.0
     --validation-fold-size 300
@@ -90,7 +92,8 @@ run_attempt() {
     --candidate-max-new-tokens 10000
     --synthesis-max-new-tokens 10000
     --synthesis-batch-size 4
-    --gradient-cache-root outputs/shared_gradient_cache
+    --gradient-cache-root "$CACHE_ROOT/gradient"
+    --source-validation-cache-root "$CACHE_ROOT/source_validation"
     --seed 42
     --output-root outputs/math_prompt_optimization
     --overwrite

@@ -101,6 +101,17 @@ def load_vllm_model_and_tokenizer(
     with _temporary_visible_gpu(device) as selected_device:
         installed_version = _validate_vllm_version()
 
+        if (
+            installed_version == "0.11.0"
+            and "gemma-3" in model_id.lower()
+            and disable_image_inputs
+        ):
+            raise ValueError(
+                "Do not disable image inputs for Gemma 3 with vLLM 0.11.0. "
+                "The text-only limit_mm_per_prompt configuration produced "
+                "empty and corrupted generations in this project."
+            )
+
         try:
             from vllm import LLM
         except ImportError as error:

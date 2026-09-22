@@ -28,7 +28,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --vllm-max-model-len 32768 \
-  --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
   --train-sample-size 512 \
   --feedback-examples 3 \
@@ -53,7 +52,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -85,7 +83,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -117,7 +114,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -152,7 +148,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant prob \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -187,7 +182,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -223,7 +217,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --vllm-max-model-len 32768 \
-  --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
   --train-sample-size 512 \
   --feedback-examples 3 \
@@ -248,7 +241,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -280,7 +272,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -312,7 +303,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -347,7 +337,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant prob \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -382,7 +371,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -418,7 +406,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --vllm-max-model-len 32768 \
-  --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
   --train-sample-size 512 \
   --feedback-examples 3 \
@@ -443,7 +430,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -475,7 +461,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -507,7 +492,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -542,7 +526,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant prob \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -577,7 +560,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -613,7 +595,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --vllm-max-model-len 32768 \
-  --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
   --train-sample-size 512 \
   --feedback-examples 3 \
@@ -638,7 +619,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -670,7 +650,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -702,7 +681,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -737,7 +715,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant prob \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -772,7 +749,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -808,7 +784,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_lpo.py \
   --backend vllm \
   --gpu-memory-utilization 0.90 \
   --vllm-max-model-len 32768 \
-  --vllm-disable-images \
   --optimizer-max-new-tokens 10000 \
   --train-sample-size 512 \
   --feedback-examples 3 \
@@ -833,7 +808,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -865,7 +839,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_greater.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant greater_tg \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -897,7 +870,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -932,7 +904,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant prob \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
@@ -967,7 +938,6 @@ CUDA_VISIBLE_DEVICES=3 python -u codes/run_qa_promptopt_gradpo.py \
   --final-evaluation-backend vllm \
   --dual-vllm-gpu-memory-utilization 0.5 \
   --vllm-max-model-len 16384 \
-  --vllm-disable-images \
   --variant gen_random \
   --train-sample-size 600 \
   --gradient-sample-size 200 \
