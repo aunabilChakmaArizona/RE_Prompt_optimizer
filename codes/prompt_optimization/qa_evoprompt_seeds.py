@@ -96,17 +96,19 @@ QA_EVOPROMPT_SEEDS = {
         {
             "label": "automatic_1",
             "prompt": (
-                "Use the supplied passages to answer the question. Combine relevant "
-                "evidence when needed and return the most accurate answer."
+                "Determine exactly what the question asks, trace the necessary evidence "
+                "across the supplied passages, and reason through the connections step by "
+                "step. Return a concise answer using the context's exact names and wording "
+                "whenever possible."
             ),
         },
         {
             "label": "automatic_2",
             "prompt": (
-                "Carefully analyze the question and the provided passages. Locate the "
-                "necessary evidence, resolve references between passages, and connect "
-                "the facts in a logical sequence. Check that the final answer directly "
-                "addresses the question and is supported by the context."
+                "Carefully resolve entities, references, comparisons, and event "
+                "relationships across the context before answering. Verify that the final "
+                "answer matches the specific type of information requested and contains "
+                "no unnecessary details."
             ),
         },
     ],

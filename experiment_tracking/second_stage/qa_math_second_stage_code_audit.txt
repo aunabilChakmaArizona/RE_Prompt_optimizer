@@ -201,9 +201,13 @@ Remaining review items (not changed in this pass)
 - Actual selected regions, token candidates, beam traces, prompts, and source
   IDs are saved in each run. Aggregate edit/content reporting remains disabled
   for now, as requested, and can be generated later from these artifacts.
-- The full OpenBookQA non-reasoning and Math reasoning shell matrices are
-  generated. Shared code supports other reasoning tasks, but final HotpotQA
-  second-stage command matrices still need to be prepared when requested.
+- The full OpenBookQA non-reasoning, Math reasoning, and HotpotQA reasoning
+  shell matrices are generated. HotpotQA transfers the finalized per-model
+  OpenBookQA configurations without task-specific tuning. Their current default
+  `ready` source set runs RPO-5, RPO-10, and ETGPO-1 only: 18 attempts per
+  model while EvoPrompt is being rerun. The retained `full` set has 24 physical
+  Qwen runs because its old byte-identical EvoPrompt-5/10 source is evaluated
+  once for both logical rows, and 30 Gemma runs over five distinct sources.
 
 Generated full-matrix scripts after the fixes
 ---------------------------------------------
@@ -211,6 +215,16 @@ Generated full-matrix scripts after the fixes
 - codes/run_openbookqa_second_stage_gemma.sh
 - codes/run_math_second_stage_qwen.sh
 - codes/run_math_second_stage_gemma.sh
+- codes/run_hotpotqa_second_stage_qwen.sh
+- codes/run_hotpotqa_second_stage_gemma.sh
+- codes/run_hotpotqa_second_stage.slurm (DeltaAI two-task model array)
+- codes/run_hotpotqa_second_stage_qwen_part1.sh and part2.sh (nine ready
+  attempts each), with matching dedicated .slurm files
+- codes/run_hotpotqa_second_stage_gemma_part1.sh and part2.sh (nine ready
+  attempts each), with matching dedicated .slurm files
+- experiment_tracking/second_stage/hotpotqa_sources/ (portable exact copies of
+  the selected first-stage prompts, so a fresh DeltaAI checkout does not depend
+  on untracked first-stage output directories)
 - codes/run_openbookqa_gradpo_tuning_qwen.sh (Qwen tuning is complete; its one
   active command applies the selected configuration to the RPO-10 source, and
   the RPO-5 tuning commands remain commented as history)
