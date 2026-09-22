@@ -1,0 +1,427 @@
+DELTA AI GEMMA/VLLM MATH GRADPO FAILURE HANDOFF
+================================================
+
+Date audited: 2026-09-21
+Purpose: handoff for a Codex instance running on DeltaAI to reproduce, isolate,
+and fix the abnormal Gemma-3-4B vLLM behavior before any Gemma MATH-500
+second-stage results are used.
+
+
+BOTTOM LINE
+-----------
+
+The eight Gemma MATH-500 GradPO-Gen tuning commands completed without a Python
+traceback or GPU out-of-memory error, but the resulting experiments are not
+scientifically usable. The DeltaAI vLLM engine silently generated corrupted
+Gemma completions.
+
+Two separate failure signatures occurred:
+
+1. RPO5 source: source validation was plausible, but GradPO replacement-candidate
+   generation returned multilingual/repetitive garbage. Parsing therefore kept
+   only each original span. All four RPO5 attempts were no-op searches and
+   retained the source prompt.
+
+2. RPO10 source: source validation itself collapsed to 1/900 correct. Almost
+   every generation reached the 4,096-token cap, and most decoded responses were
+   empty or whitespace. This corrupted source result was saved in the shared
+   source-validation cache and reused by the later RPO10 attempts. The apparent
+   42-62% candidate scores therefore are not valid improvements over the source.
+
+Do not report any of these eight runs. Do not rerun the full eight-run matrix
+until a small exact-prompt smoke test passes.
+
+
+ARTIFACTS REVIEWED
+------------------
+
+Local copies of the DeltaAI artifacts:
+
+- delta_ai_runs/math_gradpo_gemma_3189027.log
+- delta_ai_runs/deltaai_results1.zip
+
+The ZIP contains all eight GradPO-Gen output directories, including configs,
+source/final prompts, gradient samples, selected regions, candidate outputs,
+beam traces, validation predictions, and summaries.
+
+The launch files are:
+
+- codes/run_math_gradpo_tuning_gemma.sh
+- codes/run_math_gradpo_tuning_gemma.slurm
+
+Portable source prompts are:
+
+- experiment_tracking/second_stage/math_gemma_sources/rpo5.txt
+- experiment_tracking/second_stage/math_gemma_sources/rpo10.txt
+
+
+DELTA AI RUNTIME RECORDED IN THE LOG
+------------------------------------
+
+- Architecture: aarch64
+- Allocated accelerator: NVIDIA GH200 120GB
+- vLLM: 0.11.0
+- PyTorch: 2.8.0+cu129
+- Transformers: 4.55.2
+- math-verify: 0.9.0
+- Model: google/gemma-3-4b-it
+- dtype: bfloat16
+- vLLM V1 engine
+- max model length: 32,768
+- vLLM memory utilization: 0.50
+- image inputs disabled with limit_mm_per_prompt={"image": 0}
+- enforce_eager=False
+- enable_prefix_caching=True
+- chunked prefill enabled, max_num_batched_tokens=16,384
+- torch.compile/CUDA graphs enabled
+- FlashInfer unavailable; vLLM used its PyTorch-native top-k/top-p sampler
+- xFormers unavailable; the engine reported fallback attention paths
+- HF was used for gradients and prompt fluency; vLLM was used for text
+  generation, validation, and candidate task-loss scoring.
+
+The required DeltaAI NCCL workaround was active: the Conda environment was
+activated and LD_LIBRARY_PATH was unset before PyTorch/vLLM imports.
+
+
+KNOWN-GOOD GEMMA/VLLM RUNS ARE NOT THE SAME CONFIGURATION
+---------------------------------------------------------
+
+Gemma with vLLM has worked elsewhere in this project, but those runs do not
+replicate the DeltaAI combination:
+
+1. Earlier Gemma MATH RPO:
+   - H100/x86 host
+   - vLLM 0.8.5.post1
+   - image inputs disabled
+   - target maximum 8,192 tokens
+   - valid generations and scores
+   Evidence:
+   - codes/nohup_outs/math_first_stage_gemma.log
+   - outputs/math_prompt_optimization/reasoning/rpo/
+     math500_reasoning_gemma_rpo_gemma12opt_lambda1_vs1500/config.json
+
+2. Later Gemma OpenBookQA matched retest:
+   - H100/x86 host
+   - vLLM 0.11.0
+   - images allowed
+   - short 16-token outputs
+   - valid solo and batched results
+   Evidence:
+   - experiment_tracking/final_test/
+     openbookqa_gemma_matched16_test_results.txt
+   - experiment_tracking/second_stage/
+     openbookqa_gradpo_tuning_results.txt (around the vLLM 0.11 notes)
+
+The abnormal configuration is therefore the combined DeltaAI setup:
+vLLM 0.11.0 + GH200/aarch64 + image inputs disabled + V1 default prefix
+caching/CUDA graphs. The evidence does not yet identify which one of these
+differences is causal.
+
+
+SOURCE-PROMPT INTEGRITY CHECK
+-----------------------------
+
+The DeltaAI archive used the intended source prompt files exactly. This rules
+out uploading or selecting the wrong source prompt.
+
+RPO5 SHA-256:
+078c8d9274076e9d5ba27bfcffca256f55fe713e0fdc272efea3189d3c6fdcc9
+
+RPO10 SHA-256:
+b7454bf90b34fbeeed151e59c9fb55924748ee29a09a63851b2148d11cf0cb28
+
+The archive and the portable files above match byte-for-byte for both sources.
+Dataset paths, validation size (3 x 300 = 900), fixed answer instruction, and
+source-prompt placement also appeared correct.
+
+
+EIGHT-RUN SUMMARY
+-----------------
+
+All values below are validation accuracy / stable accuracy percentages.
+
+| Source | S | T | H    | Source score  | Recorded final | Missing tags: source -> final | Audit |
+|--------|---|---|------|---------------|----------------|-------------------------------|-------|
+| RPO5   | 5 | 3 | 0.60 | 67.00 / 65.56 | 67.00 / 65.56  | 102 -> 102                    | No-op; candidate generation corrupt |
+| RPO5   | 5 | 5 | 0.45 | 67.00 / 65.56 | 67.00 / 65.56  | 102 -> 102                    | No-op; candidate generation corrupt |
+| RPO5   | 5 | 5 | 0.60 | 67.00 / 65.56 | 67.00 / 65.56  | 102 -> 102                    | No-op; candidate generation corrupt |
+| RPO5   | 7 | 5 | 0.45 | 67.00 / 65.56 | 67.00 / 65.56  | 102 -> 102                    | No-op; candidate generation corrupt |
+| RPO10  | 5 | 3 | 0.60 | 0.11 / -0.05  | 42.22 / 41.59  | 900 -> 480                    | Invalid source comparison |
+| RPO10  | 5 | 5 | 0.45 | 0.11 / -0.05  | 49.56 / 48.21  | 900 -> 248                    | Invalid source comparison |
+| RPO10  | 5 | 5 | 0.60 | 0.11 / -0.05  | 61.67 / 60.42  | 900 -> 182                    | Invalid source comparison |
+| RPO10  | 7 | 5 | 0.45 | 0.11 / -0.05  | 42.22 / 40.88  | 900 -> 462                    | Invalid source comparison |
+
+The four RPO5 summaries all have changed=false and
+improved_on_validation=false. The four RPO10 summaries have changed=true and
+improved_on_validation=true only because the shared source evaluation was
+corrupted to approximately zero.
+
+
+RPO5 FAILURE EVIDENCE
+---------------------
+
+The first RPO5 candidate-generation output begins with unrelated mixed-language
+tokens and then repeats empty Markdown code fences for thousands of characters,
+for example:
+
+  "อกาส folyam ioninost ... <返回值 ... ``` ... ``` ..."
+
+The parser found no valid replacement list. Each selected region therefore had
+only its original text as its candidate, for example:
+
+- " following math problem" -> " following math problem"
+- " for rotations" -> " for rotations"
+- " diagrams" -> " diagrams"
+- "Solve" -> "Solve"
+- " manageable steps" -> " manageable steps"
+
+Consequently, the beam search had no actual edits to test. The four unchanged
+RPO5 scores must not be interpreted as evidence that GradPO could not improve
+the prompt; the candidate-generation model call failed semantically.
+
+
+RPO10 FAILURE EVIDENCE
+----------------------
+
+From one archived initial_validation_predictions.jsonl (the same source result
+was reused across all four RPO10 runs):
+
+- total examples: 900
+- correct: 1
+- accuracy: 0.1111%
+- stable accuracy: -0.0460%
+- answer-tag outputs: 0
+- boxed-answer fallback: 3
+- missing extracted answer: 897
+- exact empty raw_response strings: 825
+- empty after whitespace stripping: 826
+- responses with exactly 4,096 output tokens: 875
+- mean output tokens: 4,020.03
+
+The first nonempty archived response is only the unrelated text "質感" despite
+having 4,096 generated token IDs. Other nonempty responses repeat fragments
+such as "Let" or "The" and whitespace until the cap. This is raw-generation
+failure, not an answer-extraction or math-grading problem.
+
+The valid historical RPO run reports the selected Gemma MATH RPO prompt at
+approximately 68.07% raw accuracy / 67.24% stable accuracy on the 3 x 500
+validation protocol. A true drop to 0.11% is not credible model behavior.
+Evidence: experiment_tracking/first_stage/first_stage_summary_and_prompts.txt.
+
+
+CACHE CONTAMINATION
+-------------------
+
+The first RPO10 attempt had a source-validation cache miss and saved the
+corrupted 1/900 evaluation. The later three RPO10 attempts logged a cache hit
+and skipped source generation.
+
+Corrupted RPO10 source cache on DeltaAI:
+
+outputs/shared_source_validation_cache/math500/reasoning/
+google_gemma-3-4b-it/e680e43a22c045f0/
+38dcef302909067606e771b962c993efb659efbbae3298cb3ada2fde500954da.json
+
+The training-response caches used by the runs were also cache hits:
+
+RPO5:
+outputs/shared_gradient_cache/math500/reasoning/google_gemma-3-4b-it/
+098b167c88124f20/
+5c9d7047bc8c464d037f6d4278758e360b6ddcec3c176c43f61db607d3465a08.json
+
+RPO10:
+outputs/shared_gradient_cache/math500/reasoning/google_gemma-3-4b-it/
+e680e43a22c045f0/
+9a29f92735ec78509bc6ad421ea6bbb53fb0742b8c2c12c4d6bc33ab89accc30.json
+
+Do not delete user artifacts during diagnosis. Use fresh debug cache roots, or
+use --refresh-source-validation-cache and --refresh-gradient-cache only after
+the runtime fix is verified.
+
+Important cache-design gap: source_validation_cache.py and gradient_cache.py
+include the generation library version, model, prompt, records, seed, and
+decoding settings in their identities. They do not currently include
+disable_image_inputs, enforce_eager, prefix-caching configuration, other vLLM
+engine settings, or hardware architecture. Therefore an image-enabled or
+conservative-engine rerun can incorrectly reuse a cache made under the failing
+image-disabled/default-engine configuration. This identity should be audited
+and likely extended.
+
+
+WHAT IS ALREADY RULED OUT OR UNLIKELY
+-------------------------------------
+
+- Wrong source prompt: archive hashes match the intended files exactly.
+- Answer grader/parser: the raw model text is already empty or corrupt.
+- Merely an answer-tag problem: no coherent reasoning exists in most failed
+  source outputs.
+- The 4,096-token cap as the root cause: corruption begins immediately; the cap
+  only stops the loop. Raising it would likely waste more compute.
+- Dual vLLM/HF GPU-memory competition: the corrupted RPO5 candidate output was
+  produced by vLLM before the HF model needed for later scoring was resident.
+- Gradient code: HF gradient collection completed successfully. The observed
+  failure is in vLLM text generation/source validation.
+- Normal process warnings: the destroy_process_group NCCL warning occurs during
+  vLLM shutdown and is not the cause of semantically corrupt output.
+
+
+CURRENT WORKING HYPOTHESIS
+--------------------------
+
+This resembles a Gemma-3/vLLM runtime-generation bug or unsupported execution
+combination rather than a GradPO algorithm error. The strongest suspects are:
+
+1. Gemma-3 multimodal handling with limit_mm_per_prompt={"image": 0} in vLLM
+   0.11.0 on the GH200/aarch64 path.
+2. vLLM V1 prefix caching with Gemma-3.
+3. torch.compile/CUDA-graph behavior on GH200/aarch64.
+4. A combination of the above rather than any one setting alone.
+
+This is a hypothesis, not a confirmed root cause. Relevant upstream reports
+with similar symptoms include:
+
+- https://github.com/vllm-project/vllm/issues/14817
+  Gemma-3 empty outputs while generating until the length limit.
+- https://github.com/vllm-project/vllm/issues/20341
+  Gemma-3 no output or repeated output while other model families work.
+- https://github.com/vllm-project/vllm/issues/18733
+  Gemma-3-4B output dominated by special/padding tokens.
+- https://github.com/vllm-project/vllm/issues/39389
+  Gemma-3 output changes/non-determinism associated with V1 prefix caching.
+
+
+REQUESTED DELTA AI DIAGNOSTIC ORDER
+-----------------------------------
+
+Run all GPU tests on an allocated compute node, not a login node.
+
+1. Record the complete environment:
+
+   conda activate re_prompt_optimization_vllm_v2
+   unset LD_LIBRARY_PATH
+   python -m vllm.collect_env \
+     2>&1 | tee deltaai_vllm_collect_env.txt
+
+2. Confirm the DeltaAI checkout and artifacts:
+
+   - Record git rev-parse HEAD and git status --short.
+   - Confirm the two source hashes listed above.
+   - Confirm the model revision/commit and tokenizer/chat-template files loaded
+     from the Hugging Face cache.
+
+3. Run a cheap image-enabled control using the exact RPO10 prompt and only ten
+   validation examples. This existing inference entry point leaves images
+   enabled:
+
+   python -u codes/run_math_test_inference.py \
+     --code deltaai_gemma_rpo10_images_enabled \
+     --model google/gemma-3-4b-it \
+     --dataset data/processed/math500/validation.jsonl \
+     --backend vllm \
+     --device cuda:0 \
+     --gpu_memory_utilization 0.50 \
+     --max_new_tokens 4096 \
+     --start 0 \
+     --end 10 \
+     --prompt "$(cat experiment_tracking/second_stage/math_gemma_sources/rpo10.txt)" \
+     --output_dir outputs/deltaai_diagnostics \
+     --overwrite \
+     2>&1 | tee deltaai_gemma_rpo10_images_enabled.log
+
+4. Build a minimal exact-prompt diagnostic that prints, for every completion:
+
+   - finish_reason
+   - number of completion token IDs
+   - first and last completion token IDs
+   - tokenizer.decode(..., skip_special_tokens=True)
+   - tokenizer.decode(..., skip_special_tokens=False)
+
+   This is necessary because ordinary decoding can hide thousands of padding,
+   image, or other special tokens and make a long completion appear empty.
+
+5. Use the exact same prompt, seed, SamplingParams, and model revision in an A/B
+   matrix. Change one engine setting at a time:
+
+   A. images allowed; otherwise default vLLM settings
+   B. images disabled; otherwise default vLLM settings
+   C. images allowed; enable_prefix_caching=False
+   D. images allowed; enforce_eager=True
+   E. images allowed; both prefix caching disabled and eager execution enabled
+   F. Transformers generation control
+
+   Do not initially combine all changes, because doing so cannot identify the
+   actual cause. The production --vllm-conservative-settings flag combines eager
+   execution, disabled prefix caching, max_num_batched_tokens=4096, and
+   max_num_seqs=128; it is useful only after isolated tests.
+
+6. Test two exact prompt types:
+
+   - The RPO5 candidate_meta_prompt saved in region_candidates.json. This is a
+     particularly cheap and strong reproduction because a single optimizer call
+     produced obvious garbage; batching is not required to expose the symptom.
+   - The RPO10 source prompt on 10-20 validation examples. If this works singly,
+     repeat as one vLLM batch to test whether the failure is batching-related.
+
+7. Verify prompt rendering independently:
+
+   - Compare HF and vLLM tokenizers/model revisions.
+   - Save the exact apply_chat_template text and token IDs.
+   - Confirm the fixed answer instruction occurs exactly once before generation.
+   - Confirm the question associated with each returned output is unchanged.
+
+8. Interpret the A/B outcome:
+
+   - Images allowed works, images disabled fails:
+     remove --vllm-disable-images for Gemma-3 and extend cache identities.
+   - Default fails, prefix-cache-off works:
+     disable prefix caching for Gemma-3 and extend cache identities.
+   - Default fails, eager works:
+     suspect compile/CUDA graphs; use eager mode for Gemma-3 on DeltaAI.
+   - Every vLLM mode fails but Transformers works:
+     treat this as a vLLM 0.11/GH200 runtime incompatibility and do not use vLLM
+     Gemma generation/scoring until a compatible version is established.
+   - Both vLLM and Transformers fail:
+     inspect model weights/revision, tokenizer/chat template, and the exact
+     rendered prompt rather than GradPO.
+   - All minimal tests pass but the full run fails:
+     investigate large-batch output mapping, engine reuse, and cache loading.
+
+9. Only after one RPO5 candidate-generation smoke test and one RPO10 source
+   validation smoke test produce coherent outputs should the complete matrix be
+   relaunched. Use fresh CODE values and fresh cache roots or explicitly refresh
+   both caches. Preserve the failed artifacts for comparison.
+
+
+EARLIER DELTA AI FAILURES ALREADY FIXED IN THE CURRENT CODE
+-----------------------------------------------------------
+
+These are separate from the silent generation corruption but useful context:
+
+1. Hugging Face 401 gated-repository error:
+   fixed by authenticating and setting HF_TOKEN for Gemma access.
+
+2. "Gold answer target was not found after chat-template rendering":
+   fixed by locating/replacing the answer-tag content and using the appended
+   fixed-answer sentence only when an answer block is absent.
+
+3. "vLLM returned a non-finite scoring logprob" during prompt-fluency scoring:
+   fixed by using vLLM only for expensive candidate task loss and the already
+   loaded HF model for the five short candidate-prompt fluency scores.
+
+The final archived eight-run job passed these earlier failure points. Its
+remaining problem is silent, semantically corrupted Gemma generation.
+
+
+ACCEPTANCE CRITERIA BEFORE FULL RERUN
+-------------------------------------
+
+- RPO5 candidate generation returns parseable, task-relevant replacement lists.
+- RPO10 direct validation produces coherent reasoning rather than empty/special
+  token output.
+- RPO10 source accuracy is in the expected broad range, not approximately 0%.
+- Answer tags appear normally.
+- Exact source score is regenerated under the chosen engine configuration.
+- Cache metadata distinguishes that engine configuration from the failed one.
+- One small GradPO run completes with real replacement candidates and sensible
+  source-versus-final validation comparison.
+

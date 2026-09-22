@@ -4,6 +4,9 @@ This is the central index for project-created experiment notes, reports, and
 processing documentation. Generated run directories and third-party baseline
 files are intentionally not indexed individually.
 
+DeltaAI agents should also read `../DELTAAI_AGENTS.md` for the required reading
+order, runtime precautions, and the current Gemma/vLLM incident status.
+
 ## Dataset preparation
 
 - ANLI prompt optimization uses `../data/processed/anli/validation_promptopt.jsonl`:
@@ -64,6 +67,11 @@ python -u codes/report_first_stage_results.py
   are in `second_stage/math_gemma_sources/` (original snapshots unchanged).
   Commands: `../codes/run_math_gradpo_tuning_gemma.sh`;
   Slurm: `../codes/run_math_gradpo_tuning_gemma.slurm`.
+- `second_stage/deltaai_gemma_vllm_failure_handoff.txt`: audit of the completed
+  but invalid DeltaAI Gemma MATH-500 eight-run matrix, including the corrupted
+  RPO5 candidate generation, collapsed/cached RPO10 source evaluation, exact
+  runtime configuration, cache risks, and the ordered A/B diagnostics required
+  before rerunning the matrix.
 - `second_stage/shared_training_pool_cache.txt`: shared LPO/GreaTer/GradPO raw
   training-response cache, compatible larger-pool reuse, matching rules, flags,
   and the LPO greedy training-feedback decoding change.

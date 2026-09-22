@@ -249,3 +249,13 @@ MATH_SECOND_STAGE_GPU overrides it. MATH_SECOND_STAGE_DRY_RUN=1 prints the
 commands, and completed CODEs with summary.json are skipped on restart.
 The older five-source matrix is preserved only under
 MATH_SECOND_STAGE_RUN_SET=legacy; it retains outdated sources/settings.
+
+Qwen GreaTer/LPO sensitivity follow-up
+--------------------------------------
+codes/run_math_second_stage_qwen.sh now defaults to eight follow-up runs on
+the retained RPO5/RPO10 sources: GreaTer with pool=1600 and G=300, plus LPO
+with feedback=3, candidates=5, pool=512, and the three missing (maximum
+spans, maximum words/span) settings (3,3), (3,5), and (5,5). The completed
+LPO (5,3) run is not repeated. Validation remains 3x300 with output cap 4096.
+Set MATH_SECOND_STAGE_RUN_SET=selected to restore the completed ten-run final
+comparison, or sensitivity (the default) for this follow-up.

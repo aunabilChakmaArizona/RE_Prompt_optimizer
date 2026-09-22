@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Default: ten final Qwen Math validation runs, five refiners on RPO5/RPO10.
-# The selected GradPO-Gen runs already exist and are not repeated here.
+# Default: eight Qwen Math sensitivity runs on RPO5/RPO10:
+# GreaTer at G=300 plus the three missing LPO span/word combinations.
 # Activate re_prompt_optimization_vllm_v2 before launching.
-# nohup bash codes/run_math_second_stage_qwen.sh > codes/nohup_outs/math_second_stage_qwen_final.log 2>&1 &
-# MATH_SECOND_STAGE_DRY_RUN=1 prints all ten commands without loading models.
+# nohup bash codes/run_math_second_stage_qwen.sh > codes/nohup_outs/math_second_stage_qwen_sensitivity.log 2>&1 &
+# MATH_SECOND_STAGE_DRY_RUN=1 prints all eight commands without loading models.
 # MATH_SECOND_STAGE_GPU=N overrides the default physical GPU 1.
 # Completed run directories with summary.json are skipped on a restart.
+# MATH_SECOND_STAGE_RUN_SET=selected restores the completed ten-run comparison.
 # MATH_SECOND_STAGE_RUN_SET=legacy enables the historical commands below.
 
-if [[ "${MATH_SECOND_STAGE_RUN_SET:-selected}" == "selected" ]]; then
+RUN_SET="${MATH_SECOND_STAGE_RUN_SET:-sensitivity}"
+if [[ "$RUN_SET" == "selected" || "$RUN_SET" == "sensitivity" ]]; then
   cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
   RUN_GPU="${MATH_SECOND_STAGE_GPU:-1}"
   DRY_RUN="${MATH_SECOND_STAGE_DRY_RUN:-0}"
+  if [[ "$RUN_SET" == "sensitivity" ]]; then
+    TOTAL_ATTEMPTS=8
+  else
+    TOTAL_ATTEMPTS=10
+  fi
   if [[ "$DRY_RUN" != 0 && "$DRY_RUN" != 1 ]]; then
     printf 'MATH_SECOND_STAGE_DRY_RUN must be 0 or 1.\n' >&2
     exit 2
@@ -35,8 +42,8 @@ if [[ "${MATH_SECOND_STAGE_RUN_SET:-selected}" == "selected" ]]; then
     local method="$1" code="$2" attempt="$3"
     shift 3
     local output_dir="outputs/math_prompt_optimization/reasoning/$method/$code"
-    printf '[math-qwen] attempt %s/10 | method=%s | GPU=%s | CODE=%s\n' \
-      "$attempt" "$method" "$RUN_GPU" "$code" >&2
+    printf '[math-qwen] attempt %s/%s | set=%s | method=%s | GPU=%s | CODE=%s\n' \
+      "$attempt" "$TOTAL_ATTEMPTS" "$RUN_SET" "$method" "$RUN_GPU" "$code" >&2
     if [[ "$DRY_RUN" == 1 ]]; then
       printf 'CUDA_VISIBLE_DEVICES=%q ' "$RUN_GPU"
       printf '%q ' "$@"
@@ -48,6 +55,88 @@ if [[ "${MATH_SECOND_STAGE_RUN_SET:-selected}" == "selected" ]]; then
     fi
   }
 
+  if [[ "$RUN_SET" == "sensitivity" ]]; then
+    attempt=0
+    for source in 5 10; do
+      if [[ "$source" == 5 ]]; then
+        source_prompt="$RPO5_SOURCE"
+      else
+        source_prompt="$RPO10_SOURCE"
+      fi
+      common_args=(
+        --qa-task math500
+        --qa-mode reasoning
+        --train-path data/processed/math500/train.jsonl
+        --validation-path data/processed/math500/validation.jsonl
+        --initial-prompt-file "$source_prompt"
+        --model Qwen/Qwen3-4B
+        --device cuda:0
+        --target-max-new-tokens 4096
+        --validation-std-penalty 1.0
+        --validation-fold-size 300
+        --gradient-cache-root outputs/shared_gradient_cache
+        --seed 42
+        --output-root outputs/math_prompt_optimization
+        --overwrite
+      )
+
+      attempt=$((attempt + 1))
+      code="math500_reasoning_qwen_rpo${source}_greater_sensitivity_g300_topu5_pool1600_vs900_tok4096_v2"
+      command=(
+        python -u codes/run_qa_promptopt_greater.py
+        --code "$code"
+        "${common_args[@]}"
+        --hf-device cuda:0
+        --backend dual
+        --objective-scoring-backend vllm
+        --objective-scoring-batch-size 128
+        --final-evaluation-backend vllm
+        --gpu-memory-utilization 0.50
+        --dual-vllm-gpu-memory-utilization 0.50
+        --vllm-max-model-len 32768
+        --variant greater
+        --train-sample-size 1600
+        --gradient-sample-size 300
+        --gradient-batch-size 1
+        --selection-batch-size 4
+        --proposal-top-k 25
+        --proposal-example-size 50
+        --proposal-min-candidates 10
+        --selection-top-mu 10
+        --top-u 5
+        --fluency-lambda 0.2
+        --region-expansion-threshold 0.6
+      )
+      run_selected_command "greater" "$code" "$attempt" "${command[@]}"
+
+      for lpo_shape in 3:3 3:5 5:5; do
+        max_locations="${lpo_shape%%:*}"
+        max_words="${lpo_shape##*:}"
+        attempt=$((attempt + 1))
+        code="math500_reasoning_qwen_rpo${source}_lpo_sensitivity_f3_s${max_locations}_t${max_words}_c5_pool512_vs900_tok4096_v2"
+        command=(
+          python -u codes/run_qa_promptopt_lpo.py
+          --code "$code"
+          "${common_args[@]}"
+          --optimizer-model Qwen/Qwen3-14B
+          --optimizer-device cuda:0
+          --optimizer-max-new-tokens 10000
+          --backend vllm
+          --gpu-memory-utilization 0.90
+          --vllm-max-model-len 32768
+          --train-sample-size 512
+          --feedback-examples 3
+          --max-locations "$max_locations"
+          --max-words-per-location "$max_words"
+          --num-candidates 5
+        )
+        run_selected_command "lpo" "$code" "$attempt" "${command[@]}"
+      done
+    done
+    exit 0
+  fi
+
+  # Completed final comparison: five refiners on each retained RPO source.
   attempt=0
   for source in 5 10; do
     if [[ "$source" == 5 ]]; then
@@ -161,8 +250,8 @@ if [[ "${MATH_SECOND_STAGE_RUN_SET:-selected}" == "selected" ]]; then
   exit 0
 fi
 
-if [[ "$MATH_SECOND_STAGE_RUN_SET" != "legacy" ]]; then
-  printf 'MATH_SECOND_STAGE_RUN_SET must be selected or legacy.\n' >&2
+if [[ "$RUN_SET" != "legacy" ]]; then
+  printf 'MATH_SECOND_STAGE_RUN_SET must be sensitivity, selected, or legacy.\n' >&2
   exit 2
 fi
 
