@@ -1,0 +1,53 @@
+MATH-500 reasoning: final test (Qwen3-4B)
+============================================
+Official test: 500 problems. Five decoding seeds: 42, 1, 100, 1000, 10000.
+OpenAI accuracy (%) = mean ± sample standard deviation across the five runs.
+Gain (pp) = second-stage mean accuracy minus its own RPO source mean accuracy.
+Rows with no stable validation improvement leave test accuracy and gain blank;
+their retained prompt is the corresponding RPO source. No stable-score penalty
+is applied to the final test results.
+
+Initial prompt:  72.44 ± 0.77
+
+RPO-5
+-----
+First-stage prompt:  77.28 ± 1.54  (vs. initial: +4.84 pp)
+
+Method                 Validation  Test accuracy (%)  Gain (pp)
+---------------------  ----------  -----------------  ---------
+GradPO-Gen             Improved       78.16 ± 0.73        +0.88
+GradPO-Prob            Improved       77.92 ± 0.64        +0.64
+GradPO-Gen-Random      Improved       77.68 ± 1.25        +0.40
+LPO                    Improved       77.08 ± 1.22        -0.20
+GreaTer                Improved       78.80 ± 1.10        +1.52
+GreaTer-TG             Retained
+
+RPO-10
+------
+First-stage prompt:  78.60 ± 1.41  (vs. initial: +6.16 pp)
+
+Method                 Validation  Test accuracy (%)  Gain (pp)
+---------------------  ----------  -----------------  ---------
+GradPO-Gen             Improved       81.92 ± 0.61        +3.32
+GradPO-Prob            Retained
+GradPO-Gen-Random      Improved       79.16 ± 0.38        +0.56
+LPO                    Improved       79.24 ± 0.73        +0.64
+GreaTer                Improved       80.24 ± 0.30        +1.64
+GreaTer-TG             Improved       79.12 ± 0.73        +0.52
+
+Improvement summary (second-stage mean > matching first-stage mean)
+====================================================================
+Method                 Improved sources
+---------------------  ----------------
+GradPO-Gen             2/2
+GradPO-Prob            1/2
+GradPO-Gen-Random      2/2
+LPO                    1/2
+GreaTer                2/2
+GreaTer-TG             1/2
+
+Source run
+==========
+outputs/math_final_test/reasoning/selected_prompts/math500_reasoning_qwen_selected_refiners_5seeds_20260922T082510Z
+
+The source run also contains complete Math-Verify and simple-grader results.

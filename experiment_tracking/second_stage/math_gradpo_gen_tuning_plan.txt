@@ -259,3 +259,33 @@ spans, maximum words/span) settings (3,3), (3,5), and (5,5). The completed
 LPO (5,3) run is not repeated. Validation remains 3x300 with output cap 4096.
 Set MATH_SECOND_STAGE_RUN_SET=selected to restore the completed ten-run final
 comparison, or sensitivity (the default) for this follow-up.
+
+Final Qwen Math-500 second-stage selections
+-------------------------------------------
+Updated: 2026-09-22
+
+All selections use the 3x300 validation set, lambda=1 stable-score selection,
+Qwen3-4B, and the retained RPO-5/RPO-10 source prompts documented above.
+
+- GradPO-Gen: S=3, T=3, H=0.30, C=7, G=200, beam=5, fluency=0.5.
+- GradPO-Prob: the same shared GradPO configuration.
+- GradPO-Gen-Random: the same shared GradPO configuration.
+- LPO: feedback examples=3, max spans=3, max words/span=3, candidates=5.
+- GreaTer: G=200 and top-u=5.
+- GreaTer-TG: G=200 and top-u=5.
+
+Only refinements that improved stable validation score are included in the
+final-test manifest. RPO-10 GradPO-Prob and RPO-5 GreaTer-TG are excluded
+because their source prompts were retained. The frozen 13-row manifest is:
+
+experiment_tracking/final_test/math500_qwen_selected_prompts.tsv
+
+The five-seed, vLLM final-test runner is:
+
+codes/run_math500_final_test_qwen.sh
+
+It evaluates the initial prompt, both first-stage prompts, and the ten retained
+second-stage prompts on the official 500-problem MATH-500 test set. It uses
+seeds 42, 1, 100, 1000, and 10000, a 4096-token output limit, and reports the
+OpenAI-style grader as primary while retaining Math-Verify and simple scores.
+No stable-score penalty is applied on test.
