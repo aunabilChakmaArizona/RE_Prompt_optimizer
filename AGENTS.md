@@ -14,6 +14,7 @@ Runtime environment
 * With Gemma 3 and vLLM 0.11.0, never pass `--vllm-disable-images` or set `limit_mm_per_prompt={"image": 0}`. This configuration produced empty/corrupted generations on DeltaAI. Keep image support enabled even for text-only tasks. The vLLM loader rejects this unsafe combination.
 
 Experiment tracking
+* The central COMPLETE/INCOMPLETE status for OpenBookQA, MATH-500, and HotpotQA is tracked in `experiment_tracking/experiment_status.txt`, with one table split by model and by all three first-stage and six second-stage methods, followed by result-file pointers. Update it whenever a method finishes or a selected run changes.
 * Canonical first-stage results for OpenBookQA non-reasoning, HotpotQA reasoning, and MATH-500 reasoning are tracked in `experiment_tracking/first_stage/detailed_first_stage_results.txt`.
 * The compact stable-score table and complete initial/retained prompts are tracked in `experiment_tracking/first_stage/first_stage_summary_and_prompts.txt`.
 * Regenerate both reports after a first-stage run finishes with `python -u codes/report_first_stage_results.py`.

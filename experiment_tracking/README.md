@@ -7,6 +7,14 @@ files are intentionally not indexed individually.
 DeltaAI agents should also read `../DELTAAI_AGENTS.md` for the required reading
 order, runtime precautions, and the current Gemma/vLLM incident status.
 
+## Current completion status
+
+- `experiment_status.txt`: one central COMPLETE/INCOMPLETE table for
+  OpenBookQA, MATH-500, and HotpotQA, split by model and by all three
+  first-stage and six second-stage methods, with pointers to detailed results.
+  Update it whenever a run is completed, replaced, or selected for final
+  evaluation.
+
 ## Dataset preparation
 
 - ANLI prompt optimization uses `../data/processed/anli/validation_promptopt.jsonl`:

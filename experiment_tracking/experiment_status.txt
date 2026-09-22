@@ -1,0 +1,95 @@
+CENTRAL EXPERIMENT STATUS
+=========================
+
+Last checked: 2026-09-22
+
+COMPLETE means the currently selected experiment for that dataset/model/method
+has finished and its result artifacts are available. INCOMPLETE means a required
+run, result collection, or final evaluation still remains.
+
+| Dataset    | Model     | 1st: RPO | 1st: EvoPrompt-DE | 1st: ETGPO | 2nd: GradPO-Gen | 2nd: GradPO-Prob | 2nd: GradPO-Gen-Random | 2nd: LPO   | 2nd: GreaTer | 2nd: GreaTer-TG | Final test |
+|------------|-----------|----------|-------------------|------------|-----------------|------------------|------------------------|------------|--------------|-----------------|------------|
+| OpenBookQA | Qwen3-4B  | COMPLETE | COMPLETE          | COMPLETE   | COMPLETE        | COMPLETE         | COMPLETE               | COMPLETE   | COMPLETE     | COMPLETE        | COMPLETE   |
+| OpenBookQA | Gemma3-4B | COMPLETE | COMPLETE          | COMPLETE   | COMPLETE        | COMPLETE         | COMPLETE               | COMPLETE   | COMPLETE     | COMPLETE        | COMPLETE   |
+| MATH-500   | Qwen3-4B  | COMPLETE | COMPLETE          | COMPLETE   | INCOMPLETE      | INCOMPLETE       | INCOMPLETE             | INCOMPLETE | INCOMPLETE   | INCOMPLETE      | INCOMPLETE |
+| MATH-500   | Gemma3-4B | COMPLETE | COMPLETE          | COMPLETE   | INCOMPLETE      | INCOMPLETE       | INCOMPLETE             | INCOMPLETE | INCOMPLETE   | INCOMPLETE      | INCOMPLETE |
+| HotpotQA   | Qwen3-4B  | COMPLETE | INCOMPLETE        | COMPLETE   | INCOMPLETE      | INCOMPLETE       | INCOMPLETE             | INCOMPLETE | INCOMPLETE   | INCOMPLETE      | INCOMPLETE |
+| HotpotQA   | Gemma3-4B | COMPLETE | COMPLETE          | COMPLETE   | INCOMPLETE      | INCOMPLETE       | INCOMPLETE             | INCOMPLETE | INCOMPLETE   | INCOMPLETE      | INCOMPLETE |
+
+OpenBookQA detailed results
+---------------------------
+First stage:
+  experiment_tracking/first_stage/detailed_first_stage_results.txt
+  experiment_tracking/first_stage/first_stage_summary_and_prompts.txt
+
+Second stage:
+  experiment_tracking/second_stage/openbookqa_gradpo_tuning_results.txt
+
+Final test:
+  experiment_tracking/final_test/openbookqa_latest_rpo_five_seed_results.txt
+  experiment_tracking/final_test/openbookqa_test_scores_only.txt
+
+
+MATH-500 detailed results
+-------------------------
+First stage:
+  experiment_tracking/first_stage/detailed_first_stage_results.txt
+  experiment_tracking/first_stage/first_stage_summary_and_prompts.txt
+  experiment_tracking/first_stage/math_qwen_rpo_source_adjustments.txt
+  experiment_tracking/first_stage/math_evoprompt_source_adjustments.txt
+
+Qwen RPO-source second stage and final test:
+  experiment_tracking/second_stage/math_gradpo_gen_tuning_plan.txt
+  experiment_tracking/final_test/math500_qwen_five_seed_results.txt
+  experiment_tracking/final_test/math500_qwen_selected_prompts.tsv
+
+Gemma RPO-source GradPO-Gen tuning:
+  delta_ai_runs/math_gradpo_gemma_v3_images_enabled_results.txt
+
+MATH-500 remains incomplete under the full five-source design. The saved Qwen
+second-stage/final-test matrix covers RPO-5 and RPO-10 only. EvoPrompt-DE-5,
+EvoPrompt-DE-10, and ETGPO-1 have validation results but have not received the
+full six-refiner second stage or official final-test evaluation. Gemma also
+still lacks these source branches and the remaining RPO-source refiners.
+
+Prepared Qwen EvoPrompt/ETGPO second-stage scripts (9 runs each):
+  codes/run_math_second_stage_qwen_evoprompt_etgpo_part1.sh
+  codes/run_math_second_stage_qwen_evoprompt_etgpo_part2.sh
+  codes/run_math_second_stage_qwen_evoprompt_etgpo_part1.slurm
+  codes/run_math_second_stage_qwen_evoprompt_etgpo_part2.slurm
+
+Gemma remaining second-stage launch files:
+  codes/run_math_second_stage_gemma.sh
+  codes/run_math_second_stage_gemma.slurm
+
+
+HotpotQA detailed results
+-------------------------
+Completed first-stage results:
+  experiment_tracking/first_stage/detailed_first_stage_results.txt
+  experiment_tracking/first_stage/first_stage_summary_and_prompts.txt
+
+The earlier Qwen EvoPrompt run completed but retained the initial prompt. Its
+replacement run is still incomplete:
+  CODE: hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_new_auto_seeds
+  Log: codes/nohup_outs/hotpotqa_evoprompt_qwen_new_auto_seeds.log
+  Output: outputs/qa_prompt_optimization/reasoning/evoprompt_de/hotpotqa_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs1500_new_auto_seeds
+
+Second-stage source records:
+  experiment_tracking/second_stage/hotpotqa_sources/README.txt
+
+Prepared second-stage scripts; no HotpotQA second-stage method is complete yet:
+  codes/run_hotpotqa_second_stage_qwen_part1.sh
+  codes/run_hotpotqa_second_stage_qwen_part2.sh
+  codes/run_hotpotqa_second_stage_gemma_part1.sh
+  codes/run_hotpotqa_second_stage_gemma_part2.sh
+  Matching Slurm files have the same names with the .slurm suffix.
+
+
+Shared implementation references
+--------------------------------
+  experiment_tracking/second_stage/qa_math_second_stage_code_audit.txt
+  experiment_tracking/second_stage/shared_training_pool_cache.txt
+
+Update this file whenever a method finishes, a replacement run becomes the
+selected source, or final-test results are collected.
