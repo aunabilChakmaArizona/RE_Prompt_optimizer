@@ -22,7 +22,9 @@ The task requires reasoning carefully and then outputting the correct option lab
     "non_reasoning": """A multiple-choice question contains several labeled options, with one best answer.
 The task requires directly outputting the correct option label without reasoning or explanation.""",
     "anli_non_reasoning": """A premise and hypothesis have one of three relationships: entailment, neutral, or contradiction.
-The task requires directly outputting the correct relationship label without reasoning or explanation.""",
+The task requires directly outputting the correct relationship name without reasoning or explanation.""",
+    "anli_reasoning": """A premise and hypothesis have one of three relationships: entailment, neutral, or contradiction.
+The task requires reasoning carefully about whether the premise supports, leaves undetermined, or contradicts the hypothesis, and then outputting the correct relationship name.""",
     "hotpotqa_reasoning": """A context-based question may require combining information from multiple passages.
 The task requires reasoning carefully over the provided context and then outputting the correct short answer.""",
     "math500_reasoning": """A mathematical problem may require numerical, algebraic, geometric, combinatorial, or symbolic reasoning.
@@ -100,15 +102,20 @@ def rpo_feedback_prompt(
             input_fields = "context and question"
         elif mode.task_name == "math500":
             input_fields = "question"
+        elif mode.task_name == "anli":
+            input_fields = "premise and hypothesis"
         else:
             input_fields = "question and choices"
         instance_description = f"""You are given one task instance containing the {input_fields}, ground-truth answer, the LLM's reasoning, its selected answer, and whether that answer was correct or incorrect."""
         analysis_instruction = """Analyze the reasoning in the LLM response and explain how it led to the selected answer.
 - If the answer is correct, explain which reasoning steps, evidence, or cues were useful.
 - If the answer is incorrect, explain which reasoning step, misunderstanding, missing evidence, or heuristic likely caused the error."""
+        if mode.task_name == "anli":
+            analysis_instruction += """
+When the premise does not provide enough information to support or refute the hypothesis, the relationship should be Neutral. Choose Contradiction only when the premise provides evidence that the hypothesis is false. Describe a general inference pattern rather than advice tied to the example's particular facts or entities."""
     else:
         if mode.task_name == "anli":
-            instance_description = """You are given one task instance containing the premise, hypothesis, relationship labels, ground-truth answer, the LLM's selected answer, and whether that answer was correct or incorrect. No reasoning trace is provided."""
+            instance_description = """You are given one task instance containing the premise, hypothesis, ground-truth relationship, the LLM's selected relationship, and whether that answer was correct or incorrect. No reasoning trace is provided."""
             analysis_instruction = """The LLM was asked to answer directly, and no explicit reasoning is provided. Infer the most likely evidence, cues, or heuristic that led to the selected answer.
 - If the answer is correct, explain what likely supported the decision.
 - If the answer is incorrect, explain what misunderstanding, missing evidence, or heuristic likely caused the error.

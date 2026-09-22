@@ -12,6 +12,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Sequence
 
+from anli_task_common import (
+    anli_gold_relation,
+    build_anli_prompt,
+    normalize_anli_relation,
+)
 from agents.agent_decoding import model_default_sampling_parameters
 from agents.agent_token_usage import TokenUsage, summarize_token_usage
 
@@ -339,6 +344,10 @@ def validate_answer_processing() -> None:
     assert normalize_choice_label("\\boxed{A}", labels) == "A"
     assert normalize_choice_label("B because it is correct", labels) is None
     assert normalize_choice_label("E", labels) is None
+    assert normalize_anli_relation(" Entailment ") == "entailment"
+    assert normalize_anli_relation("NEUTRAL") == "neutral"
+    assert normalize_anli_relation("A") is None
+    assert normalize_anli_relation("entailment because...") is None
     assert normalize_open_answer("The Beatles!") == "beatles"
     assert split_open_answers("Paris; New York") == ["paris", "new york"]
     assert official_webquestions_value("1836-02-23") == (1836, 2, 23)
@@ -477,6 +486,60 @@ def score_multiple_choice_predictions(
         "accuracy_percent": 100.0 * correct_count / total,
         "missing_answer_tags": missing_tag_count,
         "invalid_choice_labels": invalid_label_count,
+        "token_usage": summarize_token_usage(token_usages),
+    }
+    return results, statistics
+
+
+def score_anli_predictions(
+    records: Sequence[dict[str, Any]],
+    responses: Sequence[str],
+    token_usages: Sequence[TokenUsage],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Score tagged ANLI relationship names with exact normalized accuracy."""
+    if len(records) != len(responses) or len(records) != len(token_usages):
+        raise ValueError("ANLI records, responses, and token usage must have equal lengths.")
+
+    results = []
+    correct_count = 0
+    missing_tag_count = 0
+    invalid_relationship_count = 0
+    for record, response, token_usage in zip(records, responses, token_usages):
+        extracted_answer = extract_tagged_answer(response)
+        predicted_relation = normalize_anli_relation(extracted_answer)
+        gold_relation = anli_gold_relation(record)
+        is_correct = predicted_relation == gold_relation
+        missing_tag_count += int(extracted_answer is None)
+        invalid_relationship_count += int(
+            extracted_answer is not None and predicted_relation is None
+        )
+        correct_count += int(is_correct)
+        results.append(
+            {
+                "id": record["id"],
+                "dataset": record.get("dataset"),
+                "task_type": record.get("task_type"),
+                "premise": record["premise"],
+                "hypothesis": record["hypothesis"],
+                "gold_answer": gold_relation,
+                "raw_response": response,
+                "token_usage": dict(token_usage),
+                "extracted_answer": extracted_answer,
+                "predicted_answer": predicted_relation,
+                "correct": is_correct,
+            }
+        )
+
+    total = len(records)
+    statistics = {
+        "total": total,
+        "correct": correct_count,
+        "incorrect": total - correct_count,
+        "accuracy": correct_count / total,
+        "accuracy_percent": 100.0 * correct_count / total,
+        "missing_answer_tags": missing_tag_count,
+        "invalid_relationships": invalid_relationship_count,
+        "invalid_choice_labels": invalid_relationship_count,
         "token_usage": summarize_token_usage(token_usages),
     }
     return results, statistics
@@ -653,6 +716,8 @@ def score_predictions(
     task_type: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Score model responses with the metric for the selected QA task."""
+    if records and all(record.get("dataset") == "anli" for record in records):
+        return score_anli_predictions(records, responses, token_usages)
     if task_type == "hotpotqa_open_qa":
         return score_hotpotqa_predictions(records, responses, token_usages)
     if task_type == "open_qa":
@@ -781,7 +846,23 @@ def run_qa_test_inference(
     all_records = read_jsonl(dataset_path)
     records = all_records[args.start : args.end]
     task_type = validate_records(records)
-    if task_type == "hotpotqa_open_qa":
+    if all(record.get("dataset") == "anli" for record in records):
+        prompts = [
+            build_anli_prompt(
+                instruction_prompt,
+                resolved_answer_instruction,
+                str(record["premise"]),
+                str(record["hypothesis"]),
+            )
+            for record in records
+        ]
+        prompt_template = build_anli_prompt(
+            instruction_prompt,
+            resolved_answer_instruction,
+            "{premise}",
+            "{hypothesis}",
+        )
+    elif task_type == "hotpotqa_open_qa":
         task_default_instruction = default_instruction
         resolved_answer_instruction = answer_instruction
         task_default_max_new_tokens = default_max_new_tokens

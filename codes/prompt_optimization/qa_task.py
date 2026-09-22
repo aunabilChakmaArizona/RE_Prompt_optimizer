@@ -9,7 +9,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from anli_task_common import ANLI_ANSWER_INSTRUCTION, ANLI_INITIAL_PROMPT
+from anli_task_common import (
+    ANLI_ANSWER_INSTRUCTION,
+    ANLI_INITIAL_PROMPT,
+    ANLI_REASONING_ANSWER_INSTRUCTION,
+    ANLI_REASONING_INITIAL_PROMPT,
+    anli_gold_relation,
+    build_anli_prompt,
+    normalize_anli_relation,
+)
 from math_grading.graders import grade_math_answer
 from math_inference_common import (
     ANSWER_INSTRUCTION_PROMPT as MATH_ANSWER_INSTRUCTION_PROMPT,
@@ -97,6 +105,14 @@ OPENBOOKQA_MODES = {
 }
 
 ANLI_MODES = {
+    "reasoning": QAMode(
+        name="reasoning",
+        task_name="anli",
+        initial_prompt=ANLI_REASONING_INITIAL_PROMPT,
+        answer_instruction=ANLI_REASONING_ANSWER_INSTRUCTION,
+        enable_thinking=True,
+        default_max_new_tokens=1024,
+    ),
     "non_reasoning": QAMode(
         name="non_reasoning",
         task_name="anli",
@@ -193,6 +209,13 @@ def render_qa_prompt(
         raise ValueError("The instruction prompt must not be empty.")
     if mode.task_name == "math500":
         return build_math_prompt(instruction_prompt, str(record["question"]))
+    if mode.task_name == "anli":
+        return build_anli_prompt(
+            instruction_prompt,
+            mode.answer_instruction,
+            str(record["premise"]),
+            str(record["hypothesis"]),
+        )
     if mode.task_name == "hotpotqa":
         return build_context_open_qa_prompt(
             instruction_prompt,
@@ -238,6 +261,21 @@ def score_qa_response(
             "raw_response": response,
         }
     extracted = extract_tagged_answer(response)
+    if mode.task_name == "anli":
+        prediction = normalize_anli_relation(extracted)
+        gold = anli_gold_relation(record)
+        invalid = extracted is not None and prediction is None
+        return {
+            "id": record["id"],
+            "gold_answer": gold,
+            "predicted_answer": prediction,
+            "extracted_answer": extracted,
+            "correct": prediction == gold,
+            "missing_answer_tag": extracted is None,
+            "invalid_choice_label": invalid,
+            "invalid_relationship": invalid,
+            "raw_response": response,
+        }
     if mode.task_name == "hotpotqa":
         prediction = extracted or ""
         gold = str(record["answer"])
@@ -484,8 +522,7 @@ def rpo_feedback_example(
             [
                 f"Premise: {record['premise']}",
                 f"Hypothesis: {record['hypothesis']}",
-                f"Labels: {choices_as_text(record)}",
-                f"Ground-Truth Answer: {record['answer']}",
+                f"Ground-Truth Relationship: {anli_gold_relation(record)}",
             ]
         )
     elif mode.task_name == "math500":
