@@ -45,8 +45,10 @@ from prompt_optimization.qa_task import (
 from prompt_optimization.second_stage import (
     _balance_gradient_pairs,
     _beam_search_replacements,
+    _extract_lpo_tagged_source,
     _filter_gradpo_region_candidates,
     _gradpo_synthesis_prompt,
+    _lpo_candidate_prompts_from_outputs,
     _normalize_synthesized_prompt,
     run_lpo,
 )
@@ -298,6 +300,39 @@ class MathPromptOptimizationTests(unittest.TestCase):
         self.assertIn("End of reasoning.", example)
         self.assertIn("LLM Selected Answer: 2", example)
         self.assertNotIn("<answer>", example)
+
+    def test_lpo_recovers_marked_source_from_echoed_meta_prompt(self) -> None:
+        """Ignore echoed task text and recover the complete marked source prompt."""
+        source = "Solve the problem carefully. Check the final result."
+        raw_output = (
+            "```\n<p>Task description.\n\nCurrent prompt:\n```\n"
+            "Solve the <edit>problem carefully</edit>. Check the "
+            "<edit>final result</edit>.\n```\nFeedback examples...\n</p>\n```"
+        )
+
+        tagged = _extract_lpo_tagged_source(raw_output, source)
+
+        self.assertEqual(
+            tagged,
+            "Solve the <edit>problem carefully</edit>. Check the "
+            "<edit>final result</edit>.",
+        )
+
+    def test_lpo_rejects_incomplete_prompt_wrappers(self) -> None:
+        """Do not validate echoed headers or candidates with leaked LPO wrappers."""
+        prompts = _lpo_candidate_prompts_from_outputs(
+            [
+                "<p>Task description.\n\nCurrent prompt:",
+                "<p>Leaked opening wrapper only.",
+                "<p>Complete revised instruction.</p>",
+            ],
+            "Original instruction.",
+        )
+
+        self.assertEqual(
+            prompts,
+            ["Original instruction.", "Complete revised instruction."],
+        )
 
     def test_lpo_validates_every_distinct_rewrite_without_train_preselection(self) -> None:
         """Send all five LPO rewrites and the source directly to validation."""

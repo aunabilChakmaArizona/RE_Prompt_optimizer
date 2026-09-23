@@ -1,0 +1,102 @@
+MATH-500 Gemma RPO-source second-stage archive audit
+====================================================
+
+Archive:
+delta_ai_runs/math500_gemma_rpo_second_stage_results.tar.gz
+
+Slurm log:
+codes/nohup_outs/math_second_stage_gemma_3193662.log
+
+Audit summary
+-------------
+
+- All 14 newly requested runs reached their normal save step.
+- No traceback, OOM, non-finite score, or killed process occurred.
+- All runs used image support with Gemma 3 (`vllm_disable_images=false`).
+- Validation used 900 examples as three folds of 300 and selected prompts by
+  stable accuracy with lambda=1.
+- The archive also contains 18 earlier GradPO-Gen tuning runs, for 32 summary
+  files in total.
+- The long text printed in the log consists of ordinary 4096-token Math
+  reasoning generations. It is not the earlier Gemma image-disable corruption.
+- The FlashInfer fallback and NCCL shutdown messages are non-fatal warnings.
+
+Current 14-run results
+----------------------
+
+RPO5 source: 607/900 correct, raw 67.44, stable 66.82
+
+| Method            | Setting                   | Correct change | Raw accuracy | Stable score | Audit verdict |
+|-------------------|---------------------------|----------------|--------------|--------------|---------------|
+| GradPO-Prob       | S7 T5 H.45 C7 G200 B5     | 607 -> 615 (+8)  | 68.33 | 67.09 | Valid improvement |
+| GradPO-Gen-Random | S7 T5 H.45 C7 G200 B5     | 607 -> 607 (+0)  | 67.44 | 66.82 | Source retained |
+| GreaTer           | G200                      | 607 -> 617 (+10) | 68.56 | 67.42 | Valid improvement |
+| GreaTer           | G300                      | 607 -> 625 (+18) | 69.44 | 68.82 | Best GreaTer result |
+| LPO               | feedback3, S3, T3, C5     | 607 -> 607 (+0)  | 67.44 | 66.82 | Source retained |
+| LPO               | feedback3, S5, T3, C5     | 607 -> 626 (+19) | 69.56 | 67.24 | Usable text, but leaked a literal `<p>` tag |
+| LPO               | feedback3, S7, T3, C5     | 607 -> 632 (+25) | 70.22 | 69.39 | Valid and best LPO result |
+
+RPO10 source: 624/900 correct, raw 69.33, stable 67.89
+
+| Method            | Setting                   | Correct change | Raw accuracy | Stable score | Audit verdict |
+|-------------------|---------------------------|----------------|--------------|--------------|---------------|
+| GradPO-Prob       | S7 T5 H.45 C7 G200 B5     | 624 -> 626 (+2)  | 69.56 | 68.42 | Valid improvement |
+| GradPO-Gen-Random | S7 T5 H.45 C7 G200 B5     | 624 -> 624 (+0)  | 69.33 | 67.89 | Source retained |
+| GreaTer           | G200                      | 624 -> 624 (+0)  | 69.33 | 67.89 | Source retained |
+| GreaTer           | G300                      | 624 -> 619 (-5)  | 68.78 | 68.09 | Stable-only gain; edit is ungrammatical (`Please the following...`) |
+| LPO               | feedback3, S3, T3, C5     | 624 -> 635 (+11) | 70.56 | 69.06 | Complete but highly expanded/duplicative prompt |
+| LPO               | feedback3, S5, T3, C5     | 624 -> 638 (+14) | 70.89 | 69.66 | INVALID: parser selected an echoed meta-prompt fragment |
+| LPO               | feedback3, S7, T3, C5     | 624 -> 629 (+5)  | 69.89 | 68.52 | INVALID: parser selected an echoed meta-prompt fragment |
+
+Previously selected GradPO-Gen context
+--------------------------------------
+
+| Source | Setting               | Correct change | Raw accuracy | Stable score | Prompt audit |
+|--------|-----------------------|----------------|--------------|--------------|--------------|
+| RPO5   | S7 T5 H.45 C7 G200 B5 | 607 -> 615 (+8)  | 68.33 | 67.39 | Valid |
+| RPO10  | S7 T5 H.45 C7 G200 B5 | 624 -> 645 (+21) | 71.67 | 69.76 | Valid |
+
+Interpretation
+--------------
+
+- GradPO-Gen is the strongest valid RPO10 result: +21 correct examples and
+  +1.87 stable-score points.
+- GradPO-Prob improves both source prompts, but less than GradPO-Gen.
+- GradPO-Gen-Random improves neither source prompt, so both random rows retain
+  their corresponding RPO prompt.
+- GreaTer G300 is clearly best on RPO5. It does not provide a credible RPO10
+  improvement: raw accuracy falls by five correct examples and the single-token
+  edit changes `Solve` to the ungrammatical `Please`.
+- LPO S7 gives the strongest valid RPO5 result. The RPO10 S5/S7 scores cannot be
+  used because their selected prompts are malformed. RPO10 S3 is complete but
+  grows from 1,258 to 2,106 characters and repeats much of the source prompt.
+
+LPO parser failure
+------------------
+
+For RPO10 S5 and S7, Gemma echoed the task description, the words
+`Current prompt:`, a nested code fence, the actual marked prompt, and feedback.
+`_extract_lpo_prompt()` accepted the first fenced block, which ended immediately
+after `Current prompt:`. The rewrite stage then optimized this fragment:
+
+<p>A mathematical problem may require numerical, algebraic, geometric,
+combinatorial, or symbolic reasoning.
+The task requires deriving the solution carefully and then outputting an exact
+and correct answer.
+
+Current prompt:
+
+These are real validation scores for malformed strings, not valid LPO results.
+Before rerunning LPO, the location-stage parser should require that removing
+`<edit>` tags exactly reconstructs the source prompt. Invalid location outputs
+should be rejected instead of passed to the rewrite stage. Candidate prompts
+should also reject residual wrappers such as `<p>`.
+
+Recommended status
+------------------
+
+- Accept GradPO-Gen, GradPO-Prob, GradPO-Gen-Random, and RPO5 GreaTer G300.
+- Treat RPO10 GreaTer as no improvement unless a later valid candidate improves.
+- Accept RPO5 LPO S7.
+- Do not use RPO10 LPO S5/S7. Fix the parser and rerun the affected LPO settings
+  before choosing the final LPO configuration or starting final test evaluation.

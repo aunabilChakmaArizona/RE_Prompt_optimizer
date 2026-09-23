@@ -687,11 +687,60 @@ def _extract_lpo_prompt(raw_output: str) -> str:
     return prompt
 
 
+def _extract_lpo_tagged_source(raw_output: str, source_prompt: str) -> str:
+    """Recover the exact source prompt with only LPO edit tags inserted."""
+    source = source_prompt.strip()
+    edit_tag_pattern = re.compile(r"</?edit>", flags=re.IGNORECASE)
+    plain_characters: list[str] = []
+    raw_positions: list[int] = []
+    cursor = 0
+    for tag in edit_tag_pattern.finditer(raw_output):
+        for raw_index in range(cursor, tag.start()):
+            plain_characters.append(raw_output[raw_index])
+            raw_positions.append(raw_index)
+        cursor = tag.end()
+    for raw_index in range(cursor, len(raw_output)):
+        plain_characters.append(raw_output[raw_index])
+        raw_positions.append(raw_index)
+
+    plain_output = "".join(plain_characters)
+    occurrence = plain_output.find(source)
+    while occurrence >= 0:
+        raw_start = raw_positions[occurrence]
+        raw_end = raw_positions[occurrence + len(source) - 1] + 1
+        opening_tag = re.search(r"<edit>$", raw_output[:raw_start], re.IGNORECASE)
+        if opening_tag:
+            raw_start = opening_tag.start()
+        closing_tag = re.match(r"</edit>", raw_output[raw_end:], re.IGNORECASE)
+        if closing_tag:
+            raw_end += closing_tag.end()
+        candidate = raw_output[raw_start:raw_end].strip()
+        if (
+            re.search(r"<edit>", candidate, re.IGNORECASE)
+            and re.search(r"</edit>", candidate, re.IGNORECASE)
+            and edit_tag_pattern.sub("", candidate).strip() == source
+        ):
+            return candidate
+        occurrence = plain_output.find(source, occurrence + 1)
+    return ""
+
+
 def _clean_lpo_candidate_prompt(text: str) -> str:
     """Remove LPO's output wrappers and local edit tags from one candidate."""
     cleaned = _extract_lpo_prompt(text)
     cleaned = re.sub(r"</?edit>", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
+
+
+def _is_valid_lpo_candidate_prompt(prompt: str) -> bool:
+    """Reject incomplete LPO wrappers and echoed meta-prompt fragments."""
+    if not prompt:
+        return False
+    if re.search(r"</?(?:p|edit)>|```", prompt, flags=re.IGNORECASE):
+        return False
+    if re.search(r"Current prompt:\s*$", prompt, flags=re.IGNORECASE):
+        return False
+    return True
 
 
 def _lpo_candidate_prompts_from_outputs(
@@ -701,8 +750,10 @@ def _lpo_candidate_prompts_from_outputs(
     """Extract each rewritten LPO prompt and remove its edit tags."""
     return unique_nonempty(
         [
-            _clean_lpo_candidate_prompt(candidate)
+            prompt
             for candidate in [fallback_prompt, *raw_outputs]
+            for prompt in [_clean_lpo_candidate_prompt(candidate)]
+            if _is_valid_lpo_candidate_prompt(prompt)
         ]
     )
 
@@ -741,7 +792,17 @@ def run_lpo(context: QAOptimizationContext, args) -> dict[str, Any]:
         [location_meta_prompt],
         log_label="qa_lpo_location_tagging",
     )[0]
-    tagged_prompt = _extract_lpo_prompt(location_output)
+    tagged_prompt = _extract_lpo_tagged_source(
+        location_output,
+        context.initial_prompt,
+    )
+    if not tagged_prompt:
+        context.logger.event(
+            "lpo_location_output_rejected",
+            reason=(
+                "Removing <edit> tags did not reconstruct the complete source prompt."
+            ),
+        )
     locations = [
         {
             "location_rank": index,
