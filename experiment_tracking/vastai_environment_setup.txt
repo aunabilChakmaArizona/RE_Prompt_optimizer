@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Vast.ai x86_64 environment setup for this project.
+# Run with:
+#   bash experiment_tracking/vastai_environment_setup.txt
+#
+# Optional overrides:
+#   WORK_ROOT=/workspace
+#   ENV_NAME=re_prompt_optimization_vllm_v2
+#   REPO_URL=https://github.com/USER/RE_Prompt_optimizer.git
+#   PROJECT_DIR=/workspace/RE_Prompt_optimizer
+
+WORK_ROOT="${WORK_ROOT:-/workspace}"
+ENV_NAME="${ENV_NAME:-re_prompt_optimization_vllm_v2}"
+
+if [[ ! -d "$WORK_ROOT" || ! -w "$WORK_ROOT" ]]; then
+  WORK_ROOT="$HOME/promptopt_workspace"
+fi
+
+CONDA_DIR="${CONDA_DIR:-$WORK_ROOT/miniconda3}"
+HF_HOME="${HF_HOME:-$WORK_ROOT/huggingface}"
+PIP_CACHE_DIR="${PIP_CACHE_DIR:-$WORK_ROOT/pip-cache}"
+TMPDIR="${TMPDIR:-$WORK_ROOT/tmp}"
+PROJECT_DIR="${PROJECT_DIR:-$WORK_ROOT/RE_Prompt_optimizer}"
+
+mkdir -p "$WORK_ROOT" "$HF_HOME" "$PIP_CACHE_DIR" "$TMPDIR"
+export HF_HOME PIP_CACHE_DIR TMPDIR
+export TRANSFORMERS_CACHE="$HF_HOME/hub"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export TOKENIZERS_PARALLELISM=false
+
+printf '\n[1/7] Checking GPU and storage\n'
+uname -a
+df -h "$WORK_ROOT"
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+  printf 'nvidia-smi is unavailable. Start a Vast.ai GPU instance with NVIDIA drivers.\n' >&2
+  exit 2
+fi
+nvidia-smi
+
+printf '\n[2/7] Installing basic system tools\n'
+if command -v apt-get >/dev/null 2>&1; then
+  if [[ "$EUID" -eq 0 ]]; then
+    APT=(apt-get)
+  elif command -v sudo >/dev/null 2>&1; then
+    APT=(sudo apt-get)
+  else
+    printf 'apt-get needs root or sudo. Install git, curl, wget, unzip, and build-essential manually.\n' >&2
+    exit 2
+  fi
+  "${APT[@]}" update
+  DEBIAN_FRONTEND=noninteractive "${APT[@]}" install -y \
+    build-essential ca-certificates curl git git-lfs rsync tmux unzip wget
+fi
+
+printf '\n[3/7] Installing Miniconda under %s\n' "$CONDA_DIR"
+if [[ ! -x "$CONDA_DIR/bin/conda" ]]; then
+  case "$(uname -m)" in
+    x86_64) CONDA_ARCH="x86_64" ;;
+    aarch64|arm64) CONDA_ARCH="aarch64" ;;
+    *) printf 'Unsupported CPU architecture: %s\n' "$(uname -m)" >&2; exit 2 ;;
+  esac
+  INSTALLER="$TMPDIR/miniconda.sh"
+  curl -fL \
+    "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-${CONDA_ARCH}.sh" \
+    -o "$INSTALLER"
+  bash "$INSTALLER" -b -p "$CONDA_DIR"
+fi
+
+source "$CONDA_DIR/etc/profile.d/conda.sh"
+conda config --set auto_activate_base false
+
+printf '\n[4/7] Creating Conda environment %s\n' "$ENV_NAME"
+if ! conda env list | awk -v name="$ENV_NAME" '$1 == name {found=1} END {exit !found}'; then
+  conda create -n "$ENV_NAME" --override-channels -c conda-forge python=3.11 pip -y
+fi
+conda activate "$ENV_NAME"
+
+printf '\n[5/7] Installing the pinned project runtime\n'
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install \
+  "vllm==0.11.0" \
+  "transformers==4.55.2" \
+  --extra-index-url https://download.pytorch.org/whl/cu128
+python -m pip install \
+  accelerate \
+  datasets \
+  backoff \
+  "math-verify==0.9.0" \
+  "pylatexenc==2.10"
+python -m pip check
+
+printf '\n[6/7] Saving cache and Conda settings for future shells\n'
+START_MARKER="# >>> RE_PROMPT_OPTIMIZER_VASTAI >>>"
+END_MARKER="# <<< RE_PROMPT_OPTIMIZER_VASTAI <<<"
+if ! grep -Fq "$START_MARKER" "$HOME/.bashrc" 2>/dev/null; then
+  cat >> "$HOME/.bashrc" <<EOF
+
+$START_MARKER
+export PROMPTOPT_WORK_ROOT="$WORK_ROOT"
+export HF_HOME="$HF_HOME"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export TRANSFORMERS_CACHE="$HF_HOME/hub"
+export PIP_CACHE_DIR="$PIP_CACHE_DIR"
+export TMPDIR="$TMPDIR"
+export TOKENIZERS_PARALLELISM=false
+source "$CONDA_DIR/etc/profile.d/conda.sh"
+$END_MARKER
+EOF
+fi
+
+if [[ -n "${REPO_URL:-}" ]]; then
+  if [[ -d "$PROJECT_DIR/.git" ]]; then
+    printf 'Repository already exists at %s; leaving it unchanged.\n' "$PROJECT_DIR"
+  else
+    git clone "$REPO_URL" "$PROJECT_DIR"
+  fi
+fi
+
+if [[ -n "${HF_TOKEN:-}" ]] && command -v hf >/dev/null 2>&1; then
+  hf auth login --token "$HF_TOKEN"
+fi
+
+printf '\n[7/7] Verifying CUDA, PyTorch, Transformers, and vLLM\n'
+python - <<'PY'
+import importlib.metadata as metadata
+import torch
+import transformers
+import vllm
+
+print("torch:", torch.__version__)
+print("torch CUDA build:", torch.version.cuda)
+print("transformers:", transformers.__version__)
+print("vLLM:", vllm.__version__)
+print("math-verify:", metadata.version("math-verify"))
+assert torch.cuda.is_available(), "PyTorch cannot access the Vast.ai GPU"
+print("GPU:", torch.cuda.get_device_name(0))
+from vllm import _C  # noqa: F401
+print("vLLM CUDA extension: OK")
+PY
+
+printf '\nSetup complete.\n'
+printf 'Environment: %s\n' "$ENV_NAME"
+printf 'Conda path:  %s\n' "$CONDA_DIR"
+printf 'HF cache:    %s\n' "$HF_HOME"
+printf 'Project:     %s\n' "$PROJECT_DIR"
+printf '\nFor a new shell, run:\n'
+printf '  source ~/.bashrc\n'
+printf '  conda activate %s\n' "$ENV_NAME"
+printf '\nGemma only: export HF_TOKEN before setup or log in later with `hf auth login`.\n'

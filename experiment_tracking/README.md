@@ -244,6 +244,11 @@ Associated report scripts:
 
 ## Implementation and dataset processing documentation
 
+- `vastai_environment_setup.txt`: directly runnable Vast.ai setup script for a
+  `/workspace`-backed Miniconda installation, the named Python 3.11 environment,
+  pinned vLLM 0.11.0/Transformers 4.55.2 runtime, QA/Math dependencies, cache
+  placement, optional repository cloning/Hugging Face login, and a CUDA/vLLM
+  smoke test.
 - `deltaai_setup_step_by_step.txt`: complete beginner-friendly DeltaAI SSH/Duo,
   allocation/storage discovery, one-time Bash startup settings, HOME-based
   Conda and project-based Git/data/results, pinned vLLM 0.11/PyTorch 2.8
