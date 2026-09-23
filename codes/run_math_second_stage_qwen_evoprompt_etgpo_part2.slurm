@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=math-qw-s2-evo2
+#SBATCH --job-name=math-qw-s2-etgpo
 #SBATCH --account=bihn-dtai-gh
 #SBATCH --partition=ghx4
 #SBATCH --nodes=1
@@ -8,10 +8,10 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
-#SBATCH --output=codes/nohup_outs/math_qwen_evo_etgpo_part2_%j.log
-#SBATCH --error=codes/nohup_outs/math_qwen_evo_etgpo_part2_%j.log
+#SBATCH --output=codes/nohup_outs/math_qwen_etgpo_second_stage_%j.log
+#SBATCH --error=codes/nohup_outs/math_qwen_etgpo_second_stage_%j.log
 
-# Submit from the repository root after Part 1 succeeds:
+# Submit independently from the repository root:
 #   sbatch codes/run_math_second_stage_qwen_evoprompt_etgpo_part2.slurm
 
 set -euo pipefail
@@ -39,4 +39,3 @@ unset MATH_SECOND_STAGE_GPU
 python -c 'import importlib.metadata as m, torch; print({name: m.version(name) for name in ("vllm", "torch", "transformers", "math-verify")}); assert m.version("vllm") == "0.11.0"; assert torch.cuda.is_available()'
 
 srun --ntasks=1 bash codes/run_math_second_stage_qwen_evoprompt_etgpo_part2.sh
-

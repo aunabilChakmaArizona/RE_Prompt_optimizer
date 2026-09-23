@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Qwen MATH-500 EvoPrompt/ETGPO second stage, attempts 10-18 of 18.
-# Part 2 runs LPO/GreaTer/GreaTer-TG on EvoPrompt-10, followed by all six
-# refiners on ETGPO-1. Validation remains 3 folds x 300 examples.
+# Qwen MATH-500 ETGPO second stage, attempts 13-18 of 18.
+# Part 2 runs all six refiners on ETGPO-1. It uses no EvoPrompt source, so it
+# can run independently of Part 1 without sharing a source-prompt cache.
+# Validation remains 3 folds x 300 examples.
 # Activate re_prompt_optimization_vllm_v2 before launching.
 #
 # nohup bash codes/run_math_second_stage_qwen_evoprompt_etgpo_part2.sh \
@@ -25,7 +26,6 @@ OUTPUT_ROOT="outputs/math_prompt_optimization"
 GRADIENT_CACHE_ROOT="outputs/shared_gradient_cache"
 SOURCE_CACHE_ROOT="outputs/shared_source_validation_cache"
 
-EVOPROMPT10_SOURCE="outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_10_from_actual_iteration_2.txt"
 ETGPO1_SOURCE="outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt"
 
 if [[ "$DRY_RUN" != 0 && "$DRY_RUN" != 1 ]]; then
@@ -34,7 +34,6 @@ if [[ "$DRY_RUN" != 0 && "$DRY_RUN" != 1 ]]; then
 fi
 
 for required_file in \
-  "$EVOPROMPT10_SOURCE" \
   "$ETGPO1_SOURCE" \
   data/processed/math500/train.jsonl \
   data/processed/math500/validation.jsonl; do
@@ -183,12 +182,7 @@ run_refiner() {
   run_command "$attempt" "$method" "$code" "${command[@]}"
 }
 
-attempt=9
-for method in lpo greater greater_tg; do
-  attempt=$((attempt + 1))
-  run_refiner "$attempt" "evoprompt10" "$EVOPROMPT10_SOURCE" "$method"
-done
-
+attempt=12
 for method in gradpo_gen gradpo_prob gradpo_gen_random lpo greater greater_tg; do
   attempt=$((attempt + 1))
   run_refiner "$attempt" "etgpo1" "$ETGPO1_SOURCE" "$method"

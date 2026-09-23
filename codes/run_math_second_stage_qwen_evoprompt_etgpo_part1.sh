@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Qwen MATH-500 EvoPrompt/ETGPO second stage, attempts 1-9 of 18.
-# Part 1 runs all six refiners on EvoPrompt-5, followed by the three
-# GradPO variants on EvoPrompt-10. Validation remains 3 folds x 300 examples.
+# Qwen MATH-500 EvoPrompt second stage, attempts 1-12 of 18.
+# Part 1 runs all six refiners on EvoPrompt-5 and EvoPrompt-10. Keeping both
+# EvoPrompt sources in this job prevents source-cache overlap with Part 2.
+# Validation remains 3 folds x 300 examples.
 # Activate re_prompt_optimization_vllm_v2 before launching.
 #
 # nohup bash codes/run_math_second_stage_qwen_evoprompt_etgpo_part1.sh \
@@ -189,7 +190,7 @@ for method in gradpo_gen gradpo_prob gradpo_gen_random lpo greater greater_tg; d
   run_refiner "$attempt" "evoprompt5" "$EVOPROMPT5_SOURCE" "$method"
 done
 
-for method in gradpo_gen gradpo_prob gradpo_gen_random; do
+for method in gradpo_gen gradpo_prob gradpo_gen_random lpo greater greater_tg; do
   attempt=$((attempt + 1))
   run_refiner "$attempt" "evoprompt10" "$EVOPROMPT10_SOURCE" "$method"
 done
