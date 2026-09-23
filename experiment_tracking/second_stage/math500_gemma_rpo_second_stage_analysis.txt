@@ -100,3 +100,32 @@ Recommended status
 - Accept RPO5 LPO S7.
 - Do not use RPO10 LPO S5/S7. Fix the parser and rerun the affected LPO settings
   before choosing the final LPO configuration or starting final test evaluation.
+
+Parser-fixed Vast.ai LPO follow-up (2026-09-22)
+------------------------------------------------
+
+Archive:
+vast_ai_runs/vastai_math500_gemma_lpo_parserfix_results.tar.gz
+
+Both RPO10 reruns completed normally and produced structurally valid prompts.
+Validation used 900 examples (three folds of 300), OpenAI PRM800K grading, and
+stable-score selection with lambda=1.
+
+| Source | Setting | Selected spans | Correct change | Raw accuracy | Stable score | Verdict |
+|--------|---------|----------------|----------------|--------------|--------------|---------|
+| RPO10 | feedback3, S5, T3, C5 | 3 | 603 -> 625 (+22) | 69.44 | 68.05 | Valid improvement; selected LPO setting |
+| RPO10 | feedback3, S7, T3, C5 | 4 | 603 -> 613 (+10) | 68.11 | 65.52 | Valid improvement, weaker than S5/T3 |
+
+Transition counts for the selected RPO10 S5/T3 run are 92 wrong-to-right and
+70 right-to-wrong, for a net gain of 22 correct examples.
+
+Final LPO configuration decision
+--------------------------------
+
+Use feedback examples=3, maximum spans S=5, maximum words/tokens per span T=3,
+and candidates C=5 as the shared Gemma RPO5/RPO10 LPO configuration. The
+parser-fixed RPO10 result above verifies this setting. The historical RPO5
+S5/T3 artifact improved 607 -> 626, but it contains a residual literal `<p>`
+tag and therefore is not a final valid artifact. Rerun RPO5 S5/T3 with the
+fixed parser before final test evaluation; until then, do not claim that both
+selected LPO runs are complete.

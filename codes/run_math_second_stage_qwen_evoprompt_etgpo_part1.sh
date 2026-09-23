@@ -26,8 +26,8 @@ OUTPUT_ROOT="outputs/math_prompt_optimization"
 GRADIENT_CACHE_ROOT="outputs/shared_gradient_cache"
 SOURCE_CACHE_ROOT="outputs/shared_source_validation_cache"
 
-EVOPROMPT5_SOURCE="outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_5_from_actual_iteration_1.txt"
-EVOPROMPT10_SOURCE="outputs/math_prompt_optimization/reasoning/evoprompt_de/math500_reasoning_qwen_evoprompt_qwen14opt_lambda1_vs900/prompt_experimental_iteration_10_from_actual_iteration_2.txt"
+EVOPROMPT5_SOURCE="experiment_tracking/second_stage/math500_sources/qwen/evoprompt5.txt"
+EVOPROMPT10_SOURCE="experiment_tracking/second_stage/math500_sources/qwen/evoprompt10.txt"
 
 if [[ "$DRY_RUN" != 0 && "$DRY_RUN" != 1 ]]; then
   printf 'MATH_SECOND_STAGE_DRY_RUN must be 0 or 1.\n' >&2

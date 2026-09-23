@@ -26,7 +26,7 @@ OUTPUT_ROOT="outputs/math_prompt_optimization"
 GRADIENT_CACHE_ROOT="outputs/shared_gradient_cache"
 SOURCE_CACHE_ROOT="outputs/shared_source_validation_cache"
 
-ETGPO1_SOURCE="outputs/math_prompt_optimization/reasoning/etgpo/math500_reasoning_qwen_etgpo_qwen14opt_lambda1_vs900/final_prompt.txt"
+ETGPO1_SOURCE="experiment_tracking/second_stage/math500_sources/qwen/etgpo1.txt"
 
 if [[ "$DRY_RUN" != 0 && "$DRY_RUN" != 1 ]]; then
   printf 'MATH_SECOND_STAGE_DRY_RUN must be 0 or 1.\n' >&2
